@@ -516,7 +516,20 @@ class NewsCrawler {
     
     private function create_summary_post($articles, $category, $status) {
         $cat_id = $this->get_or_create_category($category);
-        $post_title = 'ニュースまとめ - ' . date_i18n('Y年n月j日');
+        
+        // キーワード情報を取得
+        $options = get_option('news_crawler_settings', array());
+        $keywords = isset($options['keywords']) ? $options['keywords'] : array('ニュース');
+        
+        // キーワードが設定されていない場合は、記事の内容から推測
+        if (empty($keywords) || (count($keywords) === 1 && $keywords[0] === 'ニュース')) {
+            $keyword_text = '最新';
+        } else {
+            // キーワードを組み合わせてタイトルを作成（最大3つまで）
+            $keyword_text = implode('、', array_slice($keywords, 0, 3));
+        }
+        
+        $post_title = $keyword_text . '：ニュースまとめ – ' . date_i18n('Y年n月j日');
         
         $post_content = '';
         
@@ -528,7 +541,7 @@ class NewsCrawler {
         
         foreach ($articles_by_source as $source_host => $source_articles) {
             $post_content .= '<!-- wp:heading {"level":2} -->';
-            $post_content .= '<h2>' . esc_html($source_host) . '</h2>';
+            $post_content .= '<h2>' . esc_html($this->get_readable_source_name($source_host)) . '</h2>';
             $post_content .= '<!-- /wp:heading -->';
             
             foreach ($source_articles as $article) {
@@ -797,6 +810,10 @@ class NewsCrawler {
                         $link_node = $link_query->item(0);
                         if ($link_node) {
                             $link = $link_node->getAttribute('href');
+                            // 相対URLを絶対URLに変換
+                            if (!empty($link) && !filter_var($link, FILTER_VALIDATE_URL)) {
+                                $link = $this->build_absolute_url($source, $link);
+                            }
                         }
                     }
                     
@@ -857,7 +874,7 @@ class NewsCrawler {
                     );
                     
                     // デバッグ用：抽出された記事の詳細を記録
-                    error_log('News Crawler: 記事抽出 - タイトル: ' . $title . ', 本文長: ' . mb_strlen($excerpt) . '文字');
+                    error_log('News Crawler: 記事抽出 - タイトル: ' . $title . ', 本文長: ' . mb_strlen($excerpt) . '文字, リンク: ' . $link);
                 }
                 $found_articles = true;
                 break;
@@ -913,6 +930,82 @@ class NewsCrawler {
             error_log('News Crawler: HTML解析中にエラーが発生しました: ' . $e->getMessage());
             return array();
         }
+    }
+    
+    private function get_readable_source_name($source_host) {
+        // ドメイン名を読みやすい名前に変換
+        $source_names = array(
+            'www3.nhk.or.jp' => 'NHKニュース',
+            'news.tv-asahi.co.jp' => 'テレビ朝日ニュース',
+            'newsdig.tbs.co.jp' => 'TBSニュース',
+            'www.fnn.jp' => 'フジテレビニュース',
+            'news.ntv.co.jp' => '日本テレビニュース',
+            'mainichi.jp' => '毎日新聞',
+            'www.asahi.com' => '朝日新聞',
+            'www.yomiuri.co.jp' => '読売新聞',
+            'www.sankei.com' => '産経新聞',
+            'www.nikkei.com' => '日本経済新聞',
+            'www.tokyo-np.co.jp' => '東京新聞',
+            'kyodonews.jp' => '共同通信',
+            'www.jiji.com' => '時事通信',
+            'www.itmedia.co.jp' => 'ITmedia',
+            'www.techno-edge.net' => 'テクノエッジ',
+            'sanseito.jp' => '参政党',
+            'www.komei.or.jp' => '公明党',
+            'reiwa-shinsengumi.com' => 'れいわ新選組'
+        );
+        
+        // 登録されている名前があれば返す
+        if (isset($source_names[$source_host])) {
+            return $source_names[$source_host];
+        }
+        
+        // 登録されていない場合は、ドメイン名をクリーンアップして返す
+        $clean_name = str_replace(array('www.', 'news.', 'www3.'), '', $source_host);
+        $clean_name = ucfirst($clean_name); // 最初の文字を大文字に
+        
+        return $clean_name;
+    }
+    
+    private function build_absolute_url($base_url, $relative_url) {
+        // 既に絶対URLの場合はそのまま返す
+        if (filter_var($relative_url, FILTER_VALIDATE_URL)) {
+            return $relative_url;
+        }
+        
+        // 空の場合は空文字を返す
+        if (empty($relative_url)) {
+            return '';
+        }
+        
+        // プロトコル相対URL（//example.com/path）の場合
+        if (substr($relative_url, 0, 2) === '//') {
+            $base_parts = parse_url($base_url);
+            $scheme = $base_parts['scheme'] ?? 'https';
+            return $scheme . ':' . $relative_url;
+        }
+        
+        // 絶対パス（/path）の場合
+        if (substr($relative_url, 0, 1) === '/') {
+            $base_parts = parse_url($base_url);
+            $scheme = $base_parts['scheme'] ?? 'https';
+            $host = $base_parts['host'] ?? '';
+            return $scheme . '://' . $host . $relative_url;
+        }
+        
+        // 相対パス（path）の場合
+        $base_parts = parse_url($base_url);
+        $scheme = $base_parts['scheme'] ?? 'https';
+        $host = $base_parts['host'] ?? '';
+        $path = $base_parts['path'] ?? '/';
+        
+        // ベースパスからディレクトリ部分を取得
+        $dir = dirname($path);
+        if ($dir === '.') {
+            $dir = '/';
+        }
+        
+        return $scheme . '://' . $host . $dir . '/' . $relative_url;
     }
     
     private function get_or_create_category($category_name) {
