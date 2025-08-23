@@ -406,15 +406,34 @@ class NewsCrawler {
                             if ($this->is_keyword_match($article, $keywords)) {
                                 $matched_articles[] = $article;
                                 $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                            } else {
+                                // キーワードマッチしない場合のデバッグ情報
+                                global $news_crawler_search_text;
+                                $debug_info[] = '  - キーワードマッチなし: ' . $article['title'];
+                                $debug_info[] = '    検索対象テキスト: ' . mb_substr($news_crawler_search_text, 0, 100) . '...';
                             }
                         }
                     } else {
-                        $article = $this->parse_content($content, $source);
-                        if ($article) {
-                            $debug_info[] = $source . ': HTMLページから記事を解析';
-                            if ($this->is_keyword_match($article, $keywords)) {
-                                $matched_articles[] = $article;
-                                $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                        $articles = $this->parse_content($content, $source);
+                        if ($articles && is_array($articles)) {
+                            $debug_info[] = $source . ': HTMLページから' . count($articles) . '件の記事を解析';
+                            foreach ($articles as $article) {
+                                if ($this->is_keyword_match($article, $keywords)) {
+                                    $matched_articles[] = $article;
+                                    $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                                }
+                            }
+                        } elseif ($articles) {
+                            // 単一記事の場合
+                            $debug_info[] = $source . ': HTMLページから単一記事を解析';
+                            if ($this->is_keyword_match($articles, $keywords)) {
+                                $matched_articles[] = $articles;
+                                $debug_info[] = '  - キーワードマッチ: ' . $articles['title'];
+                            } else {
+                                // キーワードマッチしない場合のデバッグ情報
+                                global $news_crawler_search_text;
+                                $debug_info[] = '  - キーワードマッチなし: ' . $articles['title'];
+                                $debug_info[] = '    検索対象テキスト: ' . mb_substr($news_crawler_search_text, 0, 100) . '...';
                             }
                         }
                     }
@@ -428,17 +447,32 @@ class NewsCrawler {
         
         $valid_articles = array();
         foreach ($matched_articles as $article) {
+            $debug_info[] = "  - 記事: " . $article['title'];
+            
             if ($this->is_duplicate_article($article)) {
                 $duplicates_skipped++;
+                $debug_info[] = "    → 重複のためスキップ";
                 continue;
             }
             
             $quality_score = $this->calculate_quality_score($article);
-            if ($quality_score < 0.5) {
+            $debug_info[] = "    → 品質スコア: " . number_format($quality_score, 2);
+            
+            // 品質スコアの詳細情報を追加
+            global $news_crawler_debug_details;
+            if (!empty($news_crawler_debug_details)) {
+                foreach ($news_crawler_debug_details as $detail) {
+                    $debug_info[] = "      " . $detail;
+                }
+            }
+            
+            if ($quality_score < 0.3) {
                 $low_quality_skipped++;
+                $debug_info[] = "    → 品質スコアが低いためスキップ";
                 continue;
             }
             
+            $debug_info[] = "    → 有効記事として追加";
             $valid_articles[] = $article;
         }
         
@@ -467,6 +501,11 @@ class NewsCrawler {
     
     private function is_keyword_match($article, $keywords) {
         $text_to_search = strtolower($article['title'] . ' ' . ($article['excerpt'] ?? '') . ' ' . ($article['news_content'] ?? '') . ' ' . ($article['description'] ?? ''));
+        
+        // デバッグ用：検索対象のテキストを記録
+        global $news_crawler_search_text;
+        $news_crawler_search_text = $text_to_search;
+        
         foreach ($keywords as $keyword) {
             if (stripos($text_to_search, strtolower($keyword)) !== false) {
                 return true;
@@ -567,7 +606,7 @@ class NewsCrawler {
         global $wpdb;
         $title = $article['title'];
         $similar_titles = $wpdb->get_var($wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_title LIKE %s AND post_type = 'post' AND post_status IN ('publish', 'draft', 'pending') AND post_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
+            "SELECT ID FROM {$wpdb->posts} WHERE post_title LIKE %s AND post_type = 'post' AND post_status IN ('publish', 'draft', 'pending') AND post_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             '%' . $wpdb->esc_like($title) . '%'
         ));
         if ($similar_titles) return true;
@@ -584,17 +623,59 @@ class NewsCrawler {
     
     private function calculate_quality_score($article) {
         $score = 0;
+        $debug_details = [];
+        
         $title_length = mb_strlen($article['title']);
-        if ($title_length >= 10 && $title_length <= 100) $score += 0.3;
+        if ($title_length >= 5 && $title_length <= 150) {
+            $score += 0.3;
+            $debug_details[] = "タイトル長: " . $title_length . "文字 (+0.3)";
+        } else {
+            $debug_details[] = "タイトル長: " . $title_length . "文字 (不足)";
+        }
         
-        $content_length = mb_strlen(($article['excerpt'] ?? '') . ' ' . ($article['news_content'] ?? ''));
-        if ($content_length >= 100) $score += 0.4;
+        // excerptとnews_contentの両方をチェック（RSSとHTMLの両方に対応）
+        $content_text = '';
+        if (!empty($article['excerpt'])) $content_text .= $article['excerpt'] . ' ';
+        if (!empty($article['news_content'])) $content_text .= $article['news_content'] . ' ';
+        if (!empty($article['description'])) $content_text .= $article['description'] . ' ';
         
-        if (!empty($article['image_url'])) $score += 0.1;
-        if (!empty($article['article_date'])) $score += 0.1;
-        if (!empty($article['source'])) $score += 0.1;
+        $content_length = mb_strlen(trim($content_text));
+        if ($content_length >= 50) {
+            $score += 0.4;
+            $debug_details[] = "本文長: " . $content_length . "文字 (+0.4)";
+        } else {
+            $debug_details[] = "本文長: " . $content_length . "文字 (不足)";
+        }
         
-        return min($score, 1.0);
+        if (!empty($article['image_url'])) {
+            $score += 0.1;
+            $debug_details[] = "画像あり (+0.1)";
+        } else {
+            $debug_details[] = "画像なし";
+        }
+        
+        if (!empty($article['article_date'])) {
+            $score += 0.1;
+            $debug_details[] = "日付あり (+0.1)";
+        } else {
+            $debug_details[] = "日付なし";
+        }
+        
+        if (!empty($article['source'])) {
+            $score += 0.1;
+            $debug_details[] = "ソースあり (+0.1)";
+        } else {
+            $debug_details[] = "ソースなし";
+        }
+        
+        $final_score = min($score, 1.0);
+        $debug_details[] = "最終スコア: " . number_format($final_score, 2);
+        
+        // デバッグ情報をグローバル変数に保存
+        global $news_crawler_debug_details;
+        $news_crawler_debug_details = $debug_details;
+        
+        return $final_score;
     }
     
     private function get_crawler_statistics() {
@@ -671,33 +752,167 @@ class NewsCrawler {
     }
     
     private function parse_content($content, $source) {
-        $doc = new DOMDocument();
-        libxml_use_internal_errors(true);
-        $doc->loadHTML('<?xml encoding="utf-8" ?>' . $content);
-        libxml_clear_errors();
-        $xpath = new DOMXPath($doc);
+        try {
+            $doc = new DOMDocument();
+            libxml_use_internal_errors(true);
+            $doc->loadHTML('<?xml encoding="utf-8" ?>' . $content);
+            libxml_clear_errors();
+            $xpath = new DOMXPath($doc);
+            
+            if (!$xpath) {
+                error_log('News Crawler: XPath初期化に失敗しました');
+                return array();
+            }
 
-        $title = $xpath->query('//h1')->item(0)->nodeValue ?? $xpath->query('//title')->item(0)->nodeValue ?? '';
+        $articles = array();
         
-        $paragraphs = [];
-        foreach ($xpath->query('//p') as $p) {
-            $text = trim($p->nodeValue);
-            if (mb_strlen($text) > 30) {
-                $paragraphs[] = $text;
+        // 複数の記事を抽出するためのセレクター
+        $article_selectors = array(
+            '//article',
+            '//div[contains(@class, "post")]',
+            '//div[contains(@class, "news")]',
+            '//div[contains(@class, "item")]',
+            '//li[contains(@class, "news")]',
+            '//div[contains(@class, "article")]',
+            '//div[contains(@class, "entry")]'
+        );
+        
+        $found_articles = false;
+        foreach ($article_selectors as $selector) {
+            $nodes = $xpath->query($selector);
+            if ($nodes && $nodes->length > 0) {
+                foreach ($nodes as $node) {
+                    $title_query = $xpath->query('.//h1|.//h2|.//h3|.//h4|.//a', $node);
+                    if (!$title_query || $title_query->length === 0) continue;
+                    
+                    $title_node = $title_query->item(0);
+                    if (!$title_node) continue;
+                    
+                    $title = trim($title_node->nodeValue);
+                    if (empty($title) || mb_strlen($title) < 5) continue;
+                    
+                    $link_query = $xpath->query('.//a', $node);
+                    $link = '';
+                    if ($link_query && $link_query->length > 0) {
+                        $link_node = $link_query->item(0);
+                        if ($link_node) {
+                            $link = $link_node->getAttribute('href');
+                        }
+                    }
+                    
+                    $paragraphs = array();
+                    // より多くの要素から本文を抽出
+                    $content_selectors = array(
+                        './/p',
+                        './/div[contains(@class, "content")]',
+                        './/div[contains(@class, "text")]',
+                        './/div[contains(@class, "body")]',
+                        './/div[contains(@class, "article")]',
+                        './/span[contains(@class, "content")]',
+                        './/span[contains(@class, "text")]'
+                    );
+                    
+                    foreach ($content_selectors as $content_selector) {
+                        $content_query = $xpath->query($content_selector, $node);
+                        if ($content_query && $content_query->length > 0) {
+                            foreach ($content_query as $content_element) {
+                                $text = trim($content_element->nodeValue);
+                                if (mb_strlen($text) > 20) {
+                                    $paragraphs[] = $text;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 段落が見つからない場合は、ノード全体からテキストを抽出
+                    if (empty($paragraphs)) {
+                        $node_text = trim(strip_tags($doc->saveHTML($node)));
+                        if (mb_strlen($node_text) > 50) {
+                            $paragraphs[] = $node_text;
+                        }
+                    }
+                    
+                    $excerpt = implode(' ', array_slice($paragraphs, 0, 2));
+                    
+                    $time_query = $xpath->query('.//time[@datetime]|.//span[@class*="date"]', $node);
+                    $article_date = '';
+                    if ($time_query && $time_query->length > 0) {
+                        $time_node = $time_query->item(0);
+                        if ($time_node) {
+                            if ($time_node->hasAttribute('datetime')) {
+                                $article_date = date('Y-m-d H:i:s', strtotime($time_node->getAttribute('datetime')));
+                            } else {
+                                $article_date = date('Y-m-d H:i:s', strtotime($time_node->nodeValue));
+                            }
+                        }
+                    }
+                    
+                    $articles[] = array(
+                        'title' => $title,
+                        'link' => $link,
+                        'excerpt' => $excerpt,
+                        'news_content' => implode("\n\n", $paragraphs),
+                        'article_date' => $article_date,
+                        'source' => $source,
+                    );
+                    
+                    // デバッグ用：抽出された記事の詳細を記録
+                    error_log('News Crawler: 記事抽出 - タイトル: ' . $title . ', 本文長: ' . mb_strlen($excerpt) . '文字');
+                }
+                $found_articles = true;
+                break;
             }
         }
-        $excerpt = implode(' ', array_slice($paragraphs, 0, 2));
         
-        $time_node = $xpath->query('//time[@datetime]')->item(0);
-        $article_date = $time_node ? $time_node->getAttribute('datetime') : '';
+        // 記事が見つからない場合は、単一ページとして解析
+        if (!$found_articles) {
+            $title = '';
+            $h1_query = $xpath->query('//h1');
+            if ($h1_query && $h1_query->length > 0) {
+                $title = $h1_query->item(0)->nodeValue ?? '';
+            }
+            if (empty($title)) {
+                $title_query = $xpath->query('//title');
+                if ($title_query && $title_query->length > 0) {
+                    $title = $title_query->item(0)->nodeValue ?? '';
+                }
+            }
+            
+            $paragraphs = array();
+            $p_query = $xpath->query('//p');
+            if ($p_query && $p_query->length > 0) {
+                foreach ($p_query as $p) {
+                    $text = trim($p->nodeValue);
+                    if (mb_strlen($text) > 30) {
+                        $paragraphs[] = $text;
+                    }
+                }
+            }
+            $excerpt = implode(' ', array_slice($paragraphs, 0, 2));
+            
+            $article_date = '';
+            $time_query = $xpath->query('//time[@datetime]');
+            if ($time_query && $time_query->length > 0) {
+                $time_node = $time_query->item(0);
+                if ($time_node) {
+                    $article_date = $time_node->getAttribute('datetime');
+                }
+            }
 
-        return array(
-            'title' => trim($title),
-            'excerpt' => $excerpt,
-            'news_content' => implode("\n\n", $paragraphs),
-            'article_date' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '',
-            'source' => $source,
-        );
+            $articles[] = array(
+                'title' => trim($title),
+                'excerpt' => $excerpt,
+                'news_content' => implode("\n\n", $paragraphs),
+                'article_date' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '',
+                'source' => $source,
+            );
+        }
+        
+        return $articles;
+        } catch (Exception $e) {
+            error_log('News Crawler: HTML解析中にエラーが発生しました: ' . $e->getMessage());
+            return array();
+        }
     }
     
     private function get_or_create_category($category_name) {
