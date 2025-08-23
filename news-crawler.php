@@ -540,6 +540,9 @@ class NewsCrawler {
         }
         
         foreach ($articles_by_source as $source_host => $source_articles) {
+            $post_content .= '<!-- wp:quote -->';
+            $post_content .= '<blockquote class="wp-block-quote">';
+            
             $post_content .= '<!-- wp:heading {"level":2} -->';
             $post_content .= '<h2>' . esc_html($this->get_readable_source_name($source_host)) . '</h2>';
             $post_content .= '<!-- /wp:heading -->';
@@ -579,6 +582,9 @@ class NewsCrawler {
                 $post_content .= '<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>';
                 $post_content .= '<!-- /wp:spacer -->';
             }
+            
+            $post_content .= '</blockquote>';
+            $post_content .= '<!-- /wp:quote -->';
         }
         
         $post_data = array(
