@@ -219,10 +219,9 @@ class NewsCrawler {
             
             <hr>
             
-            <h2>手動実行</h2>
+            <h2>投稿を作成</h2>
             <p>設定したニュースソースからキーワードにマッチした記事を取得して、1つの投稿にまとめて作成します。</p>
-            <button type="button" id="manual-run" class="button button-primary">手動実行</button>
-            <button type="button" id="test-fetch" class="button button-secondary">テスト取得</button>
+            <button type="button" id="manual-run" class="button button-primary">投稿を作成</button>
             
             <div id="manual-run-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
             
@@ -267,37 +266,9 @@ class NewsCrawler {
                     var button = $(this);
                     var resultDiv = $('#manual-run-result');
                     button.prop('disabled', true).text('実行中...');
-                    resultDiv.html('記事の取得と投稿を開始します...');
+                    resultDiv.html('ニュースソースの解析と投稿作成を開始します...');
                     
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'news_crawler_manual_run',
-                            nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                resultDiv.html('<div class="notice notice-success"><p>' + response.data.replace(/\n/g, '<br>') + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="notice notice-error"><p>' + response.data.replace(/\n/g, '<br>') + '</p></div>');
-                            }
-                        },
-                        error: function() {
-                            resultDiv.html('<div class="notice notice-error"><p>エラーが発生しました。</p></div>');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('手動実行');
-                        }
-                    });
-                });
-                
-                $('#test-fetch').click(function() {
-                    var button = $(this);
-                    var resultDiv = $('#manual-run-result');
-                    button.prop('disabled', true).text('テスト中...');
-                    resultDiv.html('ニュースソースへの接続をテストしています...');
-
+                    // まずニュースソースの解析を実行
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
@@ -305,18 +276,44 @@ class NewsCrawler {
                             action: 'news_crawler_test_fetch',
                             nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
                         },
-                        success: function(response) {
-                             if (response.success) {
-                                resultDiv.html('<div class="notice notice-info"><p>' + response.data + '</p></div>');
+                        success: function(testResponse) {
+                            var testResult = '';
+                            if (testResponse.success) {
+                                testResult = '<div class="notice notice-info"><p><strong>ニュースソース解析結果:</strong><br>' + testResponse.data + '</p></div>';
                             } else {
-                                resultDiv.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
+                                testResult = '<div class="notice notice-error"><p><strong>ニュースソース解析エラー:</strong><br>' + testResponse.data + '</p></div>';
                             }
+                            
+                            // 次に投稿作成を実行
+                            $.ajax({
+                                url: ajaxurl,
+                                type: 'POST',
+                                data: {
+                                    action: 'news_crawler_manual_run',
+                                    nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
+                                },
+                                success: function(postResponse) {
+                                    var postResult = '';
+                                    if (postResponse.success) {
+                                        postResult = '<div class="notice notice-success"><p><strong>投稿作成結果:</strong><br>' + postResponse.data.replace(/\n/g, '<br>') + '</p></div>';
+                                    } else {
+                                        postResult = '<div class="notice notice-error"><p><strong>投稿作成エラー:</strong><br>' + postResponse.data.replace(/\n/g, '<br>') + '</p></div>';
+                                    }
+                                    
+                                    // 両方の結果を表示
+                                    resultDiv.html(testResult + '<br>' + postResult);
+                                },
+                                error: function() {
+                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>投稿作成エラー:</strong><br>エラーが発生しました。</p></div>');
+                                },
+                                complete: function() {
+                                    button.prop('disabled', false).text('投稿を作成');
+                                }
+                            });
                         },
                         error: function() {
-                            resultDiv.html('<div class="notice notice-error"><p>エラーが発生しました。</p></div>');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('テスト取得');
+                            resultDiv.html('<div class="notice notice-error"><p><strong>ニュースソース解析エラー:</strong><br>エラーが発生しました。</p></div>');
+                            button.prop('disabled', false).text('投稿を作成');
                         }
                     });
                 });
