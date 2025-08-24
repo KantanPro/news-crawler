@@ -4,7 +4,7 @@ Tags: news, crawler, rss, automation, content, youtube
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -98,6 +98,14 @@ YouTube Data API v3のAPIキーが必要です。Google Cloud Consoleで取得�
 5. YouTube動画投稿作成画面
 
 == Changelog ==
+
+= 1.4.0 =
+* ジャンル別設定管理機能を追加
+* 統合管理画面でニュースとYouTube動画を一元管理
+* 基本設定の分離（YouTube APIキーなど）
+* ワンクリック投稿作成機能
+* 設定の再利用機能
+* ユーザビリティの大幅改善
 
 = 1.3.0 =
 * ファーストテイク

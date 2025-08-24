@@ -15,24 +15,20 @@ class NewsCrawlerYouTubeCrawler {
     private $option_name = 'youtube_crawler_settings';
     
     public function __construct() {
-        $options = get_option($this->option_name, array());
-        $this->api_key = isset($options['api_key']) ? $options['api_key'] : '';
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // APIキーは基本設定から取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $this->api_key = isset($basic_settings['youtube_api_key']) ? $basic_settings['youtube_api_key'] : '';
+        
+        // メニュー登録は新しいジャンル設定システムで管理されるため無効化
+        // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_youtube_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_youtube_crawler_test_fetch', array($this, 'test_fetch'));
     }
     
     public function add_admin_menu() {
-        // YouTubeサブメニュー
-        add_submenu_page(
-            'news-crawler',
-            'YouTube',
-            'YouTube',
-            'manage_options',
-            'youtube-crawler',
-            array($this, 'admin_page')
-        );
+        // 新しいジャンル設定システムに統合されたため、このメニューは無効化
+        // メニューは NewsCrawlerGenreSettings クラスで管理されます
     }
     
     public function admin_init() {
@@ -205,202 +201,110 @@ class NewsCrawlerYouTubeCrawler {
         }
         echo '</select>';
         echo '<p class="description">重複チェックを無効にすると、同じ動画が含まれた投稿が複数作成される可能性があります。</p>';
-    }
-    
+    }   
+ 
     public function sanitize_settings($input) {
         $sanitized = array();
         
         $existing_options = get_option($this->option_name, array());
         
-        if (isset($input['max_videos']) && !empty($input['max_videos'])) {
-            $max_videos = intval($input['max_videos']);
-            $sanitized['max_videos'] = max(1, min(20, $max_videos));
+        if (isset($input['max_videos'])) {
+            if (is_numeric($input['max_videos']) || (is_string($input['max_videos']) && !empty(trim($input['max_videos'])))) {
+                $max_videos = intval($input['max_videos']);
+                $sanitized['max_videos'] = max(1, min(20, $max_videos));
+            } else {
+                $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
+            }
         } else {
             $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
         }
         
-        if (isset($input['keywords']) && !empty($input['keywords'])) {
-            // 配列の場合はそのまま使用、文字列の場合は改行で分割
-            if (is_array($input['keywords'])) {
-                $keywords = $input['keywords'];
-            } else {
+        if (isset($input['keywords'])) {
+            if (is_array($input['keywords']) && !empty($input['keywords'])) {
+                $keywords = array_map('trim', $input['keywords']);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } elseif (is_string($input['keywords']) && !empty(trim($input['keywords']))) {
                 $keywords = explode("\n", $input['keywords']);
+                $keywords = array_map('trim', $keywords);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } else {
+                $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
             }
-            $keywords = array_map('trim', $keywords);
-            $keywords = array_filter($keywords);
-            $sanitized['keywords'] = $keywords;
         } else {
             $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         }
         
-        if (isset($input['channels']) && !empty($input['channels'])) {
-            // 配列の場合はそのまま使用、文字列の場合は改行で分割
-            if (is_array($input['channels'])) {
-                $channels = $input['channels'];
-            } else {
+        if (isset($input['channels'])) {
+            if (is_array($input['channels']) && !empty($input['channels'])) {
+                $channels = array_map('trim', $input['channels']);
+                $channels = array_filter($channels);
+            } elseif (is_string($input['channels']) && !empty(trim($input['channels']))) {
                 $channels = explode("\n", $input['channels']);
+                $channels = array_map('trim', $channels);
+                $channels = array_filter($channels);
+                $sanitized['channels'] = $channels;
+            } else {
+                $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
             }
-            $channels = array_map('trim', $channels);
-            $channels = array_filter($channels);
-            $sanitized['channels'] = $channels;
         } else {
             $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
         }
         
-        if (isset($input['post_category']) && !empty($input['post_category'])) {
-            $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+        if (isset($input['post_category'])) {
+            if (is_string($input['post_category']) && !empty(trim($input['post_category']))) {
+                $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+            } else {
+                $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
+            }
         } else {
             $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
         }
         
-        if (isset($input['post_status']) && !empty($input['post_status'])) {
-            $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+        if (isset($input['post_status'])) {
+            if (is_string($input['post_status']) && !empty(trim($input['post_status']))) {
+                $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+            } else {
+                $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
+            }
         } else {
             $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
         }
         
-        if (isset($input['embed_type']) && !empty($input['embed_type'])) {
-            $sanitized['embed_type'] = sanitize_text_field($input['embed_type']);
+        if (isset($input['embed_type'])) {
+            if (is_string($input['embed_type']) && !empty(trim($input['embed_type']))) {
+                $sanitized['embed_type'] = sanitize_text_field($input['embed_type']);
+            } else {
+                $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
+            }
         } else {
             $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
         }
         
         // API キーの処理
-        if (isset($input['api_key']) && !empty($input['api_key'])) {
-            $sanitized['api_key'] = sanitize_text_field($input['api_key']);
+        if (isset($input['api_key'])) {
+            if (is_string($input['api_key']) && !empty(trim($input['api_key']))) {
+                $sanitized['api_key'] = sanitize_text_field($input['api_key']);
+            } else {
+                $sanitized['api_key'] = isset($existing_options['api_key']) ? $existing_options['api_key'] : '';
+            }
         } else {
             $sanitized['api_key'] = isset($existing_options['api_key']) ? $existing_options['api_key'] : '';
         }
         
         // 重複チェック設定の処理
-        if (isset($input['skip_duplicates']) && !empty($input['skip_duplicates'])) {
-            $sanitized['skip_duplicates'] = sanitize_text_field($input['skip_duplicates']);
+        if (isset($input['skip_duplicates'])) {
+            if (is_string($input['skip_duplicates']) && !empty(trim($input['skip_duplicates']))) {
+                $sanitized['skip_duplicates'] = sanitize_text_field($input['skip_duplicates']);
+            } else {
+                $sanitized['skip_duplicates'] = isset($existing_options['skip_duplicates']) ? $existing_options['skip_duplicates'] : 'enabled';
+            }
         } else {
             $sanitized['skip_duplicates'] = isset($existing_options['skip_duplicates']) ? $existing_options['skip_duplicates'] : 'enabled';
         }
         
         return $sanitized;
-    }
-    
-    public function admin_page() {
-        ?>
-        <div class="wrap">
-            <h1>YouTube Crawler</h1>
-            
-            <?php if (isset($_GET['settings-updated'])): ?>
-                <div class="notice notice-success is-dismissible">
-                    <p>設定を保存しました。</p>
-                </div>
-            <?php endif; ?>
-            
-            <form method="post" action="options.php">
-                <?php
-                settings_fields($this->option_name);
-                do_settings_sections('youtube-crawler');
-                submit_button();
-                ?>
-            </form>
-            
-            <hr>
-            
-            <h2>動画投稿を作成</h2>
-            <p>設定した各YouTubeチャンネルから最新の動画を1件ずつ取得し、キーワードにマッチした動画の埋め込みと要約を含む投稿を作成します。</p>
-            <button type="button" id="youtube-manual-run" class="button button-primary">動画投稿を作成</button>
-            
-            <div id="youtube-manual-run-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
-            
-            <hr>
-            
-            <h2>統計情報</h2>
-            <?php $stats = $this->get_youtube_statistics(); ?>
-            <table class="widefat">
-                <thead>
-                    <tr>
-                        <th>項目</th>
-                        <th>数値</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>総動画投稿数</td>
-                        <td><?php echo $stats['total_posts']; ?>件</td>
-                    </tr>
-                    <tr>
-                        <td>今月の動画投稿数</td>
-                        <td><?php echo $stats['posts_this_month']; ?>件</td>
-                    </tr>
-                    <tr>
-                        <td>重複スキップ数</td>
-                        <td><?php echo $stats['duplicates_skipped']; ?>件</td>
-                    </tr>
-                    <tr>
-                        <td>最後の実行日時</td>
-                        <td><?php echo $stats['last_run']; ?></td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <script>
-            jQuery(document).ready(function($) {
-                $('#youtube-manual-run').click(function() {
-                    var button = $(this);
-                    var resultDiv = $('#youtube-manual-run-result');
-                    button.prop('disabled', true).text('実行中...');
-                    resultDiv.html('YouTubeチャンネルの解析と動画投稿作成を開始します...');
-                    
-                    // まずチャンネルの解析を実行
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'youtube_crawler_test_fetch',
-                            nonce: '<?php echo wp_create_nonce('youtube_crawler_nonce'); ?>'
-                        },
-                        success: function(testResponse) {
-                            var testResult = '';
-                            if (testResponse.success) {
-                                testResult = '<div class="notice notice-info"><p><strong>YouTubeチャンネル解析結果:</strong><br>' + testResponse.data + '</p></div>';
-                            } else {
-                                testResult = '<div class="notice notice-error"><p><strong>YouTubeチャンネル解析エラー:</strong><br>' + testResponse.data + '</p></div>';
-                            }
-                            
-                            // 次に動画投稿作成を実行
-                            $.ajax({
-                                url: ajaxurl,
-                                type: 'POST',
-                                data: {
-                                    action: 'youtube_crawler_manual_run',
-                                    nonce: '<?php echo wp_create_nonce('youtube_crawler_nonce'); ?>'
-                                },
-                                success: function(postResponse) {
-                                    var postResult = '';
-                                    if (postResponse.success) {
-                                        postResult = '<div class="notice notice-success"><p><strong>動画投稿作成結果:</strong><br>' + postResponse.data.replace(/\n/g, '<br>') + '</p></div>';
-                                    } else {
-                                        postResult = '<div class="notice notice-error"><p><strong>動画投稿作成エラー:</strong><br>' + postResponse.data.replace(/\n/g, '<br>') + '</p></div>';
-                                    }
-                                    
-                                    // 両方の結果を表示
-                                    resultDiv.html(testResult + '<br>' + postResult);
-                                },
-                                error: function() {
-                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>動画投稿作成エラー:</strong><br>エラーが発生しました。</p></div>');
-                                },
-                                complete: function() {
-                                    button.prop('disabled', false).text('動画投稿を作成');
-                                }
-                            });
-                        },
-                        error: function() {
-                            resultDiv.html('<div class="notice notice-error"><p><strong>YouTubeチャンネル解析エラー:</strong><br>エラーが発生しました。</p></div>');
-                            button.prop('disabled', false).text('動画投稿を作成');
-                        }
-                    });
-                });
-            });
-            </script>
-        </div>
-        <?php
     }
     
     public function manual_run() {
@@ -445,7 +349,7 @@ class NewsCrawlerYouTubeCrawler {
         wp_send_json_success(implode('<br>', $test_result));
     }
     
-    private function crawl_youtube() {
+    public function crawl_youtube() {
         $options = get_option($this->option_name, array());
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
@@ -458,27 +362,28 @@ class NewsCrawlerYouTubeCrawler {
             return 'YouTubeチャンネルが設定されていません。';
         }
         
-        if (empty($this->api_key)) {
-            return 'YouTube APIキーが設定されていません。';
+        // APIキーを基本設定から取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['youtube_api_key']) ? $basic_settings['youtube_api_key'] : '';
+        
+        if (empty($api_key)) {
+            return 'YouTube APIキーが設定されていません。基本設定で設定してください。';
         }
+        
+        $this->api_key = $api_key;
         
         $matched_videos = array();
         $errors = array();
         $duplicates_skipped = 0;
-        $debug_info = array();
         
         foreach ($channels as $channel) {
             try {
                 // 各チャンネルから最新の動画を1件のみ取得
                 $videos = $this->fetch_channel_videos($channel, 1);
                 if ($videos && is_array($videos)) {
-                    $debug_info[] = $channel . ': 最新の動画1件を取得';
                     foreach ($videos as $video) {
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
-                            $debug_info[] = '  - キーワードマッチ: ' . $video['title'];
-                        } else {
-                            $debug_info[] = '  - キーワードマッチなし: ' . $video['title'];
                         }
                     }
                 }
@@ -487,26 +392,16 @@ class NewsCrawlerYouTubeCrawler {
             }
         }
         
-        $debug_info[] = "\nキーワードマッチした動画数: " . count($matched_videos);
-        
         $valid_videos = array();
         foreach ($matched_videos as $video) {
-            $debug_info[] = "  - 動画: " . $video['title'];
-            $debug_info[] = "    動画ID: " . $video['video_id'];
-            
             if ($skip_duplicates === 'enabled') {
                 $duplicate_info = $this->is_duplicate_video($video);
                 if ($duplicate_info) {
                     $duplicates_skipped++;
-                    $debug_info[] = "    → 重複のためスキップ (投稿ID: " . $duplicate_info . ") - 過去30日以内に同じ動画が投稿済み";
                     continue;
                 }
-                $debug_info[] = "    → 重複チェック: 過去30日以内に重複なし";
-            } else {
-                $debug_info[] = "    → 重複チェックは無効化されています";
             }
             
-            $debug_info[] = "    → 有効動画として追加";
             $valid_videos[] = $video;
         }
         
@@ -518,13 +413,7 @@ class NewsCrawlerYouTubeCrawler {
             $post_id = $this->create_video_summary_post($valid_videos, $category, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
-                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
-            } else {
-                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
-                $debug_info[] = "\n投稿作成失敗: " . $error_message;
             }
-        } else {
-            $debug_info[] = "\n有効な動画がないため投稿を作成しませんでした";
         }
         
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
@@ -532,13 +421,92 @@ class NewsCrawlerYouTubeCrawler {
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
         
-        $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
-        
         $this->update_youtube_statistics($posts_created, $duplicates_skipped);
         
         return $result;
     }
     
+    public function crawl_youtube_with_options($options) {
+        $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
+        $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+        $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
+        $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'youtube';
+        $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
+        $skip_duplicates = isset($options['skip_duplicates']) && !empty($options['skip_duplicates']) ? $options['skip_duplicates'] : 'enabled';
+        
+        if (empty($channels)) {
+            return 'YouTubeチャンネルが設定されていません。';
+        }
+        
+        // APIキーを基本設定から取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['youtube_api_key']) ? $basic_settings['youtube_api_key'] : '';
+        
+        // オプションからもAPIキーを取得（優先）
+        if (isset($options['api_key']) && !empty($options['api_key'])) {
+            $api_key = $options['api_key'];
+        }
+        
+        if (empty($api_key)) {
+            return 'YouTube APIキーが設定されていません。基本設定で設定してください。';
+        }
+        
+        $this->api_key = $api_key;
+        
+        $matched_videos = array();
+        $errors = array();
+        $duplicates_skipped = 0;
+        
+        foreach ($channels as $channel) {
+            try {
+                // 各チャンネルから最新の動画を1件のみ取得
+                $videos = $this->fetch_channel_videos($channel, 1);
+                if ($videos && is_array($videos)) {
+                    foreach ($videos as $video) {
+                        if ($this->is_keyword_match($video, $keywords)) {
+                            $matched_videos[] = $video;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $errors[] = $channel . ': ' . $e->getMessage();
+            }
+        }
+        
+        $valid_videos = array();
+        foreach ($matched_videos as $video) {
+            if ($skip_duplicates === 'enabled') {
+                $duplicate_info = $this->is_duplicate_video($video);
+                if ($duplicate_info) {
+                    $duplicates_skipped++;
+                    continue;
+                }
+            }
+            
+            $valid_videos[] = $video;
+        }
+        
+        $valid_videos = array_slice($valid_videos, 0, $max_videos);
+        
+        $posts_created = 0;
+        $post_id = null;
+        if (!empty($valid_videos)) {
+            $post_id = $this->create_video_summary_post($valid_videos, $category, $status);
+            if ($post_id && !is_wp_error($post_id)) {
+                $posts_created = 1;
+            }
+        }
+        
+        $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
+        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
+        if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
+        
+        $this->update_youtube_statistics($posts_created, $duplicates_skipped);
+        
+        return $result;
+    }  
+  
     private function is_keyword_match($video, $keywords) {
         $text_to_search = strtolower($video['title'] . ' ' . ($video['description'] ?? ''));
         

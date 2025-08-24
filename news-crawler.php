@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -15,6 +15,35 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// 必要なクラスファイルをインクルード
+require_once plugin_dir_path(__FILE__) . 'includes/class-genre-settings.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-youtube-crawler.php';
+
+// プラグイン初期化
+function news_crawler_init() {
+    // ジャンル設定管理クラスを初期化
+    if (class_exists('NewsCrawlerGenreSettings')) {
+        new NewsCrawlerGenreSettings();
+    }
+    
+    // 既存のNewsCrawlerクラスも初期化（後方互換性のため）
+    if (class_exists('NewsCrawler')) {
+        // メニュー登録を無効化したNewsCrawlerクラスは手動で初期化しない
+        // ジャンル設定から呼び出される際にインスタンス化される
+    }
+    
+    // 既存のYouTubeCrawlerクラスも初期化（後方互換性のため）
+    if (class_exists('YouTubeCrawler')) {
+        // メニュー登録を無効化したYouTubeCrawlerクラスは手動で初期化しない
+    }
+    
+    // 既存のYouTubeCrawlerクラス（新版）も初期化
+    if (class_exists('NewsCrawlerYouTubeCrawler')) {
+        // メニュー登録を無効化したクラスは手動で初期化しない
+    }
+}
+add_action('plugins_loaded', 'news_crawler_init');
+
 // YouTube API クラス
 class YouTubeCrawler {
     private $api_key;
@@ -22,21 +51,16 @@ class YouTubeCrawler {
     
     public function __construct() {
         $this->api_key = get_option('youtube_api_key', '');
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // メニュー登録は新しいジャンル設定システムで管理されるため無効化
+        // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_youtube_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_youtube_crawler_test_fetch', array($this, 'test_fetch'));
     }
     
     public function add_admin_menu() {
-        add_submenu_page(
-            'options-general.php',
-            'YouTube Crawler',
-            'YouTube',
-            'manage_options',
-            'youtube-crawler',
-            array($this, 'admin_page')
-        );
+        // 新しいジャンル設定システムに統合されたため、このメニューは無効化
+        // メニューは NewsCrawlerGenreSettings クラスで管理されます
     }
     
     public function admin_init() {
@@ -190,45 +214,76 @@ class YouTubeCrawler {
         
         $existing_options = get_option($this->option_name, array());
         
-        if (isset($input['max_videos']) && !empty(trim($input['max_videos']))) {
-            $max_videos = intval($input['max_videos']);
-            $sanitized['max_videos'] = max(1, min(20, $max_videos));
+        if (isset($input['max_videos'])) {
+            if (is_numeric($input['max_videos']) || (is_string($input['max_videos']) && !empty(trim($input['max_videos'])))) {
+                $max_videos = intval($input['max_videos']);
+                $sanitized['max_videos'] = max(1, min(20, $max_videos));
+            } else {
+                $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
+            }
         } else {
             $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
         }
         
-        if (isset($input['keywords']) && !empty(trim($input['keywords']))) {
-            $keywords = explode("\n", $input['keywords']);
-            $keywords = array_map('trim', $keywords);
-            $keywords = array_filter($keywords);
-            $sanitized['keywords'] = $keywords;
+        if (isset($input['keywords'])) {
+            if (is_array($input['keywords'])) {
+                $keywords = array_map('trim', $input['keywords']);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } elseif (is_string($input['keywords']) && !empty(trim($input['keywords']))) {
+                $keywords = explode("\n", $input['keywords']);
+                $keywords = array_map('trim', $keywords);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } else {
+                $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+            }
         } else {
             $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         }
         
-        if (isset($input['channels']) && !empty(trim($input['channels']))) {
-            $channels = explode("\n", $input['channels']);
-            $channels = array_map('trim', $channels);
-            $channels = array_filter($channels);
-            $sanitized['channels'] = $channels;
+        if (isset($input['channels'])) {
+            if (is_array($input['channels'])) {
+                $channels = array_map('trim', $input['channels']);
+                $channels = array_filter($channels);
+                $sanitized['channels'] = $channels;
+            } elseif (is_string($input['channels']) && !empty(trim($input['channels']))) {
+                $channels = explode("\n", $input['channels']);
+                $channels = array_map('trim', $channels);
+                $channels = array_filter($channels);
+                $sanitized['channels'] = $channels;
+            } else {
+                $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
+            }
         } else {
             $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
         }
         
-        if (isset($input['post_category']) && !empty(trim($input['post_category']))) {
-            $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+        if (isset($input['post_category'])) {
+            if (is_string($input['post_category']) && !empty(trim($input['post_category']))) {
+                $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+            } else {
+                $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
+            }
         } else {
             $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
         }
         
-        if (isset($input['post_status']) && !empty(trim($input['post_status']))) {
-            $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+        if (isset($input['post_status'])) {
+            if (is_string($input['post_status']) && !empty(trim($input['post_status']))) {
+                $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+                $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
+            }
         } else {
             $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
         }
         
-        if (isset($input['embed_type']) && !empty(trim($input['embed_type']))) {
-            $sanitized['embed_type'] = sanitize_text_field($input['embed_type']);
+        if (isset($input['embed_type'])) {
+            if (is_string($input['embed_type']) && !empty(trim($input['embed_type']))) {
+                $sanitized['embed_type'] = sanitize_text_field($input['embed_type']);
+            } else {
+                $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
+            }
         } else {
             $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
         }
@@ -399,7 +454,7 @@ class YouTubeCrawler {
         wp_send_json_success(implode('<br>', $test_result));
     }
     
-    private function crawl_youtube() {
+    public function crawl_youtube() {
         $options = get_option($this->option_name, array());
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
@@ -745,7 +800,8 @@ class NewsCrawler {
     
     public function __construct() {
         add_action('init', array($this, 'init'));
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // メニュー登録は新しいジャンル設定システムで管理されるため無効化
+        // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_news_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_news_crawler_test_fetch', array($this, 'test_fetch'));
@@ -760,26 +816,8 @@ class NewsCrawler {
     }
     
     public function add_admin_menu() {
-        // メインメニューを追加
-        add_menu_page(
-            'News Crawler',
-            'News Crawler',
-            'manage_options',
-            'news-crawler',
-            array($this, 'admin_page'),
-            'dashicons-rss',
-            30
-        );
-        
-        // ニュースサイトサブメニュー
-        add_submenu_page(
-            'news-crawler',
-            'ニュースサイト',
-            'ニュースサイト',
-            'manage_options',
-            'news-crawler',
-            array($this, 'admin_page')
-        );
+        // 新しいジャンル設定システムに統合されたため、このメニューは無効化
+        // メニューは NewsCrawlerGenreSettings クラスで管理されます
     }
     
     public function admin_init() {
@@ -893,40 +931,73 @@ class NewsCrawler {
         
         $existing_options = get_option($this->option_name, array());
         
-        if (isset($input['max_articles']) && !empty(trim($input['max_articles']))) {
-            $max_articles = intval($input['max_articles']);
-            $sanitized['max_articles'] = max(1, min(50, $max_articles));
+        if (isset($input['max_articles'])) {
+            if (is_numeric($input['max_articles']) || (is_string($input['max_articles']) && !empty(trim($input['max_articles'])))) {
+                $max_articles = intval($input['max_articles']);
+                $sanitized['max_articles'] = max(1, min(50, $max_articles));
+            } else {
+                $sanitized['max_articles'] = isset($existing_options['max_articles']) ? $existing_options['max_articles'] : 10;
+            }
         } else {
             $sanitized['max_articles'] = isset($existing_options['max_articles']) ? $existing_options['max_articles'] : 10;
         }
         
-        if (isset($input['keywords']) && !empty(trim($input['keywords']))) {
-            $keywords = explode("\n", $input['keywords']);
-            $keywords = array_map('trim', $keywords);
-            $keywords = array_filter($keywords);
-            $sanitized['keywords'] = $keywords;
+        if (isset($input['keywords'])) {
+            if (is_array($input['keywords'])) {
+                // 配列の場合（ジャンル設定から渡される場合）
+                $keywords = array_map('trim', $input['keywords']);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } elseif (is_string($input['keywords']) && !empty(trim($input['keywords']))) {
+                // 文字列の場合（管理画面から直接入力される場合）
+                $keywords = explode("\n", $input['keywords']);
+                $keywords = array_map('trim', $keywords);
+                $keywords = array_filter($keywords);
+                $sanitized['keywords'] = $keywords;
+            } else {
+                $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+            }
         } else {
             $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         }
         
-        if (isset($input['news_sources']) && !empty(trim($input['news_sources']))) {
-            $sources = explode("\n", $input['news_sources']);
-            $sources = array_map('trim', $sources);
-            $sources = array_filter($sources);
-            $sources = array_map('esc_url_raw', $sources);
-            $sanitized['news_sources'] = $sources;
+        if (isset($input['news_sources'])) {
+            if (is_array($input['news_sources'])) {
+                // 配列の場合（ジャンル設定から渡される場合）
+                $sources = array_map('trim', $input['news_sources']);
+                $sources = array_filter($sources);
+                $sources = array_map('esc_url_raw', $sources);
+                $sanitized['news_sources'] = $sources;
+            } elseif (is_string($input['news_sources']) && !empty(trim($input['news_sources']))) {
+                // 文字列の場合（管理画面から直接入力される場合）
+                $sources = explode("\n", $input['news_sources']);
+                $sources = array_map('trim', $sources);
+                $sources = array_filter($sources);
+                $sources = array_map('esc_url_raw', $sources);
+                $sanitized['news_sources'] = $sources;
+            } else {
+                $sanitized['news_sources'] = isset($existing_options['news_sources']) ? $existing_options['news_sources'] : array();
+            }
         } else {
             $sanitized['news_sources'] = isset($existing_options['news_sources']) ? $existing_options['news_sources'] : array();
         }
         
-        if (isset($input['post_category']) && !empty(trim($input['post_category']))) {
-            $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+        if (isset($input['post_category'])) {
+            if (is_string($input['post_category']) && !empty(trim($input['post_category']))) {
+                $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+            } else {
+                $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'blog';
+            }
         } else {
             $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'blog';
         }
         
-        if (isset($input['post_status']) && !empty(trim($input['post_status']))) {
-            $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+        if (isset($input['post_status'])) {
+            if (is_string($input['post_status']) && !empty(trim($input['post_status']))) {
+                $sanitized['post_status'] = sanitize_text_field($input['post_status']);
+            } else {
+                $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
+            }
         } else {
             $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
         }
@@ -1111,7 +1182,7 @@ class NewsCrawler {
         }
     }
     
-    private function crawl_news() {
+    public function crawl_news() {
         $options = get_option($this->option_name, array());
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
