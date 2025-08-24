@@ -4,7 +4,7 @@
 
 # 設定
 PLUGIN_NAME="news-crawler"
-PLUGIN_VERSION="1.1.0"
+PLUGIN_VERSION="1.3.0"
 TODAY=$(date +%Y%m%d)
 OUTPUT_DIR="/Users/kantanpro/Desktop/Game_TEST_UP"
 ZIP_FILENAME="${PLUGIN_NAME}_${PLUGIN_VERSION}_${TODAY}.zip"
