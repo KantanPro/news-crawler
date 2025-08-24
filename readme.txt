@@ -1,18 +1,18 @@
 === News Crawler ===
 Contributors: KantanPro
-Tags: news, crawler, rss, automation, content
+Tags: news, crawler, rss, automation, content, youtube
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.3.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン
+指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
 
 == Description ==
 
-News Crawlerは、設定したニュースソース（RSSフィードやニュースサイト）から自動的に記事を取得し、キーワードにマッチした記事を1つの投稿にまとめて作成するWordPressプラグインです。
+News Crawlerは、設定したニュースソース（RSSフィードやニュースサイト）から自動的に記事を取得し、キーワードにマッチした記事を1つの投稿にまとめて作成するWordPressプラグインです。また、YouTubeチャンネルから動画を取得して動画の埋め込みと要約を含む投稿を作成する機能も提供します。
 
 **主な機能**
 
@@ -23,12 +23,22 @@ News Crawlerは、設定したニュースソース（RSSフィードやニュ�
 * 複数記事を1つの投稿にまとめる機能
 * 管理画面での設定と手動実行
 * 統計情報の表示
+* YouTube動画の自動取得と埋め込み
+* YouTubeチャンネルからの動画クロール
+* 動画の要約とメタ情報表示
 
 **対応ニュースソース**
 
 * RSSフィード
 * ニュースサイトのHTMLページ
 * 主要メディアサイト（NHK、朝日新聞、読売新聞など）
+
+**YouTube機能**
+
+* YouTubeチャンネル（チャンネルID指定）
+* YouTube Data API v3対応
+* 動画の自動取得と埋め込み
+* 動画情報の表示（公開日、チャンネル名、動画時間、視聴回数）
 
 **品質管理機能**
 
@@ -45,6 +55,13 @@ News Crawlerは、設定したニュースソース（RSSフィードやニュ�
 3. 設定 > News Crawler から設定を行います
 4. ニュースソースとキーワードを設定します
 5. 「投稿を作成」ボタンで手動実行します
+
+**YouTube機能を使用する場合**
+
+1. [Google Cloud Console](https://console.cloud.google.com/)でYouTube Data API v3のAPIキーを取得
+2. 設定 > YouTube からYouTube設定を行います
+3. APIキーとチャンネルIDを設定します
+4. 「動画投稿を作成」ボタンで手動実行します
 
 == Frequently Asked Questions ==
 
@@ -64,18 +81,43 @@ RSSフィードとHTMLページの両方に対応しています。主要なニ�
 
 タイトル長、本文長、画像の有無、日付情報、ソース情報などを総合的に評価して0.0〜1.0のスコアを算出します。
 
+= YouTube機能を使用するには何が必要ですか？ =
+
+YouTube Data API v3のAPIキーが必要です。Google Cloud Consoleで取得できます。
+
+= YouTube動画の重複チェックはどのように行われますか？ =
+
+過去30日以内の投稿で同じ動画IDが使用されているかをチェックし、重複動画は自動的にスキップされます。
+
 == Screenshots ==
 
 1. 管理画面の設定画面
 2. 投稿作成の実行画面
 3. 統計情報の表示画面
+4. YouTube設定画面
+5. YouTube動画投稿作成画面
 
 == Changelog ==
+
+= 1.3.0 =
+* ファーストテイク
+
+= 1.2.0 =
+* YouTube動画クロール機能を追加
+* YouTube Data API v3対応
+* 動画の埋め込みと要約機能
+* 設定画面にYouTubeメニューを追加
 
 = 1.1.0 =
 * ファーストテイク
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+YouTube動画クロール機能が強化され、より使いやすくなりました。
+
+= 1.2.0 =
+YouTube動画クロール機能が追加されました。YouTube Data API v3のAPIキーが必要です。
 
 = 1.1.0 =
 初回リリースです。基本的なニュースクローリング機能を提供します。
