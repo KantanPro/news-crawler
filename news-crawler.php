@@ -110,12 +110,12 @@ class YouTubeCrawler {
         );
         
         add_settings_field(
-            'youtube_post_category',
+            'youtube_post_categories',
             '投稿カテゴリー',
             array($this, 'post_category_callback'),
             'youtube-crawler',
             'youtube_crawler_main',
-            array('label_for' => 'youtube_post_category')
+            array('label_for' => 'youtube_post_categories')
         );
         
         add_settings_field(
@@ -173,9 +173,10 @@ class YouTubeCrawler {
     
     public function post_category_callback() {
         $options = get_option($this->option_name, array());
-        $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'youtube';
-        echo '<input type="text" id="youtube_post_category" name="' . $this->option_name . '[post_category]" value="' . esc_attr($category) . '" />';
-        echo '<p class="description">投稿するカテゴリー名を入力してください。存在しない場合は自動的に作成されます。</p>';
+        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
+        $categories_text = implode("\n", $categories);
+        echo '<textarea id="youtube_post_categories" name="' . $this->option_name . '[post_categories]" rows="3" cols="50" placeholder="1行に1カテゴリー名を入力してください">' . esc_textarea($categories_text) . '</textarea>';
+        echo '<p class="description">投稿するカテゴリー名を1行に1つずつ入力してください。存在しない場合は自動的に作成されます。</p>';
     }
     
     public function post_status_callback() {
@@ -259,14 +260,21 @@ class YouTubeCrawler {
             $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
         }
         
-        if (isset($input['post_category'])) {
-            if (is_string($input['post_category']) && !empty(trim($input['post_category']))) {
-                $sanitized['post_category'] = sanitize_text_field($input['post_category']);
+        if (isset($input['post_categories'])) {
+            if (is_array($input['post_categories'])) {
+                $categories = array_map('trim', $input['post_categories']);
+                $categories = array_filter($categories);
+                $sanitized['post_categories'] = !empty($categories) ? $categories : array('blog');
+            } elseif (is_string($input['post_categories']) && !empty(trim($input['post_categories']))) {
+                $categories = explode("\n", $input['post_categories']);
+                $categories = array_map('trim', $categories);
+                $categories = array_filter($categories);
+                $sanitized['post_categories'] = !empty($categories) ? $categories : array('blog');
             } else {
-                $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
+                $sanitized['post_categories'] = isset($existing_options['post_categories']) ? $existing_options['post_categories'] : array('blog');
             }
         } else {
-            $sanitized['post_category'] = isset($existing_options['post_category']) ? $existing_options['post_category'] : 'youtube';
+            $sanitized['post_categories'] = isset($existing_options['post_categories']) ? $existing_options['post_categories'] : array('blog');
         }
         
         if (isset($input['post_status'])) {
@@ -459,7 +467,7 @@ class YouTubeCrawler {
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
-        $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'youtube';
+        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
         
         if (empty($channels)) {
@@ -515,7 +523,7 @@ class YouTubeCrawler {
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_videos)) {
-            $post_id = $this->create_video_summary_post($valid_videos, $category, $status);
+            $post_id = $this->create_video_summary_post($valid_videos, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
                 $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
@@ -550,8 +558,11 @@ class YouTubeCrawler {
         return false;
     }
     
-    private function create_video_summary_post($videos, $category, $status) {
-        $cat_id = $this->get_or_create_category($category);
+    private function create_video_summary_post($videos, $categories, $status) {
+        $cat_ids = array();
+        foreach ($categories as $category) {
+            $cat_ids[] = $this->get_or_create_category($category);
+        }
         
         // キーワード情報を取得
         $options = get_option($this->option_name, array());
@@ -625,7 +636,7 @@ class YouTubeCrawler {
             'post_status'   => $status,
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
-            'post_category' => array($cat_id)
+            'post_category' => $cat_ids
         );
         
         $post_id = wp_insert_post($post_data, true);

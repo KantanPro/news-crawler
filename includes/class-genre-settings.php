@@ -240,8 +240,8 @@ class NewsCrawlerGenreSettings {
                             <tr>
                                 <th scope="row">投稿カテゴリー</th>
                                 <td>
-                                    <input type="text" id="post-category" name="post_category" class="regular-text" value="未分類">
-                                    <p class="description">投稿するカテゴリー名を入力してください。存在しない場合は自動的に作成されます。</p>
+                                    <textarea id="post-categories" name="post_categories" rows="3" cols="50" class="large-text" placeholder="1行に1カテゴリー名を入力してください">blog</textarea>
+                                    <p class="description">投稿するカテゴリー名を1行に1つずつ入力してください。存在しない場合は自動的に作成されます。</p>
                                 </td>
                             </tr>
                             <tr>
@@ -311,7 +311,7 @@ class NewsCrawlerGenreSettings {
                     youtube_channels: $('#youtube-channels').val(),
                     max_videos: $('#max-videos').val(),
                     embed_type: $('#embed-type').val(),
-                    post_category: $('#post-category').val(),
+                    post_categories: $('#post-categories').val(),
                     post_status: $('#post-status').val()
                 };
                 
@@ -364,7 +364,7 @@ class NewsCrawlerGenreSettings {
                         jQuery('#youtube-channels').val(setting.youtube_channels ? setting.youtube_channels.join('\n') : '');
                         jQuery('#max-videos').val(setting.max_videos || 5);
                         jQuery('#embed-type').val(setting.embed_type || 'responsive');
-                        jQuery('#post-category').val(setting.post_category || '未分類');
+                        jQuery('#post-categories').val(setting.post_categories ? setting.post_categories.join('\n') : 'blog');
                         jQuery('#post-status').val(setting.post_status || 'draft');
                         jQuery('#cancel-edit').show();
                         
@@ -486,7 +486,8 @@ class NewsCrawlerGenreSettings {
         .genre-settings-table tr:hover {
             background-color: #f5f5f5;
         }
-        .keywords-display {
+        .keywords-display,
+        .categories-display {
             max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -514,6 +515,7 @@ class NewsCrawlerGenreSettings {
         echo '<th>ジャンル名</th>';
         echo '<th>タイプ</th>';
         echo '<th>キーワード</th>';
+        echo '<th>カテゴリー</th>';
         echo '<th>操作</th>';
         echo '</tr>';
         echo '</thead>';
@@ -525,12 +527,29 @@ class NewsCrawlerGenreSettings {
                 $keywords_display .= '...';
             }
             
+            // カテゴリー表示の準備
+            $categories = array();
+            if (isset($setting['post_categories']) && is_array($setting['post_categories'])) {
+                $categories = $setting['post_categories'];
+            } elseif (isset($setting['post_category']) && !empty($setting['post_category'])) {
+                // 後方互換性のため、古い単一カテゴリー設定もサポート
+                $categories = array($setting['post_category']);
+            } else {
+                $categories = array('blog');
+            }
+            
+            $categories_display = implode(', ', array_slice($categories, 0, 3));
+            if (count($categories) > 3) {
+                $categories_display .= '...';
+            }
+            
             $content_type_label = $setting['content_type'] === 'news' ? 'ニュース' : 'YouTube';
             
             echo '<tr>';
             echo '<td><strong>' . esc_html($setting['genre_name']) . '</strong></td>';
             echo '<td>' . esc_html($content_type_label) . '</td>';
             echo '<td><span class="keywords-display" title="' . esc_attr(implode(', ', $setting['keywords'])) . '">' . esc_html($keywords_display) . '</span></td>';
+            echo '<td><span class="categories-display" title="' . esc_attr(implode(', ', $categories)) . '">' . esc_html($categories_display) . '</span></td>';
             echo '<td class="action-buttons">';
             echo '<button type="button" class="button" onclick="editGenreSetting(\'' . esc_js($id) . '\')">編集</button>';
             echo '<button type="button" class="button" onclick="duplicateGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">複製</button>';
@@ -560,11 +579,16 @@ class NewsCrawlerGenreSettings {
             wp_send_json_error('必須項目が入力されていません');
         }
         
+        $post_categories = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['post_categories']))));
+        if (empty($post_categories)) {
+            $post_categories = array('blog');
+        }
+        
         $setting = array(
             'genre_name' => $genre_name,
             'content_type' => $content_type,
             'keywords' => $keywords,
-            'post_category' => sanitize_text_field($_POST['post_category']),
+            'post_categories' => $post_categories,
             'post_status' => sanitize_text_field($_POST['post_status']),
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
@@ -692,7 +716,7 @@ class NewsCrawlerGenreSettings {
                 'max_articles' => isset($setting['max_articles']) ? intval($setting['max_articles']) : 10,
                 'keywords' => isset($setting['keywords']) && is_array($setting['keywords']) ? $setting['keywords'] : array(),
                 'news_sources' => isset($setting['news_sources']) && is_array($setting['news_sources']) ? $setting['news_sources'] : array(),
-                'post_category' => isset($setting['post_category']) ? sanitize_text_field($setting['post_category']) : '未分類',
+                'post_categories' => isset($setting['post_categories']) && is_array($setting['post_categories']) ? $setting['post_categories'] : array('blog'),
                 'post_status' => isset($setting['post_status']) ? sanitize_text_field($setting['post_status']) : 'draft'
             );
             
@@ -769,7 +793,7 @@ class NewsCrawlerGenreSettings {
                 'max_videos' => isset($setting['max_videos']) ? intval($setting['max_videos']) : 5,
                 'keywords' => isset($setting['keywords']) && is_array($setting['keywords']) ? $setting['keywords'] : array(),
                 'channels' => $youtube_channels,
-                'post_category' => isset($setting['post_category']) ? sanitize_text_field($setting['post_category']) : 'youtube',
+                'post_categories' => isset($setting['post_categories']) && is_array($setting['post_categories']) ? $setting['post_categories'] : array('blog'),
                 'post_status' => isset($setting['post_status']) ? sanitize_text_field($setting['post_status']) : 'draft',
                 'embed_type' => isset($setting['embed_type']) ? sanitize_text_field($setting['embed_type']) : 'responsive'
             );
