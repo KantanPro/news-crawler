@@ -171,8 +171,8 @@ class NewsCrawlerYouTubeCrawler {
         $options = get_option($this->option_name, array());
         $embed_type = isset($options['embed_type']) && !empty($options['embed_type']) ? $options['embed_type'] : 'responsive';
         $types = array(
-            'responsive' => 'レスポンシブ埋め込み（推奨）',
-            'classic' => 'クラシック埋め込み',
+            'responsive' => 'WordPress埋め込み（推奨・プレビュー表示）',
+            'classic' => 'WordPress埋め込み（プレビュー表示）',
             'minimal' => 'ミニマル埋め込み（リンクのみ）'
         );
         echo '<select id="youtube_embed_type" name="' . $this->option_name . '[embed_type]">';
@@ -180,6 +180,7 @@ class NewsCrawlerYouTubeCrawler {
             echo '<option value="' . $value . '" ' . selected($value, $embed_type, false) . '>' . $label . '</option>';
         }
         echo '</select>';
+        echo '<p class="description">WordPress埋め込みを選択すると、エディターでプレビュー表示されます。</p>';
     }
     
     public function sanitize_settings($input) {
@@ -516,37 +517,26 @@ class NewsCrawlerYouTubeCrawler {
         $post_content = '';
         
         foreach ($videos as $video) {
-            $post_content .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"20px","bottom":"20px"}}}} -->';
-            $post_content .= '<div class="wp-block-group" style="margin-top:20px;margin-bottom:20px">';
+            // 動画タイトル
+            $post_content .= '<h3>' . esc_html($video['title']) . '</h3>' . "\n\n";
             
-            $post_content .= '<!-- wp:heading {"level":3} -->';
-            $post_content .= '<h3>' . esc_html($video['title']) . '</h3>';
-            $post_content .= '<!-- /wp:heading -->';
+            // 動画の埋め込み（WordPressのoEmbed機能を使用）
+            $youtube_url = 'https://www.youtube.com/watch?v=' . esc_attr($video['video_id']);
             
-            // 動画の埋め込み
-            if ($embed_type === 'responsive') {
-                $post_content .= '<!-- wp:html -->';
-                $post_content .= '<div class="youtube-embed-responsive" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">';
-                $post_content .= '<iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="https://www.youtube.com/embed/' . esc_attr($video['video_id']) . '" frameborder="0" allowfullscreen></iframe>';
-                $post_content .= '</div>';
-                $post_content .= '<!-- /wp:html -->';
-            } elseif ($embed_type === 'classic') {
-                $post_content .= '<!-- wp:html -->';
-                $post_content .= '<iframe width="560" height="315" src="https://www.youtube.com/embed/' . esc_attr($video['video_id']) . '" frameborder="0" allowfullscreen></iframe>';
-                $post_content .= '<!-- /wp:html -->';
+            if ($embed_type === 'responsive' || $embed_type === 'classic') {
+                // WordPress oEmbedを使用してプレビューで表示
+                $post_content .= $youtube_url . "\n\n";
             } else {
                 // ミニマル埋め込み（リンクのみ）
-                $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p><a href="https://www.youtube.com/watch?v=' . esc_attr($video['video_id']) . '" target="_blank" rel="noopener noreferrer">YouTubeで視聴</a></p>';
-                $post_content .= '<!-- /wp:paragraph -->';
+                $post_content .= '<p><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">YouTubeで視聴</a></p>' . "\n\n";
             }
             
+            // 動画の説明
             if (!empty($video['description'])) {
-                $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p>' . esc_html(wp_trim_words($video['description'], 100, '...')) . '</p>';
-                $post_content .= '<!-- /wp:paragraph -->';
+                $post_content .= '<p>' . esc_html(wp_trim_words($video['description'], 100, '...')) . '</p>' . "\n\n";
             }
             
+            // メタ情報
             $meta_info = [];
             if (!empty($video['published_at'])) {
                 $meta_info[] = '<strong>公開日:</strong> ' . esc_html($video['published_at']);
@@ -562,13 +552,11 @@ class NewsCrawlerYouTubeCrawler {
             }
 
             if (!empty($meta_info)) {
-                $post_content .= '<!-- wp:paragraph {"fontSize":"small"} -->';
-                $post_content .= '<p class="has-small-font-size">' . implode(' | ', $meta_info) . '</p>';
-                $post_content .= '<!-- /wp:paragraph -->';
+                $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>' . "\n\n";
             }
 
-            $post_content .= '</div>';
-            $post_content .= '<!-- /wp:group -->';
+            // 区切り線
+            $post_content .= '<hr>' . "\n\n";
         }
         
         $post_data = array(
