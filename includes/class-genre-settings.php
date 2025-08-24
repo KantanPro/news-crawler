@@ -20,6 +20,7 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_delete', array($this, 'delete_genre_setting'));
         add_action('wp_ajax_genre_settings_load', array($this, 'load_genre_setting'));
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
+        add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
     }
     
     public function add_admin_menu() {
@@ -378,6 +379,32 @@ class NewsCrawlerGenreSettings {
             });
         }
         
+        // 複製ボタンクリック
+        function duplicateGenreSetting(genreId, genreName) {
+            if (confirm('ジャンル設定「' + genreName + '」を複製しますか？')) {
+                jQuery.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'genre_settings_duplicate',
+                        nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
+                        genre_id: genreId
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('設定を複製しました。');
+                            location.reload();
+                        } else {
+                            alert('複製に失敗しました: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('複製中にエラーが発生しました。');
+                    }
+                });
+            }
+        }
+        
         // 削除ボタンクリック
         function deleteGenreSetting(genreId, genreName) {
             if (confirm('ジャンル設定「' + genreName + '」を削除しますか？')) {
@@ -506,6 +533,7 @@ class NewsCrawlerGenreSettings {
             echo '<td><span class="keywords-display" title="' . esc_attr(implode(', ', $setting['keywords'])) . '">' . esc_html($keywords_display) . '</span></td>';
             echo '<td class="action-buttons">';
             echo '<button type="button" class="button" onclick="editGenreSetting(\'' . esc_js($id) . '\')">編集</button>';
+            echo '<button type="button" class="button" onclick="duplicateGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">複製</button>';
             echo '<button type="button" id="execute-btn-' . esc_attr($id) . '" class="button button-primary" onclick="executeGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">投稿を作成</button>';
             echo '<button type="button" class="button button-link-delete" onclick="deleteGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">削除</button>';
             echo '</td>';
@@ -792,6 +820,40 @@ class NewsCrawlerGenreSettings {
     
     private function get_genre_settings() {
         return get_option($this->option_name, array());
+    }
+    
+    public function duplicate_genre_setting() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $genre_id = sanitize_text_field($_POST['genre_id']);
+        $genre_settings = $this->get_genre_settings();
+        
+        if (!isset($genre_settings[$genre_id])) {
+            wp_send_json_error('指定された設定が見つかりません');
+        }
+        
+        // 元の設定をコピー
+        $original_setting = $genre_settings[$genre_id];
+        
+        // 新しいIDを生成
+        $new_genre_id = uniqid('genre_');
+        
+        // 複製用の設定を作成
+        $duplicated_setting = $original_setting;
+        $duplicated_setting['id'] = $new_genre_id;
+        $duplicated_setting['genre_name'] = $original_setting['genre_name'];
+        $duplicated_setting['created_at'] = current_time('mysql');
+        $duplicated_setting['updated_at'] = current_time('mysql');
+        
+        // 設定を保存
+        $genre_settings[$new_genre_id] = $duplicated_setting;
+        update_option($this->option_name, $genre_settings);
+        
+        wp_send_json_success('設定を複製しました');
     }
     
     private function update_genre_statistics($genre_id, $content_type) {
