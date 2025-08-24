@@ -107,10 +107,19 @@ class NewsCrawlerYouTubeCrawler {
             'youtube_crawler_main',
             array('label_for' => 'youtube_embed_type')
         );
+        
+        add_settings_field(
+            'youtube_skip_duplicates',
+            '重複チェック',
+            array($this, 'skip_duplicates_callback'),
+            'youtube-crawler',
+            'youtube_crawler_main',
+            array('label_for' => 'youtube_skip_duplicates')
+        );
     }
     
     public function main_section_callback() {
-        echo '<p>YouTubeチャンネルからキーワードにマッチした動画を取得し、動画の埋め込みと要約を含む投稿を作成します。</p>';
+        echo '<p>各YouTubeチャンネルから最新の動画を1件ずつ取得し、キーワードにマッチした動画の埋め込みと要約を含む投稿を作成します。</p>';
         echo '<p><strong>注意:</strong> YouTube Data API v3のAPIキーが必要です。<a href="https://developers.google.com/youtube/v3/getting-started" target="_blank">こちら</a>から取得できます。</p>';
     }
     
@@ -133,7 +142,7 @@ class NewsCrawlerYouTubeCrawler {
         $options = get_option($this->option_name, array());
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
         echo '<input type="number" id="youtube_max_videos" name="' . $this->option_name . '[max_videos]" value="' . esc_attr($max_videos) . '" min="1" max="20" />';
-        echo '<p class="description">キーワードにマッチした動画の最大取得数（1-20件）</p>';
+        echo '<p class="description">キーワードにマッチした動画の最大取得数（1-20件）。各チャンネルから最新の動画を1件ずつ取得します。</p>';
     }
     
     public function keywords_callback() {
@@ -171,16 +180,31 @@ class NewsCrawlerYouTubeCrawler {
         $options = get_option($this->option_name, array());
         $embed_type = isset($options['embed_type']) && !empty($options['embed_type']) ? $options['embed_type'] : 'responsive';
         $types = array(
-            'responsive' => 'WordPress埋め込み（推奨・プレビュー表示）',
-            'classic' => 'WordPress埋め込み（プレビュー表示）',
-            'minimal' => 'ミニマル埋め込み（リンクのみ）'
+            'responsive' => 'WordPress埋め込みブロック（推奨）',
+            'classic' => 'WordPress埋め込みブロック',
+            'minimal' => 'リンクのみ（軽量）'
         );
         echo '<select id="youtube_embed_type" name="' . $this->option_name . '[embed_type]">';
         foreach ($types as $value => $label) {
             echo '<option value="' . $value . '" ' . selected($value, $embed_type, false) . '>' . $label . '</option>';
         }
         echo '</select>';
-        echo '<p class="description">WordPress埋め込みを選択すると、エディターでプレビュー表示されます。</p>';
+        echo '<p class="description">WordPress埋め込みブロックを選択すると、ブロックエディターで動画プレビューが表示されます。</p>';
+    }
+    
+    public function skip_duplicates_callback() {
+        $options = get_option($this->option_name, array());
+        $skip_duplicates = isset($options['skip_duplicates']) && !empty($options['skip_duplicates']) ? $options['skip_duplicates'] : 'enabled';
+        $options_array = array(
+            'enabled' => '重複チェックを有効にする（推奨）',
+            'disabled' => '重複チェックを無効にする'
+        );
+        echo '<select id="youtube_skip_duplicates" name="' . $this->option_name . '[skip_duplicates]">';
+        foreach ($options_array as $value => $label) {
+            echo '<option value="' . $value . '" ' . selected($value, $skip_duplicates, false) . '>' . $label . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">重複チェックを無効にすると、同じ動画が含まれた投稿が複数作成される可能性があります。</p>';
     }
     
     public function sanitize_settings($input) {
@@ -248,6 +272,13 @@ class NewsCrawlerYouTubeCrawler {
             $sanitized['api_key'] = isset($existing_options['api_key']) ? $existing_options['api_key'] : '';
         }
         
+        // 重複チェック設定の処理
+        if (isset($input['skip_duplicates']) && !empty($input['skip_duplicates'])) {
+            $sanitized['skip_duplicates'] = sanitize_text_field($input['skip_duplicates']);
+        } else {
+            $sanitized['skip_duplicates'] = isset($existing_options['skip_duplicates']) ? $existing_options['skip_duplicates'] : 'enabled';
+        }
+        
         return $sanitized;
     }
     
@@ -273,7 +304,7 @@ class NewsCrawlerYouTubeCrawler {
             <hr>
             
             <h2>動画投稿を作成</h2>
-            <p>設定したYouTubeチャンネルからキーワードにマッチした動画を取得して、動画の埋め込みと要約を含む投稿を作成します。</p>
+            <p>設定した各YouTubeチャンネルから最新の動画を1件ずつ取得し、キーワードにマッチした動画の埋め込みと要約を含む投稿を作成します。</p>
             <button type="button" id="youtube-manual-run" class="button button-primary">動画投稿を作成</button>
             
             <div id="youtube-manual-run-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
@@ -403,9 +434,9 @@ class NewsCrawlerYouTubeCrawler {
         
         $test_result = array();
         foreach ($channels as $channel) {
-            $videos = $this->fetch_channel_videos($channel, 3);
+            $videos = $this->fetch_channel_videos($channel, 1);
             if ($videos && is_array($videos)) {
-                $test_result[] = $channel . ': 取得成功 (' . count($videos) . '件の動画)';
+                $test_result[] = $channel . ': 取得成功 (最新の動画1件)';
             } else {
                 $test_result[] = $channel . ': 取得失敗';
             }
@@ -421,6 +452,7 @@ class NewsCrawlerYouTubeCrawler {
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
         $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'youtube';
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
+        $skip_duplicates = isset($options['skip_duplicates']) && !empty($options['skip_duplicates']) ? $options['skip_duplicates'] : 'enabled';
         
         if (empty($channels)) {
             return 'YouTubeチャンネルが設定されていません。';
@@ -437,9 +469,10 @@ class NewsCrawlerYouTubeCrawler {
         
         foreach ($channels as $channel) {
             try {
-                $videos = $this->fetch_channel_videos($channel, 20);
+                // 各チャンネルから最新の動画を1件のみ取得
+                $videos = $this->fetch_channel_videos($channel, 1);
                 if ($videos && is_array($videos)) {
-                    $debug_info[] = $channel . ': ' . count($videos) . '件の動画を取得';
+                    $debug_info[] = $channel . ': 最新の動画1件を取得';
                     foreach ($videos as $video) {
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
@@ -459,11 +492,18 @@ class NewsCrawlerYouTubeCrawler {
         $valid_videos = array();
         foreach ($matched_videos as $video) {
             $debug_info[] = "  - 動画: " . $video['title'];
+            $debug_info[] = "    動画ID: " . $video['video_id'];
             
-            if ($this->is_duplicate_video($video)) {
-                $duplicates_skipped++;
-                $debug_info[] = "    → 重複のためスキップ";
-                continue;
+            if ($skip_duplicates === 'enabled') {
+                $duplicate_info = $this->is_duplicate_video($video);
+                if ($duplicate_info) {
+                    $duplicates_skipped++;
+                    $debug_info[] = "    → 重複のためスキップ (投稿ID: " . $duplicate_info . ") - 過去30日以内に同じ動画が投稿済み";
+                    continue;
+                }
+                $debug_info[] = "    → 重複チェック: 過去30日以内に重複なし";
+            } else {
+                $debug_info[] = "    → 重複チェックは無効化されています";
             }
             
             $debug_info[] = "    → 有効動画として追加";
@@ -473,11 +513,18 @@ class NewsCrawlerYouTubeCrawler {
         $valid_videos = array_slice($valid_videos, 0, $max_videos);
         
         $posts_created = 0;
+        $post_id = null;
         if (!empty($valid_videos)) {
             $post_id = $this->create_video_summary_post($valid_videos, $category, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+            } else {
+                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
+                $debug_info[] = "\n投稿作成失敗: " . $error_message;
             }
+        } else {
+            $debug_info[] = "\n有効な動画がないため投稿を作成しませんでした";
         }
         
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
@@ -517,29 +564,42 @@ class NewsCrawlerYouTubeCrawler {
         $post_content = '';
         
         foreach ($videos as $video) {
-            // 動画タイトル
-            $post_content .= '<h3>' . esc_html($video['title']) . '</h3>' . "\n\n";
+            // 動画タイトル（ブロックエディタ形式）
+            $post_content .= '<!-- wp:heading {"level":3} -->' . "\n";
+            $post_content .= '<h3 class="wp-block-heading">' . esc_html($video['title']) . '</h3>' . "\n";
+            $post_content .= '<!-- /wp:heading -->' . "\n\n";
             
-            // 動画の埋め込み（WordPressのoEmbed機能を使用）
+            // 動画の埋め込み（ブロックエディタ対応）
             $youtube_url = 'https://www.youtube.com/watch?v=' . esc_attr($video['video_id']);
             
             if ($embed_type === 'responsive' || $embed_type === 'classic') {
-                // WordPress oEmbedを使用してプレビューで表示
-                $post_content .= $youtube_url . "\n\n";
+                // WordPress標準のYouTube埋め込みブロック
+                $post_content .= '<!-- wp:embed {"url":"' . esc_url($youtube_url) . '","type":"video","providerNameSlug":"youtube","responsive":true,"className":"wp-embed-aspect-16-9 wp-has-aspect-ratio"} -->' . "\n";
+                $post_content .= '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio">';
+                $post_content .= '<div class="wp-block-embed__wrapper">' . "\n";
+                $post_content .= $youtube_url . "\n";
+                $post_content .= '</div></figure>' . "\n";
+                $post_content .= '<!-- /wp:embed -->' . "\n\n";
             } else {
                 // ミニマル埋め込み（リンクのみ）
-                $post_content .= '<p><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">YouTubeで視聴</a></p>' . "\n\n";
+                $post_content .= '<!-- wp:paragraph -->' . "\n";
+                $post_content .= '<p class="wp-block-paragraph"><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">📺 YouTubeで視聴する</a></p>' . "\n";
+                $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
             }
             
             // 動画の説明
             if (!empty($video['description'])) {
-                $post_content .= '<p>' . esc_html(wp_trim_words($video['description'], 100, '...')) . '</p>' . "\n\n";
+                $description = wp_trim_words($video['description'], 100, '...');
+                $post_content .= '<!-- wp:paragraph -->' . "\n";
+                $post_content .= '<p class="wp-block-paragraph">' . esc_html($description) . '</p>' . "\n";
+                $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
             }
             
             // メタ情報
             $meta_info = [];
             if (!empty($video['published_at'])) {
-                $meta_info[] = '<strong>公開日:</strong> ' . esc_html($video['published_at']);
+                $published_date = date('Y年n月j日', strtotime($video['published_at']));
+                $meta_info[] = '<strong>公開日:</strong> ' . esc_html($published_date);
             }
             if (!empty($video['channel_title'])) {
                 $meta_info[] = '<strong>チャンネル:</strong> ' . esc_html($video['channel_title']);
@@ -552,11 +612,17 @@ class NewsCrawlerYouTubeCrawler {
             }
 
             if (!empty($meta_info)) {
-                $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>' . "\n\n";
+                $post_content .= '<!-- wp:paragraph {"fontSize":"small","textColor":"contrast-2"} -->' . "\n";
+                $post_content .= '<p class="wp-block-paragraph has-contrast-2-color has-text-color has-small-font-size">' . implode(' | ', $meta_info) . '</p>' . "\n";
+                $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
             }
 
-            // 区切り線
-            $post_content .= '<hr>' . "\n\n";
+            // 区切り線（最後の動画以外）
+            if ($video !== end($videos)) {
+                $post_content .= '<!-- wp:separator {"className":"is-style-wide"} -->' . "\n";
+                $post_content .= '<hr class="wp-block-separator has-alpha-channel-opacity is-style-wide"/>' . "\n";
+                $post_content .= '<!-- /wp:separator -->' . "\n\n";
+            }
         }
         
         $post_data = array(
@@ -591,12 +657,22 @@ class NewsCrawlerYouTubeCrawler {
     private function is_duplicate_video($video) {
         global $wpdb;
         $video_id = $video['video_id'];
+        
+        // 過去30日以内の投稿のみをチェック（重複チェックを緩和）
+        $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+        
         $existing_video = $wpdb->get_var($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key LIKE %s AND meta_value = %s",
+            "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
+             INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+             WHERE pm.meta_key LIKE %s AND pm.meta_value = %s 
+             AND p.post_date >= %s 
+             AND p.post_status IN ('publish', 'draft', 'pending', 'private')",
             '_youtube_video_%_id',
-            $video_id
+            $video_id,
+            $thirty_days_ago
         ));
-        return $existing_video ? true : false;
+        
+        return $existing_video ? $existing_video : false;
     }
     
     private function fetch_channel_videos($channel_id, $max_results = 20) {

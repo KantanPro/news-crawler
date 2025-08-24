@@ -174,9 +174,9 @@ class YouTubeCrawler {
         $options = get_option($this->option_name, array());
         $embed_type = isset($options['embed_type']) && !empty($options['embed_type']) ? $options['embed_type'] : 'responsive';
         $types = array(
-            'responsive' => 'レスポンシブ埋め込み（推奨）',
-            'classic' => 'クラシック埋め込み',
-            'minimal' => 'ミニマル埋め込み（リンクのみ）'
+            'responsive' => 'WordPress埋め込みブロック（推奨）',
+            'classic' => 'WordPress埋め込みブロック',
+            'minimal' => 'リンクのみ（軽量）'
         );
         echo '<select id="youtube_embed_type" name="' . $this->option_name . '[embed_type]">';
         foreach ($types as $value => $label) {
@@ -458,11 +458,18 @@ class YouTubeCrawler {
         $valid_videos = array_slice($valid_videos, 0, $max_videos);
         
         $posts_created = 0;
+        $post_id = null;
         if (!empty($valid_videos)) {
             $post_id = $this->create_video_summary_post($valid_videos, $category, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+            } else {
+                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
+                $debug_info[] = "\n投稿作成失敗: " . $error_message;
             }
+        } else {
+            $debug_info[] = "\n有効な動画がないため投稿を作成しませんでした";
         }
         
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
@@ -509,21 +516,21 @@ class YouTubeCrawler {
             $post_content .= '<h3>' . esc_html($video['title']) . '</h3>';
             $post_content .= '<!-- /wp:heading -->';
             
-            // 動画の埋め込み
-            if ($embed_type === 'responsive') {
-                $post_content .= '<!-- wp:html -->';
-                $post_content .= '<div class="youtube-embed-responsive" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">';
-                $post_content .= '<iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="https://www.youtube.com/embed/' . esc_attr($video['video_id']) . '" frameborder="0" allowfullscreen></iframe>';
-                $post_content .= '</div>';
-                $post_content .= '<!-- /wp:html -->';
-            } elseif ($embed_type === 'classic') {
-                $post_content .= '<!-- wp:html -->';
-                $post_content .= '<iframe width="560" height="315" src="https://www.youtube.com/embed/' . esc_attr($video['video_id']) . '" frameborder="0" allowfullscreen></iframe>';
-                $post_content .= '<!-- /wp:html -->';
+            // 動画の埋め込み（ブロックエディタ対応）
+            $youtube_url = 'https://www.youtube.com/watch?v=' . esc_attr($video['video_id']);
+            
+            if ($embed_type === 'responsive' || $embed_type === 'classic') {
+                // WordPress標準のYouTube埋め込みブロック
+                $post_content .= '<!-- wp:embed {"url":"' . esc_url($youtube_url) . '","type":"video","providerNameSlug":"youtube","responsive":true,"className":"wp-embed-aspect-16-9 wp-has-aspect-ratio"} -->';
+                $post_content .= '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio">';
+                $post_content .= '<div class="wp-block-embed__wrapper">';
+                $post_content .= $youtube_url;
+                $post_content .= '</div></figure>';
+                $post_content .= '<!-- /wp:embed -->';
             } else {
                 // ミニマル埋め込み（リンクのみ）
                 $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p><a href="https://www.youtube.com/watch?v=' . esc_attr($video['video_id']) . '" target="_blank" rel="noopener noreferrer">YouTubeで視聴</a></p>';
+                $post_content .= '<p><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">📺 YouTubeで視聴する</a></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
             
@@ -589,11 +596,21 @@ class YouTubeCrawler {
     private function is_duplicate_video($video) {
         global $wpdb;
         $video_id = $video['video_id'];
+        
+        // 過去30日以内の投稿のみをチェック（重複チェックを緩和）
+        $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+        
         $existing_video = $wpdb->get_var($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key LIKE %s AND meta_value = %s",
+            "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
+             INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+             WHERE pm.meta_key LIKE %s AND pm.meta_value = %s 
+             AND p.post_date >= %s 
+             AND p.post_status IN ('publish', 'draft', 'pending', 'private')",
             '_youtube_video_%_id',
-            $video_id
+            $video_id,
+            $thirty_days_ago
         ));
+        
         return $existing_video ? true : false;
     }
     
