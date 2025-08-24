@@ -99,7 +99,8 @@ YouTube Data API v3のAPIキーが必要です。Google Cloud Consoleで取得�
 
 == Changelog ==
 
-= 1.4.0 =
+= 1.4.0 (2025年8月24日) =
+* 設定の統合とリスト保存機能を追加
 * ジャンル別設定管理機能を追加
 * 統合管理画面でニュースとYouTube動画を一元管理
 * 基本設定の分離（YouTube APIキーなど）
