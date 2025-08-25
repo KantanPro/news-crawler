@@ -1561,7 +1561,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $sanitized['text_scale'] = isset($input['text_scale']) ? intval($input['text_scale']) : 3;
         
         // AI設定
-        $sanitized['openai_api_key'] = isset($input['openai_api_key']) ? sanitize_text_field($input['openai_api_key']) : '';
+
         $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'modern, clean, professional';
         $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a featured image for a blog post about';
         
@@ -1642,10 +1642,6 @@ class NewsCrawlerFeaturedImageGenerator {
             <div id="ai-settings" class="method-settings" style="display: none;">
                 <h4>AI画像生成設定</h4>
                 <table class="form-table">
-                    <tr>
-                        <th scope="row">OpenAI APIキー</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[openai_api_key]" value="<?php echo esc_attr($settings['openai_api_key'] ?? ''); ?>" size="50" /></td>
-                    </tr>
                     <tr>
                         <th scope="row">画像スタイル</th>
                         <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'modern, clean, professional'); ?>" size="50" /></td>
