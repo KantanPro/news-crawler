@@ -489,6 +489,15 @@ class NewsCrawlerGenreSettings {
         <div class="wrap">
             <h1>News Crawler - ジャンル設定</h1>
             
+            <!-- デバッグ情報表示エリア -->
+            <div id="debug-info" style="margin-bottom: 20px; display: none;">
+                <div class="card">
+                    <h3>デバッグ情報</h3>
+                    <div id="debug-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
+                    <p><button type="button" id="clear-debug" class="button">デバッグ情報をクリア</button></p>
+                </div>
+            </div>
+            
             <div id="genre-settings-container">
                 <!-- ジャンル設定フォーム -->
                 <div class="card" style="max-width: none;">
@@ -638,10 +647,52 @@ class NewsCrawlerGenreSettings {
                     <div id="execution-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
                 </div>
             </div>
+            
+            <!-- トラブルシューティングヘルプ -->
+
         </div>
         
         <script>
         jQuery(document).ready(function($) {
+            // デバッグ情報の表示
+            function showDebugInfo() {
+                var debugInfo = [];
+                
+                // キーワードマッチングのデバッグ情報を収集
+                if (typeof window.news_crawler_keyword_debug !== 'undefined') {
+                    debugInfo.push('=== ニュースキーワードマッチングデバッグ ===');
+                    debugInfo.push(window.news_crawler_keyword_debug.join('\n\n'));
+                }
+                
+                if (typeof window.youtube_crawler_keyword_debug !== 'undefined') {
+                    debugInfo.push('\n=== YouTubeキーワードマッチングデバッグ ===');
+                    debugInfo.push(window.youtube_crawler_keyword_debug.join('\n\n'));
+                }
+                
+                if (debugInfo.length > 0) {
+                    $('#debug-content').html(debugInfo.join('\n\n'));
+                    $('#debug-info').show();
+                }
+            }
+            
+            // 定期的にデバッグ情報をチェック
+            setInterval(showDebugInfo, 2000);
+            
+            // デバッグ情報クリア
+            $('#clear-debug').click(function() {
+                $('#debug-content').html('');
+                $('#debug-info').hide();
+                // グローバル変数もクリア
+                if (typeof window.news_crawler_keyword_debug !== 'undefined') {
+                    window.news_crawler_keyword_debug = [];
+                }
+                if (typeof window.youtube_crawler_keyword_debug !== 'undefined') {
+                    window.youtube_crawler_keyword_debug = [];
+                }
+            });
+            
+
+            
             // コンテンツタイプ変更時の設定表示切り替え
             $('#content-type').change(function() {
                 var contentType = $(this).val();
@@ -1177,6 +1228,28 @@ class NewsCrawlerGenreSettings {
             $debug_info[] = '  - 投稿カテゴリー: ' . implode(', ', $temp_options['post_categories']);
             $debug_info[] = '  - 投稿ステータス: ' . $temp_options['post_status'];
             
+            // キーワードの詳細チェック
+            $debug_info[] = '';
+            $debug_info[] = 'キーワード詳細チェック:';
+            foreach ($temp_options['keywords'] as $index => $keyword) {
+                $debug_info[] = '  - キーワード[' . $index . ']: "' . $keyword . '" (長さ: ' . strlen($keyword) . '文字)';
+                if (empty(trim($keyword))) {
+                    $debug_info[] = '    → 警告: 空のキーワードが含まれています';
+                }
+            }
+            
+            // ニュースソースの詳細チェック
+            $debug_info[] = '';
+            $debug_info[] = 'ニュースソース詳細チェック:';
+            foreach ($temp_options['news_sources'] as $index => $source) {
+                $debug_info[] = '  - ソース[' . $index . ']: "' . $source . '"';
+                if (empty(trim($source))) {
+                    $debug_info[] = '    → 警告: 空のソースが含まれています';
+                } elseif (!filter_var($source, FILTER_VALIDATE_URL)) {
+                    $debug_info[] = '    → 警告: 有効なURLではありません';
+                }
+            }
+            
             // 一時的にオプションを更新
             $original_options = get_option('news_crawler_settings', array());
             update_option('news_crawler_settings', array_merge($original_options, $temp_options));
@@ -1270,6 +1343,38 @@ class NewsCrawlerGenreSettings {
                 return 'YouTubeチャンネルIDが設定されていません。ジャンル設定でYouTubeチャンネルIDを入力してください。';
             }
             
+            // デバッグ情報
+            $debug_info = array();
+            $debug_info[] = '設定内容:';
+            $debug_info[] = '  - 最大動画数: ' . $temp_options['max_videos'];
+            $debug_info[] = '  - キーワード: ' . implode(', ', $temp_options['keywords']);
+            $debug_info[] = '  - YouTubeチャンネル: ' . implode(', ', $temp_options['channels']);
+            $debug_info[] = '  - 投稿カテゴリー: ' . implode(', ', $temp_options['post_categories']);
+            $debug_info[] = '  - 投稿ステータス: ' . $temp_options['post_status'];
+            $debug_info[] = '  - 埋め込みタイプ: ' . $temp_options['embed_type'];
+            
+            // キーワードの詳細チェック
+            $debug_info[] = '';
+            $debug_info[] = 'キーワード詳細チェック:';
+            foreach ($temp_options['keywords'] as $index => $keyword) {
+                $debug_info[] = '  - キーワード[' . $index . ']: "' . $keyword . '" (長さ: ' . strlen($keyword) . '文字)';
+                if (empty(trim($keyword))) {
+                    $debug_info[] = '    → 警告: 空のキーワードが含まれています';
+                }
+            }
+            
+            // YouTubeチャンネルの詳細チェック
+            $debug_info[] = '';
+            $debug_info[] = 'YouTubeチャンネル詳細チェック:';
+            foreach ($temp_options['channels'] as $index => $channel) {
+                $debug_info[] = '  - チャンネル[' . $index . ']: "' . $channel . '"';
+                if (empty(trim($channel))) {
+                    $debug_info[] = '    → 警告: 空のチャンネルIDが含まれています';
+                } elseif (!preg_match('/^UC[a-zA-Z0-9_-]{22}$/', trim($channel))) {
+                    $debug_info[] = '    → 警告: 有効なYouTubeチャンネルIDではありません（UCで始まる24文字の文字列である必要があります）';
+                }
+            }
+            
             // 一時的にオプションを更新
             $original_options = get_option('youtube_crawler_settings', array());
             $merged_options = array_merge($original_options, $temp_options);
@@ -1311,7 +1416,7 @@ class NewsCrawlerGenreSettings {
                 // 統計情報を更新
                 $this->update_genre_statistics($setting['id'], 'youtube');
                 
-                return $result;
+                return implode("\n", $debug_info) . "\n\n" . $result;
             } finally {
                 // 元の設定を復元
                 update_option('youtube_crawler_settings', $original_options);
@@ -1467,4 +1572,6 @@ class NewsCrawlerGenreSettings {
             wp_send_json_error('要約生成中にエラーが発生しました: ' . $e->getMessage());
         }
     }
+    
+
 }

@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.5.2
+ * Version: 1.5.3
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -640,12 +640,48 @@ class YouTubeCrawler {
     private function is_keyword_match($video, $keywords) {
         $text_to_search = strtolower($video['title'] . ' ' . ($video['description'] ?? ''));
         
+        // デバッグ情報を追加
+        $debug_info = array();
+        $debug_info[] = 'YouTube動画キーワードマッチング詳細:';
+        $debug_info[] = '  動画タイトル: ' . $video['title'];
+        $debug_info[] = '  検索対象テキスト（最初の200文字）: ' . mb_substr($text_to_search, 0, 200) . '...';
+        $debug_info[] = '  設定されたキーワード: ' . implode(', ', $keywords);
+        
+        $match_found = false;
+        $matched_keywords = array();
+        
         foreach ($keywords as $keyword) {
-            if (stripos($text_to_search, strtolower($keyword)) !== false) {
-                return true;
+            $keyword_trimmed = trim($keyword);
+            if (empty($keyword_trimmed)) {
+                continue; // 空のキーワードはスキップ
+            }
+            
+            $keyword_lower = strtolower($keyword_trimmed);
+            
+            // 完全一致チェック
+            if (stripos($text_to_search, $keyword_lower) !== false) {
+                $match_found = true;
+                $matched_keywords[] = $keyword_trimmed;
+                $debug_info[] = '  ✓ キーワード "' . $keyword_trimmed . '" でマッチ';
+            } else {
+                $debug_info[] = '  ✗ キーワード "' . $keyword_trimmed . '" でマッチなし';
             }
         }
-        return false;
+        
+        if ($match_found) {
+            $debug_info[] = '  結果: マッチ成功 (' . implode(', ', $matched_keywords) . ')';
+        } else {
+            $debug_info[] = '  結果: マッチ失敗';
+        }
+        
+        // デバッグ情報をグローバル変数に保存
+        global $youtube_crawler_keyword_debug;
+        if (!isset($youtube_crawler_keyword_debug)) {
+            $youtube_crawler_keyword_debug = array();
+        }
+        $youtube_crawler_keyword_debug[] = implode("\n", $debug_info);
+        
+        return $match_found;
     }
     
     private function create_video_summary_post($videos, $categories, $status) {
@@ -799,7 +835,15 @@ class YouTubeCrawler {
         );
         
         $url = add_query_arg($params, $api_url);
-        $response = wp_remote_get($url, array('timeout' => 30));
+        
+        // cURL設定を調整（ローカル環境用）
+        $response = wp_remote_get($url, array(
+            'timeout' => 60, // タイムアウトを60秒に延長
+            'sslverify' => false, // SSL証明書検証を無効化
+            'httpversion' => '1.1',
+            'blocking' => true,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
         
         if (is_wp_error($response)) {
             throw new Exception('APIリクエストに失敗しました: ' . $response->get_error_message());
@@ -845,7 +889,15 @@ class YouTubeCrawler {
         );
         
         $url = add_query_arg($params, $api_url);
-        $response = wp_remote_get($url, array('timeout' => 30));
+        
+        // cURL設定を調整（ローカル環境用）
+        $response = wp_remote_get($url, array(
+            'timeout' => 60, // タイムアウトを60秒に延長
+            'sslverify' => false, // SSL証明書検証を無効化
+            'httpversion' => '1.1',
+            'blocking' => true,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
         
         if (is_wp_error($response)) {
             return array();
@@ -1678,12 +1730,48 @@ class NewsCrawler {
         global $news_crawler_search_text;
         $news_crawler_search_text = $text_to_search;
         
+        // デバッグ情報を追加
+        $debug_info = array();
+        $debug_info[] = 'キーワードマッチング詳細:';
+        $debug_info[] = '  記事タイトル: ' . $article['title'];
+        $debug_info[] = '  検索対象テキスト（最初の200文字）: ' . mb_substr($text_to_search, 0, 200) . '...';
+        $debug_info[] = '  設定されたキーワード: ' . implode(', ', $keywords);
+        
+        $match_found = false;
+        $matched_keywords = array();
+        
         foreach ($keywords as $keyword) {
-            if (stripos($text_to_search, strtolower($keyword)) !== false) {
-                return true;
+            $keyword_trimmed = trim($keyword);
+            if (empty($keyword_trimmed)) {
+                continue; // 空のキーワードはスキップ
+            }
+            
+            $keyword_lower = strtolower($keyword_trimmed);
+            
+            // 完全一致チェック
+            if (stripos($text_to_search, $keyword_lower) !== false) {
+                $match_found = true;
+                $matched_keywords[] = $keyword_trimmed;
+                $debug_info[] = '  ✓ キーワード "' . $keyword_trimmed . '" でマッチ';
+            } else {
+                $debug_info[] = '  ✗ キーワード "' . $keyword_trimmed . '" でマッチなし';
             }
         }
-        return false;
+        
+        if ($match_found) {
+            $debug_info[] = '  結果: マッチ成功 (' . implode(', ', $matched_keywords) . ')';
+        } else {
+            $debug_info[] = '  結果: マッチ失敗';
+        }
+        
+        // デバッグ情報をグローバル変数に保存
+        global $news_crawler_keyword_debug;
+        if (!isset($news_crawler_keyword_debug)) {
+            $news_crawler_keyword_debug = array();
+        }
+        $news_crawler_keyword_debug[] = implode("\n", $debug_info);
+        
+        return $match_found;
     }
     
     private function create_summary_post($articles, $category, $status) {
