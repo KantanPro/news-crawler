@@ -59,27 +59,47 @@ class News_Crawler_Eyecatch_Generator {
             if (!$font_path) {
                 imagedestroy($image);
                 error_log('News Crawler: 日本語フォントが見つかりません');
-                return new WP_Error('font_not_found', 'Japanese Font Required - 日本語フォントが見つかりません。システムに日本語フォントがインストールされているか確認してください。');
+                return new WP_Error('font_not_found', 'Japanese Font Required - 日本語フォントが見つかりません。プラグイン内のフォントファイルまたはシステムフォントを確認してください。');
             }
             
             error_log('News Crawler: 使用フォント: ' . $font_path . ' (サイズ: ' . filesize($font_path) . ' bytes)');
             
-            // フォントの動作確認
-            $test_bbox = imagettfbbox(20, 0, $font_path, 'テスト');
+            // フォントの詳細な動作確認
+            $test_text = 'テスト';
+            $test_bbox = imagettfbbox(20, 0, $font_path, $test_text);
             if ($test_bbox === false) {
                 imagedestroy($image);
                 error_log('News Crawler: フォントファイルの読み込みに失敗: ' . $font_path);
                 return new WP_Error('font_read_error', 'Japanese Font Required - フォントファイルの読み込みに失敗しました。フォントファイルが破損している可能性があります。');
             }
             
-            error_log('News Crawler: フォントテスト成功 - 境界ボックス: ' . implode(', ', $test_bbox));
+            // フォントの詳細情報をログに記録
+            error_log('News Crawler: フォントテスト成功 - テストテキスト: ' . $test_text);
+            error_log('News Crawler: フォント境界ボックス: ' . implode(', ', $test_bbox));
+            
+            // フォントファイルの権限確認
+            $font_permissions = substr(sprintf('%o', fileperms($font_path)), -4);
+            error_log('News Crawler: フォントファイル権限: ' . $font_permissions);
+            
+            // フォントファイルの所有者確認
+            $font_owner = posix_getpwuid(fileowner($font_path));
+            $font_group = posix_getgrgid(filegroup($font_path));
+            error_log('News Crawler: フォントファイル所有者: ' . ($font_owner ? $font_owner['name'] : 'unknown') . ':' . ($font_group ? $font_group['name'] : 'unknown'));
             
             // テキストを描画
             try {
-                $this->draw_text($image, $genre, $font_path, 48, 0xFFFFFF, $width, 200);
-                $this->draw_text($image, $keyword, $font_path, 36, 0xFFFFFF, $width, 280);
-                $this->draw_text($image, 'ニュースまとめ', $font_path, 42, 0xFFFFFF, $width, 360);
-                $this->draw_text($image, $date, $font_path, 32, 0xFFFFFF, $width, 420);
+                // ジャンル（上部、大きめのフォント）
+                $this->draw_text($image, $genre, $font_path, 52, 0xFFFFFF, $width, 180);
+                
+                // キーワード（中央上部、中程度のフォント）
+                $this->draw_text($image, $keyword, $font_path, 40, 0xFFFFFF, $width, 280);
+                
+                // ニュースまとめ（中央、強調）
+                $this->draw_text($image, 'ニュースまとめ', $font_path, 46, 0xFFFFFF, $width, 380);
+                
+                // 日付（下部、小さめのフォント）
+                $this->draw_text($image, $date, $font_path, 34, 0xFFFFFF, $width, 480);
+                
                 error_log('News Crawler: 全テキストの描画が完了しました');
             } catch (Exception $e) {
                 imagedestroy($image);
@@ -179,16 +199,20 @@ class News_Crawler_Eyecatch_Generator {
             throw new Exception('テキストの境界ボックスが正しく取得できません: ' . $text);
         }
         
+        // テキストの幅と高さを計算
         $text_width = $bbox[4] - $bbox[0];
         $text_height = $bbox[1] - $bbox[7];
         
-        // センタリング位置を計算
+        // センタリング位置を計算（より正確に）
         $x = ($width - $text_width) / 2;
         
         // Y座標を調整（テキストのベースラインに合わせる）
-        $adjusted_y = $y + $text_height;
+        // 境界ボックスの情報を使用して正確な位置を計算
+        $baseline_offset = abs($bbox[1]); // ベースラインからの上方向のオフセット
+        $adjusted_y = $y + $baseline_offset;
         
-        error_log('News Crawler: テキスト描画 - ' . $text . ' (x: ' . $x . ', y: ' . $adjusted_y . ', width: ' . $text_width . ')');
+        error_log('News Crawler: テキスト描画 - ' . $text . ' (x: ' . $x . ', y: ' . $adjusted_y . ', width: ' . $text_width . ', height: ' . $text_height . ')');
+        error_log('News Crawler: 境界ボックス情報 - ' . implode(', ', $bbox));
         
         // テキストを描画
         $result = imagettftext($image, $font_size, 0, $x, $adjusted_y, $color, $font_path, $text);
@@ -234,7 +258,6 @@ class News_Crawler_Eyecatch_Generator {
             '/System/Library/Fonts/STHeiti Medium.ttc',  // 最も安定している
             '/System/Library/Fonts/STHeiti Light.ttc',   // 軽量版
             '/System/Library/Fonts/PingFang.ttc',        // モダンなフォント
-            '/System/Library/Fonts/Hiragino Sans GB.ttc', // ヒラギノ
             '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
             '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc',
             '/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc',
@@ -255,8 +278,8 @@ class News_Crawler_Eyecatch_Generator {
                     $file_size = filesize($font);
                     error_log('Eyecatch Generator: Font file size: ' . $file_size . ' bytes');
                     
-                    // フォントの動作確認
-                    if (function_exists('imagettftext')) {
+                    // フォントの動作確認（必須）
+                    if (function_exists('imagettfbbox')) {
                         $test_bbox = imagettfbbox(20, 0, $font, 'テスト');
                         if ($test_bbox !== false) {
                             error_log('Eyecatch Generator: Font test successful: ' . $font);
@@ -266,7 +289,11 @@ class News_Crawler_Eyecatch_Generator {
                         }
                     } else {
                         error_log('Eyecatch Generator: FreeType functions not available');
-                        return $font; // FreeTypeが利用できない場合は、ファイルの存在のみで判断
+                        // FreeTypeが利用できない場合は、システムフォントのみ使用
+                        if (strpos($font, '/System/Library/Fonts/') === 0 || strpos($font, '/Library/Fonts/') === 0) {
+                            error_log('Eyecatch Generator: Using system font without FreeType test: ' . $font);
+                            return $font;
+                        }
                     }
                 } else {
                     error_log('Eyecatch Generator: Font file not readable: ' . $font);
@@ -276,24 +303,43 @@ class News_Crawler_Eyecatch_Generator {
             }
         }
         
-        error_log('Eyecatch Generator: No working system fonts found, checking plugin fonts...');
+        error_log('Eyecatch Generator: No working system fonts found, trying plugin fonts...');
         
-        // 優先順位2: プラグイン内のフォントファイル
+        // 優先順位2: プラグイン内のフォントファイル（フォールバック）
         $plugin_fonts = array();
+        
+        // 現在のファイルの場所から相対パスで解決
+        $current_file = __FILE__;
+        $plugin_root = dirname(dirname($current_file));
+        
+        // 複数のパスパターンを試行
+        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf';
+        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf';
         
         // WordPress関数を使用したパス解決
         if (function_exists('plugin_dir_path')) {
             $plugin_dir = plugin_dir_path(dirname(__FILE__));
-            error_log('Eyecatch Generator: WordPress plugin_dir_path: ' . $plugin_dir);
             $plugin_fonts[] = $plugin_dir . 'assets/fonts/NotoSansJP-Regular.ttf';
             $plugin_fonts[] = $plugin_dir . 'assets/fonts/NotoSansJP-Regular.otf';
         }
         
         // 絶対パスでの解決（フォールバック）
         $fallback_path = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf';
-        error_log('Eyecatch Generator: Fallback path: ' . $fallback_path);
         $plugin_fonts[] = $fallback_path;
         $plugin_fonts[] = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.otf';
+        
+        // さらに確実なパス解決
+        $absolute_paths = array(
+            '/Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/assets/fonts/NotoSansJP-Regular.ttf',
+            dirname(dirname(__DIR__)) . '/assets/fonts/NotoSansJP-Regular.ttf',
+            realpath(dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf')
+        );
+        
+        foreach ($absolute_paths as $path) {
+            if ($path && file_exists($path)) {
+                $plugin_fonts[] = $path;
+            }
+        }
         
         // 重複を除去
         $plugin_fonts = array_unique($plugin_fonts);
@@ -308,8 +354,8 @@ class News_Crawler_Eyecatch_Generator {
                     $file_size = filesize($plugin_font);
                     error_log('Eyecatch Generator: Plugin font file size: ' . $file_size . ' bytes');
                     
-                    // フォントの動作確認
-                    if (function_exists('imagettftext')) {
+                    // フォントの動作確認（必須）
+                    if (function_exists('imagettfbbox')) {
                         $test_bbox = imagettfbbox(20, 0, $plugin_font, 'テスト');
                         if ($test_bbox !== false) {
                             error_log('Eyecatch Generator: Plugin font test successful: ' . $plugin_font);
@@ -319,7 +365,8 @@ class News_Crawler_Eyecatch_Generator {
                         }
                     } else {
                         error_log('Eyecatch Generator: FreeType functions not available');
-                        return $plugin_font; // FreeTypeが利用できない場合は、ファイルの存在のみで判断
+                        // FreeTypeが利用できない場合は、プラグインフォントも使用しない
+                        error_log('Eyecatch Generator: Skipping plugin font due to FreeType unavailability');
                     }
                 } else {
                     error_log('Eyecatch Generator: Plugin font file not readable: ' . $plugin_font);

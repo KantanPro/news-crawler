@@ -1065,7 +1065,12 @@ class NewsCrawlerFeaturedImageGenerator {
             '/System/Library/Fonts/Hiragino Sans GB.ttc',
             '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
             '/System/Library/Fonts/Supplemental/Hiragino Sans GB.ttc',
-            '/Library/Fonts/ヒラギノ角ゴ ProN W3.otf'
+            '/Library/Fonts/ヒラギノ角ゴ ProN W3.otf',
+            '/System/Library/Fonts/STHeiti Medium.ttc',
+            '/System/Library/Fonts/STHeiti Light.ttc',
+            '/System/Library/Fonts/AquaKana.ttc',
+            '/System/Library/Fonts/Osaka.ttf',
+            '/Library/Fonts/Arial Unicode MS.ttf'
         );
         
         error_log('Featured Image Generator: Checking macOS system fonts...');
@@ -1073,33 +1078,110 @@ class NewsCrawlerFeaturedImageGenerator {
             error_log('Featured Image Generator: Checking font: ' . $font);
             if (file_exists($font)) {
                 error_log('Featured Image Generator: Found macOS system font: ' . $font);
-                return $font;
+                if (is_readable($font)) {
+                    error_log('Featured Image Generator: Font file is readable: ' . $font);
+                    $file_size = filesize($font);
+                    error_log('Featured Image Generator: Font file size: ' . $file_size . ' bytes');
+                    
+                    // フォントの動作確認（必須）
+                    if (function_exists('imagettfbbox')) {
+                        $test_bbox = imagettfbbox(20, 0, $font, 'テスト');
+                        if ($test_bbox !== false) {
+                            error_log('Featured Image Generator: Font test successful: ' . $font);
+                            return $font;
+                        } else {
+                            error_log('Featured Image Generator: Font test failed (bbox): ' . $font);
+                        }
+                    } else {
+                        error_log('Featured Image Generator: FreeType functions not available');
+                        // FreeTypeが利用できない場合は、システムフォントのみ使用
+                        if (strpos($font, '/System/Library/Fonts/') === 0 || strpos($font, '/Library/Fonts/') === 0) {
+                            error_log('Featured Image Generator: Using system font without FreeType test: ' . $font);
+                            return $font;
+                        }
+                    }
+                } else {
+                    error_log('Featured Image Generator: Font file not readable: ' . $font);
+                }
             } else {
                 error_log('Featured Image Generator: Font not found: ' . $font);
             }
         }
         
-        // 優先順位2: プラグインディレクトリ内の日本語フォントファイル
-        $plugin_fonts = array(
-            plugin_dir_path(__FILE__) . '../assets/fonts/NotoSansJP-Regular.otf',
-            plugin_dir_path(__FILE__) . '../assets/fonts/NotoSansJP-Regular.ttf',
-            plugin_dir_path(__FILE__) . '../assets/fonts/NotoSansJP-Bold.ttf',
-            plugin_dir_path(__FILE__) . '../assets/fonts/NotoSansCJK-Regular.ttf',
-            plugin_dir_path(__FILE__) . '../assets/fonts/japanese.ttf'
+        error_log('Featured Image Generator: No working system fonts found, trying plugin fonts...');
+        
+        // 優先順位2: プラグイン内のフォントファイル（フォールバック）
+        $plugin_fonts = array();
+        
+        // 現在のファイルの場所から相対パスで解決
+        $current_file = __FILE__;
+        $plugin_root = dirname(dirname($current_file));
+        
+        // 複数のパスパターンを試行
+        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf';
+        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf';
+        
+        // WordPress関数を使用したパス解決
+        if (function_exists('plugin_dir_path')) {
+            $plugin_dir = plugin_dir_path(__FILE__);
+            $plugin_fonts[] = $plugin_dir . '../assets/fonts/NotoSansJP-Regular.ttf';
+            $plugin_fonts[] = $plugin_dir . '../assets/fonts/NotoSansJP-Regular.otf';
+        }
+        
+        // 絶対パスでの解決（フォールバック）
+        $fallback_path = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf';
+        $plugin_fonts[] = $fallback_path;
+        $plugin_fonts[] = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.otf';
+        
+        // さらに確実なパス解決
+        $absolute_paths = array(
+            '/Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/assets/fonts/NotoSansJP-Regular.ttf',
+            dirname(dirname(__DIR__)) . '/assets/fonts/NotoSansJP-Regular.ttf',
+            realpath(dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf')
         );
         
-        error_log('Featured Image Generator: Checking plugin fonts...');
-        foreach ($plugin_fonts as $font) {
-            error_log('Featured Image Generator: Checking font: ' . $font);
-            if (file_exists($font)) {
-                error_log('Featured Image Generator: Found plugin font: ' . $font);
-                return $font;
-            } else {
-                error_log('Featured Image Generator: Font not found: ' . $font);
+        foreach ($absolute_paths as $path) {
+            if ($path && file_exists($path)) {
+                $plugin_fonts[] = $path;
             }
         }
         
-        // Linuxシステムフォント
+        // 重複を除去
+        $plugin_fonts = array_unique($plugin_fonts);
+        
+        error_log('Featured Image Generator: Checking ' . count($plugin_fonts) . ' plugin fonts...');
+        foreach ($plugin_fonts as $plugin_font) {
+            error_log('Featured Image Generator: Checking plugin font: ' . $plugin_font);
+            if (file_exists($plugin_font)) {
+                error_log('Featured Image Generator: Plugin font file exists: ' . $plugin_font);
+                if (is_readable($plugin_font)) {
+                    error_log('Featured Image Generator: Plugin font file is readable: ' . $plugin_font);
+                    $file_size = filesize($plugin_font);
+                    error_log('Featured Image Generator: Plugin font file size: ' . $file_size . ' bytes');
+                    
+                    // フォントの動作確認（必須）
+                    if (function_exists('imagettfbbox')) {
+                        $test_bbox = imagettfbbox(20, 0, $plugin_font, 'テスト');
+                        if ($test_bbox !== false) {
+                            error_log('Featured Image Generator: Plugin font test successful: ' . $plugin_font);
+                            return $plugin_font;
+                        } else {
+                            error_log('Featured Image Generator: Plugin font test failed (bbox): ' . $plugin_font);
+                        }
+                    } else {
+                        error_log('Featured Image Generator: FreeType functions not available');
+                        // FreeTypeが利用できない場合は、プラグインフォントも使用しない
+                        error_log('Featured Image Generator: Skipping plugin font due to FreeType unavailability');
+                    }
+                } else {
+                    error_log('Featured Image Generator: Plugin font file not readable: ' . $plugin_font);
+                }
+            } else {
+                error_log('Featured Image Generator: Plugin font file does not exist: ' . $plugin_font);
+            }
+        }
+        
+        // 優先順位3: Linuxシステムフォント
         $linux_fonts = array(
             '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
             '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf',
@@ -1113,7 +1195,7 @@ class NewsCrawlerFeaturedImageGenerator {
             }
         }
         
-        error_log('Featured Image Generator: No Japanese font found');
+        error_log('Featured Image Generator: No Japanese font found after checking all sources!');
         return false;
     }
     
