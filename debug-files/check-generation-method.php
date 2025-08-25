@@ -5,7 +5,7 @@
 
 try {
     // WordPressを読み込み
-    $wp_root = dirname(dirname(dirname(__DIR__)));
+    $wp_root = '/var/www/html';
     require_once($wp_root . '/wp-config.php');
     require_once($wp_root . '/wp-load.php');
     

@@ -179,22 +179,57 @@ class NewsCrawlerFeaturedImageGenerator {
      * Unsplash画像取得
      */
     private function fetch_unsplash_image($post_id, $title, $keywords, $settings) {
-        $access_key = isset($settings['unsplash_access_key']) ? $settings['unsplash_access_key'] : '';
+        // 複数の設定からAccess Keyを取得（優先順位付き）
+        $access_key = '';
+        
+        // 1. 基本設定から取得（最優先）
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        if (!empty($basic_settings['unsplash_access_key'])) {
+            $access_key = $basic_settings['unsplash_access_key'];
+            error_log('Featured Image Generator - Unsplash: Access key found in basic settings');
+        }
+        
+        // 2. フィーチャー画像設定から取得
+        if (empty($access_key) && !empty($settings['unsplash_access_key'])) {
+            $access_key = $settings['unsplash_access_key'];
+            error_log('Featured Image Generator - Unsplash: Access key found in featured image settings');
+        }
+        
+        // 3. ジャンル設定から取得
+        if (empty($access_key)) {
+            $genre_settings = get_option('news_crawler_genre_settings', array());
+            foreach ($genre_settings as $setting) {
+                if (!empty($setting['unsplash_access_key'])) {
+                    $access_key = $setting['unsplash_access_key'];
+                    error_log('Featured Image Generator - Unsplash: Access key found in genre settings');
+                    break;
+                }
+            }
+        }
         
         if (empty($access_key)) {
+            error_log('Featured Image Generator - Unsplash: No access key found in any settings');
             return false;
         }
         
+        error_log('Featured Image Generator - Unsplash: Access key found, length: ' . strlen($access_key));
+        
         // 検索キーワード生成
         $search_query = $this->create_unsplash_query($title, $keywords);
+        error_log('Featured Image Generator - Unsplash: Search query: ' . $search_query);
         
         // Unsplash API呼び出し
-        $response = wp_remote_get('https://api.unsplash.com/search/photos?' . http_build_query(array(
+        $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
             'query' => $search_query,
             'per_page' => 1,
             'orientation' => 'landscape',
             'content_filter' => 'high'
-        )), array(
+        ));
+        
+        error_log('Featured Image Generator - Unsplash: API URL: ' . $api_url);
+        error_log('Featured Image Generator - Unsplash: Authorization header: Client-ID ' . substr($access_key, 0, 8) . '...');
+        
+        $response = wp_remote_get($api_url, array(
             'headers' => array(
                 'Authorization' => 'Client-ID ' . $access_key,
             ),
@@ -202,16 +237,37 @@ class NewsCrawlerFeaturedImageGenerator {
         ));
         
         if (is_wp_error($response)) {
+            error_log('Featured Image Generator - Unsplash: WP_Error: ' . $response->get_error_message());
             return false;
         }
         
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
+        $response_code = wp_remote_retrieve_response_code($response);
+        error_log('Featured Image Generator - Unsplash: Response code: ' . $response_code);
         
-        if (isset($data['results'][0]['urls']['regular'])) {
-            return $this->download_and_attach_image($data['results'][0]['urls']['regular'], $post_id, $title);
+        $body = wp_remote_retrieve_body($response);
+        error_log('Featured Image Generator - Unsplash: Response body length: ' . strlen($body));
+        
+        $data = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Featured Image Generator - Unsplash: JSON decode error: ' . json_last_error_msg());
+            return false;
         }
         
+        error_log('Featured Image Generator - Unsplash: Decoded data keys: ' . implode(', ', array_keys($data)));
+        
+        if (isset($data['results']) && is_array($data['results']) && !empty($data['results'])) {
+            if (isset($data['results'][0]['urls']['regular'])) {
+                $image_url = $data['results'][0]['urls']['regular'];
+                error_log('Featured Image Generator - Unsplash: Image URL found: ' . $image_url);
+                return $this->download_and_attach_image($image_url, $post_id, $title);
+            } else {
+                error_log('Featured Image Generator - Unsplash: No regular URL in first result');
+            }
+        } else {
+            error_log('Featured Image Generator - Unsplash: No results found in response');
+        }
+        
+        error_log('Featured Image Generator - Unsplash: Failed to get image URL from response');
         return false;
     }    
     
