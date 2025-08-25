@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.5.0
+ * Version: 1.5.1
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -1314,6 +1314,133 @@ class NewsCrawler {
         return $result;
     }
     
+    public function crawl_news_with_options($options) {
+        $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
+        $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 10;
+        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
+        $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
+        
+        if (empty($sources)) {
+            return 'ニュースソースが設定されていません。';
+        }
+        
+        $matched_articles = array();
+        $errors = array();
+        $duplicates_skipped = 0;
+        $low_quality_skipped = 0;
+        $debug_info = array();
+        
+        foreach ($sources as $source) {
+            try {
+                $content = $this->fetch_content($source);
+                if ($content) {
+                    if (is_array($content)) {
+                        $debug_info[] = $source . ': RSSフィードから' . count($content) . '件の記事を取得';
+                        foreach ($content as $article) {
+                            if ($this->is_keyword_match($article, $keywords)) {
+                                $matched_articles[] = $article;
+                                $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                            } else {
+                                // キーワードマッチしない場合のデバッグ情報
+                                global $news_crawler_search_text;
+                                $debug_info[] = '  - キーワードマッチなし: ' . $article['title'];
+                                $debug_info[] = '    検索対象テキスト: ' . mb_substr($news_crawler_search_text, 0, 100) . '...';
+                            }
+                        }
+                    } else {
+                        $articles = $this->parse_content($content, $source);
+                        if ($articles && is_array($articles)) {
+                            $debug_info[] = $source . ': HTMLページから' . count($articles) . '件の記事を解析';
+                            foreach ($articles as $article) {
+                                if ($this->is_keyword_match($article, $keywords)) {
+                                    $matched_articles[] = $article;
+                                    $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                                }
+                            }
+                        } elseif ($articles) {
+                            // 単一記事の場合
+                            $debug_info[] = $source . ': HTMLページから単一記事を解析';
+                            if ($this->is_keyword_match($articles, $keywords)) {
+                                $matched_articles[] = $articles;
+                                $debug_info[] = '  - キーワードマッチ: ' . $articles['title'];
+                            } else {
+                                // キーワードマッチしない場合のデバッグ情報
+                                global $news_crawler_search_text;
+                                $debug_info[] = '  - キーワードマッチなし: ' . $articles['title'];
+                                $debug_info[] = '    検索対象テキスト: ' . mb_substr($news_crawler_search_text, 0, 100) . '...';
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $errors[] = $source . ': ' . $e->getMessage();
+            }
+        }
+        
+        $debug_info[] = "\nキーワードマッチした記事数: " . count($matched_articles);
+        
+        $valid_articles = array();
+        foreach ($matched_articles as $article) {
+            $debug_info[] = "  - 記事: " . $article['title'];
+            
+            if ($this->is_duplicate_article($article)) {
+                $duplicates_skipped++;
+                $debug_info[] = "    → 重複のためスキップ";
+                continue;
+            }
+            
+            $quality_score = $this->calculate_quality_score($article);
+            $debug_info[] = "    → 品質スコア: " . number_format($quality_score, 2);
+            
+            // 品質スコアの詳細情報を追加
+            global $news_crawler_debug_details;
+            if (!empty($news_crawler_debug_details)) {
+                foreach ($news_crawler_debug_details as $detail) {
+                    $debug_info[] = "      " . $detail;
+                }
+            }
+            
+            if ($quality_score < 0.3) {
+                $low_quality_skipped++;
+                $debug_info[] = "    → 品質スコアが低いためスキップ";
+                continue;
+            }
+            
+            $debug_info[] = "    → 有効記事として追加";
+            $valid_articles[] = $article;
+        }
+        
+        $valid_articles = array_slice($valid_articles, 0, $max_articles);
+        
+        $posts_created = 0;
+        $post_id = null;
+        if (!empty($valid_articles)) {
+            $post_id = $this->create_summary_post_with_categories($valid_articles, $categories, $status);
+            if ($post_id && !is_wp_error($post_id)) {
+                $posts_created = 1;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+            } else {
+                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
+                $debug_info[] = "\n投稿作成失敗: " . $error_message;
+            }
+        } else {
+            $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+        }
+        
+        $result = $posts_created . '件の投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
+        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
+        if ($low_quality_skipped > 0) $result .= "\n低品質スキップ: " . $low_quality_skipped . '件';
+        if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
+        
+        $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
+        
+        $this->update_crawler_statistics($posts_created, $duplicates_skipped, $low_quality_skipped);
+        
+        return $result;
+    }
+    
     private function is_keyword_match($article, $keywords) {
         $text_to_search = strtolower($article['title'] . ' ' . ($article['excerpt'] ?? '') . ' ' . ($article['news_content'] ?? '') . ' ' . ($article['description'] ?? ''));
         
@@ -1409,6 +1536,117 @@ class NewsCrawler {
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => array($cat_id)
+        );
+        
+        // ksesフィルターを一時的に無効化して投稿を作成
+        kses_remove_filters();
+        $post_id = wp_insert_post($post_data, true);
+        kses_init_filters();
+        
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+        
+        // メタデータの保存
+        update_post_meta($post_id, '_news_summary', true);
+        update_post_meta($post_id, '_news_articles_count', count($articles));
+        update_post_meta($post_id, '_news_crawled_date', current_time('mysql'));
+        
+        foreach ($articles as $index => $article) {
+            update_post_meta($post_id, '_news_article_' . $index . '_title', $article['title']);
+            update_post_meta($post_id, '_news_article_' . $index . '_source', $article['source']);
+            if (!empty($article['link'])) {
+                update_post_meta($post_id, '_news_article_' . $index . '_link', $article['link']);
+            }
+        }
+        
+        return $post_id;
+    }
+    
+    private function create_summary_post_with_categories($articles, $categories, $status) {
+        // 複数カテゴリーに対応
+        $cat_ids = array();
+        foreach ($categories as $category) {
+            $cat_ids[] = $this->get_or_create_category($category);
+        }
+        
+        // キーワード情報を取得
+        $options = get_option('news_crawler_settings', array());
+        $keywords = isset($options['keywords']) ? $options['keywords'] : array('ニュース');
+        
+        // キーワードが設定されていない場合は、記事の内容から推測
+        if (empty($keywords) || (count($keywords) === 1 && $keywords[0] === 'ニュース')) {
+            $keyword_text = '最新';
+        } else {
+            // キーワードを組み合わせてタイトルを作成（最大3つまで）
+            $keyword_text = implode('、', array_slice($keywords, 0, 3));
+        }
+        
+        $post_title = $keyword_text . '：ニュースまとめ – ' . date_i18n('Y年n月j日');
+        
+        $post_content = '';
+        
+        $articles_by_source = array();
+        foreach ($articles as $article) {
+            $source_host = parse_url($article['source'], PHP_URL_HOST) ?: $article['source'];
+            $articles_by_source[$source_host][] = $article;
+        }
+        
+        foreach ($articles_by_source as $source_host => $source_articles) {
+            $post_content .= '<!-- wp:quote -->';
+            $post_content .= '<blockquote class="wp-block-quote">';
+            
+            $post_content .= '<!-- wp:heading {"level":2} -->';
+            $post_content .= '<h2>' . esc_html($this->get_readable_source_name($source_host)) . '</h2>';
+            $post_content .= '<!-- /wp:heading -->';
+            
+            foreach ($source_articles as $article) {
+                if (!empty($article['link'])) {
+                    $post_content .= '<!-- wp:heading {"level":3} -->';
+                    $post_content .= '<h3><a href="' . esc_url($article['link']) . '" target="_blank" rel="noopener noreferrer">' . esc_html($article['title']) . '</a></h3>';
+                    $post_content .= '<!-- /wp:heading -->';
+                } else {
+                    $post_content .= '<!-- wp:heading {"level":3} -->';
+                    $post_content .= '<h3>' . esc_html($article['title']) . '</h3>';
+                    $post_content .= '<!-- /wp:heading -->';
+                }
+                
+                if (!empty($article['excerpt'])) {
+                    $post_content .= '<!-- wp:paragraph -->';
+                    $post_content .= '<p>' . esc_html($article['excerpt']) . '</p>';
+                    $post_content .= '<!-- /wp:paragraph -->';
+                }
+                
+                $meta_info = [];
+                if (!empty($article['article_date'])) {
+                    $meta_info[] = '<strong>公開日:</strong> ' . esc_html($article['article_date']);
+                }
+                if (!empty($article['source'])) {
+                    $meta_info[] = '<strong>出典:</strong> <a href="' . esc_url($article['source']) . '" target="_blank" rel="noopener noreferrer">' . esc_html(parse_url($article['source'], PHP_URL_HOST) ?: $article['source']) . '</a>';
+                }
+
+                if (!empty($meta_info)) {
+                    $post_content .= '<!-- wp:paragraph {"fontSize":"small"} -->';
+                    $post_content .= '<p class="has-small-font-size">' . implode(' | ', $meta_info) . '</p>';
+                    $post_content .= '<!-- /wp:paragraph -->';
+                }
+
+                $post_content .= '<!-- wp:spacer {"height":"20px"} -->';
+                $post_content .= '<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>';
+                $post_content .= '<!-- /wp:spacer -->';
+            }
+            
+            $post_content .= '</blockquote>';
+            $post_content .= '<!-- /wp:quote -->';
+        }
+        
+        $post_data = array(
+            'post_title'    => $post_title,
+            'post_content'  => $post_content,
+            'post_status'   => $status,
+            'post_author'   => get_current_user_id() ?: 1,
+            'post_type'     => 'post',
+            'post_category' => $cat_ids
         );
         
         // ksesフィルターを一時的に無効化して投稿を作成

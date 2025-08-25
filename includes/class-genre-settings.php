@@ -735,7 +735,7 @@ class NewsCrawlerGenreSettings {
             $debug_info[] = '  - 最大記事数: ' . $temp_options['max_articles'];
             $debug_info[] = '  - キーワード: ' . implode(', ', $temp_options['keywords']);
             $debug_info[] = '  - ニュースソース: ' . implode(', ', $temp_options['news_sources']);
-            $debug_info[] = '  - 投稿カテゴリー: ' . $temp_options['post_category'];
+            $debug_info[] = '  - 投稿カテゴリー: ' . implode(', ', $temp_options['post_categories']);
             $debug_info[] = '  - 投稿ステータス: ' . $temp_options['post_status'];
             
             // 一時的にオプションを更新
@@ -750,7 +750,13 @@ class NewsCrawlerGenreSettings {
                 }
                 
                 $debug_info[] = "\nニュースクロール実行開始...";
-                $result = $news_crawler->crawl_news();
+                
+                // 新しいメソッドがあるかチェック
+                if (method_exists($news_crawler, 'crawl_news_with_options')) {
+                    $result = $news_crawler->crawl_news_with_options($temp_options);
+                } else {
+                    $result = $news_crawler->crawl_news();
+                }
                 
                 // 統計情報を更新
                 $this->update_genre_statistics($setting['id'], 'news');
