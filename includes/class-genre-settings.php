@@ -690,7 +690,6 @@ class NewsCrawlerGenreSettings {
                     data: formData,
                     success: function(response) {
                         if (response.success) {
-                            alert('設定を保存しました。');
                             location.reload();
                         } else {
                             alert('エラー: ' + response.data);
@@ -771,7 +770,6 @@ class NewsCrawlerGenreSettings {
                     },
                     success: function(response) {
                         if (response.success) {
-                            alert('設定を複製しました。');
                             location.reload();
                         } else {
                             alert('複製に失敗しました: ' + response.data);
@@ -805,7 +803,6 @@ class NewsCrawlerGenreSettings {
                     },
                     success: function(response) {
                         if (response.success) {
-                            alert('設定を削除しました。');
                             location.reload();
                         } else {
                             alert('削除に失敗しました: ' + response.data);
