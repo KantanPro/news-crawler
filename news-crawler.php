@@ -18,6 +18,9 @@ if (!defined('ABSPATH')) {
 // 必要なクラスファイルをインクルード
 require_once plugin_dir_path(__FILE__) . 'includes/class-genre-settings.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-youtube-crawler.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-featured-image-generator.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
 
 // プラグイン初期化
 function news_crawler_init() {
@@ -40,6 +43,21 @@ function news_crawler_init() {
     // 既存のYouTubeCrawlerクラス（新版）も初期化
     if (class_exists('NewsCrawlerYouTubeCrawler')) {
         // メニュー登録を無効化したクラスは手動で初期化しない
+    }
+    
+    // アイキャッチ生成クラスを初期化
+    if (class_exists('NewsCrawlerFeaturedImageGenerator')) {
+        new NewsCrawlerFeaturedImageGenerator();
+    }
+    
+    // アイキャッチ画像生成クラスを初期化
+    if (class_exists('News_Crawler_Eyecatch_Generator')) {
+        new News_Crawler_Eyecatch_Generator();
+    }
+    
+    // アイキャッチ画像管理画面クラスを初期化
+    if (class_exists('News_Crawler_Eyecatch_Admin')) {
+        new News_Crawler_Eyecatch_Admin();
     }
 }
 add_action('plugins_loaded', 'news_crawler_init');
@@ -369,6 +387,7 @@ class YouTubeCrawler {
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
+                        dataType: 'json',
                         data: {
                             action: 'youtube_crawler_test_fetch',
                             nonce: '<?php echo wp_create_nonce('youtube_crawler_nonce'); ?>'
@@ -385,6 +404,7 @@ class YouTubeCrawler {
                             $.ajax({
                                 url: ajaxurl,
                                 type: 'POST',
+                                dataType: 'json',
                                 data: {
                                     action: 'youtube_crawler_manual_run',
                                     nonce: '<?php echo wp_create_nonce('youtube_crawler_nonce'); ?>'
@@ -400,16 +420,74 @@ class YouTubeCrawler {
                                     // 両方の結果を表示
                                     resultDiv.html(testResult + '<br>' + postResult);
                                 },
-                                error: function() {
-                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>動画投稿作成エラー:</strong><br>エラーが発生しました。</p></div>');
+                                error: function(xhr, status, error) {
+                                    console.log('AJAX Error Details:', {
+                                        status: xhr.status,
+                                        statusText: xhr.statusText,
+                                        responseText: xhr.responseText,
+                                        responseJSON: xhr.responseJSON,
+                                        error: error
+                                    });
+                                    
+                                    var errorMessage = 'エラーが発生しました。';
+                                    if (xhr.responseJSON && xhr.responseJSON.data) {
+                                        errorMessage = xhr.responseJSON.data;
+                                    } else if (xhr.status >= 400) {
+                                        errorMessage = 'HTTPエラー: ' + xhr.status + ' ' + xhr.statusText;
+                                    } else if (xhr.responseText) {
+                                        // レスポンステキストを確認
+                                        try {
+                                            var response = JSON.parse(xhr.responseText);
+                                            if (response.data) {
+                                                errorMessage = response.data;
+                                            } else {
+                                                errorMessage = 'レスポンス解析エラー: ' + xhr.responseText.substring(0, 100);
+                                            }
+                                        } catch (e) {
+                                            errorMessage = 'レスポンス形式エラー: ' + xhr.responseText.substring(0, 100);
+                                        }
+                                    } else if (error) {
+                                        errorMessage = 'エラー: ' + error;
+                                    }
+                                    
+                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>動画投稿作成エラー:</strong><br>' + errorMessage + '</p></div>');
                                 },
                                 complete: function() {
                                     button.prop('disabled', false).text('動画投稿を作成');
                                 }
                             });
                         },
-                        error: function() {
-                            resultDiv.html('<div class="notice notice-error"><p><strong>YouTubeチャンネル解析エラー:</strong><br>エラーが発生しました。</p></div>');
+                        error: function(xhr, status, error) {
+                            console.log('AJAX Error Details (Test):', {
+                                status: xhr.status,
+                                statusText: xhr.statusText,
+                                responseText: xhr.responseText,
+                                responseJSON: xhr.responseJSON,
+                                error: error
+                            });
+                            
+                            var errorMessage = 'エラーが発生しました。';
+                            if (xhr.responseJSON && xhr.responseJSON.data) {
+                                errorMessage = xhr.responseJSON.data;
+                            } else if (xhr.status >= 400) {
+                                errorMessage = 'HTTPエラー: ' + xhr.status + ' ' + xhr.statusText;
+                            } else if (xhr.responseText) {
+                                // レスポンステキストを確認
+                                try {
+                                    var response = JSON.parse(xhr.responseText);
+                                    if (response.data) {
+                                        errorMessage = response.data;
+                                    } else {
+                                        errorMessage = 'レスポンス解析エラー: ' + xhr.responseText.substring(0, 100);
+                                    }
+                                } catch (e) {
+                                    errorMessage = 'レスポンス形式エラー: ' + xhr.responseText.substring(0, 100);
+                                }
+                            } else if (error) {
+                                errorMessage = 'エラー: ' + error;
+                            }
+                            
+                            resultDiv.html('<div class="notice notice-error"><p><strong>YouTubeチャンネル解析エラー:</strong><br>' + errorMessage + '</p></div>');
                             button.prop('disabled', false).text('動画投稿を作成');
                         }
                     });
@@ -656,6 +734,11 @@ class YouTubeCrawler {
             update_post_meta($post_id, '_youtube_video_' . $index . '_channel', $video['channel_title']);
         }
         
+        // アイキャッチ生成（ジャンル設定から呼び出された場合）
+        error_log('NewsCrawler: About to call maybe_generate_featured_image for YouTube post ' . $post_id);
+        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        error_log('NewsCrawler: YouTube maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
+        
         return $post_id;
     }
     
@@ -801,6 +884,69 @@ class YouTubeCrawler {
             return is_wp_error($result) ? 1 : $result['term_id'];
         }
         return $category->term_id;
+    }
+    
+    /**
+     * アイキャッチ画像を生成
+     */
+    private function maybe_generate_featured_image($post_id, $title, $keywords) {
+        error_log('YouTubeCrawler: maybe_generate_featured_image called for post ' . $post_id);
+        error_log('YouTubeCrawler: Title: ' . $title);
+        error_log('YouTubeCrawler: Keywords: ' . implode(', ', $keywords));
+        
+        // ジャンル設定からの実行かどうかを確認
+        $genre_setting = get_transient('news_crawler_current_genre_setting');
+        
+        error_log('YouTubeCrawler: Genre setting exists: ' . ($genre_setting ? 'Yes' : 'No'));
+        if ($genre_setting) {
+            error_log('YouTubeCrawler: Genre setting content: ' . print_r($genre_setting, true));
+            error_log('YouTubeCrawler: Auto featured image enabled: ' . (isset($genre_setting['auto_featured_image']) && $genre_setting['auto_featured_image'] ? 'Yes' : 'No'));
+            if (isset($genre_setting['featured_image_method'])) {
+                error_log('YouTubeCrawler: Featured image method: ' . $genre_setting['featured_image_method']);
+            }
+        } else {
+            error_log('YouTubeCrawler: No genre setting found in transient storage');
+            // 基本設定からアイキャッチ生成設定を確認
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            
+            error_log('YouTubeCrawler: Checking basic settings for featured image generation');
+            error_log('YouTubeCrawler: Basic settings: ' . print_r($basic_settings, true));
+            
+            // 基本設定でアイキャッチ生成が有効かチェック
+            $auto_featured_enabled = isset($basic_settings['auto_featured_image']) && $basic_settings['auto_featured_image'];
+            if (!$auto_featured_enabled) {
+                error_log('YouTubeCrawler: Featured image generation skipped - not enabled in basic settings');
+                return false;
+            }
+            
+            // 基本設定から設定を作成
+            $genre_setting = array(
+                'auto_featured_image' => true,
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
+            );
+            error_log('YouTubeCrawler: Using basic settings for featured image generation');
+        }
+        
+        if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
+            error_log('YouTubeCrawler: Featured image generation skipped - not enabled');
+            return false;
+        }
+        
+        if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
+            error_log('YouTubeCrawler: Featured image generator class not found');
+            return false;
+        }
+        
+        error_log('YouTubeCrawler: Creating featured image generator instance');
+        $generator = new NewsCrawlerFeaturedImageGenerator();
+        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
+        
+        error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
+        
+        $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+        error_log('YouTubeCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
+        
+        return $result;
     }
 }
 
@@ -1090,6 +1236,7 @@ class NewsCrawler {
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
+                        dataType: 'json',
                         data: {
                             action: 'news_crawler_test_fetch',
                             nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
@@ -1106,6 +1253,7 @@ class NewsCrawler {
                             $.ajax({
                                 url: ajaxurl,
                                 type: 'POST',
+                                dataType: 'json',
                                 data: {
                                     action: 'news_crawler_manual_run',
                                     nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
@@ -1121,16 +1269,74 @@ class NewsCrawler {
                                     // 両方の結果を表示
                                     resultDiv.html(testResult + '<br>' + postResult);
                                 },
-                                error: function() {
-                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>投稿作成エラー:</strong><br>エラーが発生しました。</p></div>');
+                                error: function(xhr, status, error) {
+                                    console.log('AJAX Error Details (Post):', {
+                                        status: xhr.status,
+                                        statusText: xhr.statusText,
+                                        responseText: xhr.responseText,
+                                        responseJSON: xhr.responseJSON,
+                                        error: error
+                                    });
+                                    
+                                    var errorMessage = 'エラーが発生しました。';
+                                    if (xhr.responseJSON && xhr.responseJSON.data) {
+                                        errorMessage = xhr.responseJSON.data;
+                                    } else if (xhr.status >= 400) {
+                                        errorMessage = 'HTTPエラー: ' + xhr.status + ' ' + xhr.statusText;
+                                    } else if (xhr.responseText) {
+                                        // レスポンステキストを確認
+                                        try {
+                                            var response = JSON.parse(xhr.responseText);
+                                            if (response.data) {
+                                                errorMessage = response.data;
+                                            } else {
+                                                errorMessage = 'レスポンス解析エラー: ' + xhr.responseText.substring(0, 100);
+                                            }
+                                        } catch (e) {
+                                            errorMessage = 'レスポンス形式エラー: ' + xhr.responseText.substring(0, 100);
+                                        }
+                                    } else if (error) {
+                                        errorMessage = 'エラー: ' + error;
+                                    }
+                                    
+                                    resultDiv.html(testResult + '<br><div class="notice notice-error"><p><strong>投稿作成エラー:</strong><br>' + errorMessage + '</p></div>');
                                 },
                                 complete: function() {
                                     button.prop('disabled', false).text('投稿を作成');
                                 }
                             });
                         },
-                        error: function() {
-                            resultDiv.html('<div class="notice notice-error"><p><strong>ニュースソース解析エラー:</strong><br>エラーが発生しました。</p></div>');
+                        error: function(xhr, status, error) {
+                            console.log('AJAX Error Details (Test Fetch):', {
+                                status: xhr.status,
+                                statusText: xhr.statusText,
+                                responseText: xhr.responseText,
+                                responseJSON: xhr.responseJSON,
+                                error: error
+                            });
+                            
+                            var errorMessage = 'エラーが発生しました。';
+                            if (xhr.responseJSON && xhr.responseJSON.data) {
+                                errorMessage = xhr.responseJSON.data;
+                            } else if (xhr.status >= 400) {
+                                errorMessage = 'HTTPエラー: ' + xhr.status + ' ' + xhr.statusText;
+                            } else if (xhr.responseText) {
+                                // レスポンステキストを確認
+                                try {
+                                    var response = JSON.parse(xhr.responseText);
+                                    if (response.data) {
+                                        errorMessage = response.data;
+                                    } else {
+                                        errorMessage = 'レスポンス解析エラー: ' + xhr.responseText.substring(0, 100);
+                                    }
+                                } catch (e) {
+                                    errorMessage = 'レスポンス形式エラー: ' + xhr.responseText.substring(0, 100);
+                                }
+                            } else if (error) {
+                                errorMessage = 'エラー: ' + error;
+                            }
+                            
+                            resultDiv.html('<div class="notice notice-error"><p><strong>ニュースソース解析エラー:</strong><br>' + errorMessage + '</p></div>');
                             button.prop('disabled', false).text('投稿を作成');
                         }
                     });
@@ -1560,6 +1766,11 @@ class NewsCrawler {
             }
         }
         
+        // アイキャッチ生成（ジャンル設定から呼び出された場合）
+        error_log('NewsCrawler: About to call maybe_generate_featured_image for news post ' . $post_id);
+        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        error_log('NewsCrawler: News maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
+        
         return $post_id;
     }
     
@@ -1670,6 +1881,11 @@ class NewsCrawler {
                 update_post_meta($post_id, '_news_article_' . $index . '_link', $article['link']);
             }
         }
+        
+        // アイキャッチ生成（ジャンル設定から呼び出された場合）
+        error_log('NewsCrawler: About to call maybe_generate_featured_image for news post ' . $post_id);
+        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        error_log('NewsCrawler: News maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
         
         return $post_id;
     }
@@ -2074,6 +2290,71 @@ class NewsCrawler {
             return is_wp_error($result) ? 1 : $result['term_id'];
         }
         return $category->term_id;
+    }
+    
+    /**
+     * アイキャッチ画像を生成（ジャンル設定から呼び出された場合のみ）
+     */
+    private function maybe_generate_featured_image($post_id, $title, $keywords) {
+        error_log('NewsCrawler: maybe_generate_featured_image called for post ' . $post_id);
+        error_log('NewsCrawler: Title: ' . $title);
+        error_log('NewsCrawler: Keywords: ' . implode(', ', $keywords));
+        
+        // ジャンル設定からの実行かどうかを確認
+        $genre_setting = get_transient('news_crawler_current_genre_setting');
+        
+        error_log('NewsCrawler: Genre setting exists: ' . ($genre_setting ? 'Yes' : 'No'));
+        if ($genre_setting) {
+            error_log('NewsCrawler: Genre setting content: ' . print_r($genre_setting, true));
+            error_log('NewsCrawler: Auto featured image enabled: ' . (isset($genre_setting['auto_featured_image']) && $genre_setting['auto_featured_image'] ? 'Yes' : 'No'));
+            if (isset($genre_setting['featured_image_method'])) {
+                error_log('NewsCrawler: Featured image method: ' . $genre_setting['featured_image_method']);
+            }
+        } else {
+            error_log('NewsCrawler: No genre setting found in transient storage');
+            // 基本設定からアイキャッチ生成設定を確認
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $featured_settings = get_option('news_crawler_featured_image_settings', array());
+            
+            error_log('NewsCrawler: Checking basic settings for featured image generation');
+            error_log('NewsCrawler: Basic settings: ' . print_r($basic_settings, true));
+            error_log('NewsCrawler: Featured settings: ' . print_r($featured_settings, true));
+            
+            // 基本設定でアイキャッチ生成が有効かチェック
+            $auto_featured_enabled = isset($basic_settings['auto_featured_image']) && $basic_settings['auto_featured_image'];
+            if (!$auto_featured_enabled) {
+                error_log('NewsCrawler: Featured image generation skipped - not enabled in basic settings');
+                return false;
+            }
+            
+            // 基本設定から設定を作成
+            $genre_setting = array(
+                'auto_featured_image' => true,
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
+            );
+            error_log('NewsCrawler: Using basic settings for featured image generation');
+        }
+        
+        if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
+            error_log('NewsCrawler: Featured image generation skipped - not enabled');
+            return false;
+        }
+        
+        if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
+            error_log('NewsCrawler: Featured image generator class not found');
+            return false;
+        }
+        
+        error_log('NewsCrawler: Creating featured image generator instance');
+        $generator = new NewsCrawlerFeaturedImageGenerator();
+        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
+        
+        error_log('NewsCrawler: Generating featured image with method: ' . $method);
+        
+        $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+        error_log('NewsCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
+        
+        return $result;
     }
 }
 

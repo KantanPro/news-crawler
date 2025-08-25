@@ -81,10 +81,63 @@ class NewsCrawlerGenreSettings {
             'news-crawler-basic',
             'basic_settings_main'
         );
+        
+        // アイキャッチ生成設定セクション
+        add_settings_section(
+            'featured_image_settings',
+            'アイキャッチ自動生成設定',
+            array($this, 'featured_image_section_callback'),
+            'news-crawler-basic'
+        );
+        
+        add_settings_field(
+            'openai_api_key',
+            'OpenAI APIキー',
+            array($this, 'openai_api_key_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
+        
+        add_settings_field(
+            'unsplash_access_key',
+            'Unsplash Access Key',
+            array($this, 'unsplash_access_key_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
+        
+        add_settings_field(
+            'auto_featured_image',
+            'アイキャッチ自動生成',
+            array($this, 'auto_featured_image_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
+        
+        add_settings_field(
+            'featured_image_method',
+            'アイキャッチ生成方法',
+            array($this, 'featured_image_method_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
+        
+        // テンプレート設定フィールド
+        add_settings_field(
+            'template_settings',
+            'テンプレート設定',
+            array($this, 'template_settings_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
     }
     
     public function basic_section_callback() {
         echo '<p>すべてのジャンル設定で共通して使用される基本設定です。</p>';
+    }
+    
+    public function featured_image_section_callback() {
+        echo '<p>投稿作成時のアイキャッチ自動生成に関する設定です。</p>';
     }
     
     public function youtube_api_key_callback() {
@@ -106,6 +159,46 @@ class NewsCrawlerGenreSettings {
         echo '<p class="description">投稿のデフォルト作成者を選択してください。</p>';
     }
     
+    public function openai_api_key_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($options['openai_api_key']) ? $options['openai_api_key'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[openai_api_key]" value="' . esc_attr($api_key) . '" size="50" />';
+        echo '<p class="description">AI画像生成に使用するOpenAI APIキーを入力してください。</p>';
+    }
+    
+    public function unsplash_access_key_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $access_key = isset($options['unsplash_access_key']) ? $options['unsplash_access_key'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[unsplash_access_key]" value="' . esc_attr($access_key) . '" size="50" />';
+        echo '<p class="description">Unsplash画像取得に使用するAccess Keyを入力してください。</p>';
+    }
+    
+    public function auto_featured_image_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $enabled = isset($options['auto_featured_image']) ? $options['auto_featured_image'] : false;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[auto_featured_image]" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[auto_featured_image]">投稿作成時に自動でアイキャッチを生成する</label>';
+        echo '<p class="description">ジャンル設定で個別に設定されていない場合に適用されます。</p>';
+    }
+    
+    public function featured_image_method_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'template';
+        
+        $methods = array(
+            'template' => 'テンプレート生成（軽量・高速）',
+            'ai' => 'AI生成（OpenAI DALL-E）',
+            'unsplash' => 'Unsplash画像取得'
+        );
+        
+        echo '<select name="news_crawler_basic_settings[featured_image_method]">';
+        foreach ($methods as $value => $label) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($value, $method, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">デフォルトのアイキャッチ生成方法を選択してください。</p>';
+    }
+    
     public function sanitize_basic_settings($input) {
         $sanitized = array();
         
@@ -117,7 +210,112 @@ class NewsCrawlerGenreSettings {
             $sanitized['default_post_author'] = intval($input['default_post_author']);
         }
         
+        if (isset($input['openai_api_key'])) {
+            $sanitized['openai_api_key'] = sanitize_text_field($input['openai_api_key']);
+        }
+        
+        if (isset($input['unsplash_access_key'])) {
+            $sanitized['unsplash_access_key'] = sanitize_text_field($input['unsplash_access_key']);
+        }
+        
+        if (isset($input['auto_featured_image'])) {
+            $sanitized['auto_featured_image'] = (bool) $input['auto_featured_image'];
+        }
+        
+        if (isset($input['featured_image_method'])) {
+            $allowed_methods = array('template', 'ai', 'unsplash');
+            $method = sanitize_text_field($input['featured_image_method']);
+            $sanitized['featured_image_method'] = in_array($method, $allowed_methods) ? $method : 'template';
+        }
+        
+        // テンプレート設定の処理
+        if (isset($input['template_width'])) {
+            $sanitized['template_width'] = intval($input['template_width']);
+        }
+        
+        if (isset($input['template_height'])) {
+            $sanitized['template_height'] = intval($input['template_height']);
+        }
+        
+        if (isset($input['bg_color1'])) {
+            $sanitized['bg_color1'] = sanitize_hex_color($input['bg_color1']);
+        }
+        
+        if (isset($input['bg_color2'])) {
+            $sanitized['bg_color2'] = sanitize_hex_color($input['bg_color2']);
+        }
+        
+        if (isset($input['text_color'])) {
+            $sanitized['text_color'] = sanitize_hex_color($input['text_color']);
+        }
+        
+        if (isset($input['font_size'])) {
+            $sanitized['font_size'] = intval($input['font_size']);
+        }
+        
+        if (isset($input['text_scale'])) {
+            $sanitized['text_scale'] = intval($input['text_scale']);
+        }
+        
         return $sanitized;
+    }
+    
+    public function template_settings_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        ?>
+        <div class="template-settings">
+            <table class="form-table">
+                <tr>
+                    <th scope="row">画像サイズ</th>
+                    <td>
+                        <input type="number" name="news_crawler_basic_settings[template_width]" value="<?php echo esc_attr($options['template_width'] ?? 1200); ?>" min="400" max="2000" style="width: 80px;" /> × 
+                        <input type="number" name="news_crawler_basic_settings[template_height]" value="<?php echo esc_attr($options['template_height'] ?? 630); ?>" min="200" max="1200" style="width: 80px;" /> px
+                        <p class="description">アイキャッチ画像のサイズを指定してください。</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">背景色1</th>
+                    <td>
+                        <input type="color" name="news_crawler_basic_settings[bg_color1]" value="<?php echo esc_attr($options['bg_color1'] ?? '#4F46E5'); ?>" />
+                        <p class="description">グラデーション背景の開始色</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">背景色2</th>
+                    <td>
+                        <input type="color" name="news_crawler_basic_settings[bg_color2]" value="<?php echo esc_attr($options['bg_color2'] ?? '#7C3AED'); ?>" />
+                        <p class="description">グラデーション背景の終了色</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">テキスト色</th>
+                    <td>
+                        <input type="color" name="news_crawler_basic_settings[text_color]" value="<?php echo esc_attr($options['text_color'] ?? '#FFFFFF'); ?>" />
+                        <p class="description">タイトルテキストの色</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">フォントサイズ</th>
+                    <td>
+                        <input type="number" name="news_crawler_basic_settings[font_size]" value="<?php echo esc_attr($options['font_size'] ?? 48); ?>" min="24" max="120" style="width: 80px;" /> px
+                        <p class="description">TTFフォント使用時のサイズ。内蔵フォント使用時は自動調整されます。</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">文字拡大倍率</th>
+                    <td>
+                        <select name="news_crawler_basic_settings[text_scale]">
+                            <option value="2" <?php selected($options['text_scale'] ?? 3, 2); ?>>2倍</option>
+                            <option value="3" <?php selected($options['text_scale'] ?? 3, 3); ?>>3倍（推奨）</option>
+                            <option value="4" <?php selected($options['text_scale'] ?? 3, 4); ?>>4倍</option>
+                            <option value="5" <?php selected($options['text_scale'] ?? 3, 5); ?>>5倍</option>
+                        </select>
+                        <p class="description">内蔵フォント使用時の文字拡大倍率。文字が小さい場合は4倍または5倍を選択してください。</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <?php
     }
     
     public function basic_settings_page() {
@@ -255,6 +453,23 @@ class NewsCrawlerGenreSettings {
                                     </select>
                                 </td>
                             </tr>
+                            <tr>
+                                <th scope="row">アイキャッチ自動生成</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="auto-featured-image" name="auto_featured_image" value="1">
+                                        投稿作成時にアイキャッチを自動生成する
+                                    </label>
+                                    <div id="featured-image-settings" style="margin-top: 10px; display: none;">
+                                        <select id="featured-image-method" name="featured_image_method">
+                                            <option value="template">テンプレート生成</option>
+                                            <option value="ai">AI画像生成 (OpenAI DALL-E)</option>
+                                            <option value="unsplash">Unsplash画像取得</option>
+                                        </select>
+                                        <p class="description">アイキャッチの生成方法を選択してください。</p>
+                                    </div>
+                                </td>
+                            </tr>
                         </table>
                         
                         <p class="submit">
@@ -295,6 +510,15 @@ class NewsCrawlerGenreSettings {
                 }
             });
             
+            // アイキャッチ自動生成チェックボックス変更時の設定表示切り替え
+            $('#auto-featured-image').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#featured-image-settings').show();
+                } else {
+                    $('#featured-image-settings').hide();
+                }
+            });
+            
             // フォーム送信
             $('#genre-settings-form').submit(function(e) {
                 e.preventDefault();
@@ -312,7 +536,9 @@ class NewsCrawlerGenreSettings {
                     max_videos: $('#max-videos').val(),
                     embed_type: $('#embed-type').val(),
                     post_categories: $('#post-categories').val(),
-                    post_status: $('#post-status').val()
+                    post_status: $('#post-status').val(),
+                    auto_featured_image: $('#auto-featured-image').is(':checked') ? 1 : 0,
+                    featured_image_method: $('#featured-image-method').val()
                 };
                 
                 $.ajax({
@@ -327,8 +553,16 @@ class NewsCrawlerGenreSettings {
                             alert('エラー: ' + response.data);
                         }
                     },
-                    error: function() {
-                        alert('保存中にエラーが発生しました。');
+                    error: function(xhr, status, error) {
+                        var errorMessage = '保存中にエラーが発生しました。';
+                        if (xhr.responseJSON && xhr.responseJSON.data) {
+                            errorMessage = xhr.responseJSON.data;
+                        } else if (xhr.statusText) {
+                            errorMessage = '通信エラー: ' + xhr.statusText;
+                        } else if (error) {
+                            errorMessage = 'エラー: ' + error;
+                        }
+                        alert(errorMessage);
                     }
                 });
             });
@@ -366,6 +600,8 @@ class NewsCrawlerGenreSettings {
                         jQuery('#embed-type').val(setting.embed_type || 'responsive');
                         jQuery('#post-categories').val(setting.post_categories ? setting.post_categories.join('\n') : 'blog');
                         jQuery('#post-status').val(setting.post_status || 'draft');
+                        jQuery('#auto-featured-image').prop('checked', setting.auto_featured_image == 1).trigger('change');
+                        jQuery('#featured-image-method').val(setting.featured_image_method || 'template');
                         jQuery('#cancel-edit').show();
                         
                         // フォームまでスクロール
@@ -398,8 +634,16 @@ class NewsCrawlerGenreSettings {
                             alert('複製に失敗しました: ' + response.data);
                         }
                     },
-                    error: function() {
-                        alert('複製中にエラーが発生しました。');
+                    error: function(xhr, status, error) {
+                        var errorMessage = '複製中にエラーが発生しました。';
+                        if (xhr.responseJSON && xhr.responseJSON.data) {
+                            errorMessage = xhr.responseJSON.data;
+                        } else if (xhr.statusText) {
+                            errorMessage = '通信エラー: ' + xhr.statusText;
+                        } else if (error) {
+                            errorMessage = 'エラー: ' + error;
+                        }
+                        alert(errorMessage);
                     }
                 });
             }
@@ -423,6 +667,17 @@ class NewsCrawlerGenreSettings {
                         } else {
                             alert('削除に失敗しました: ' + response.data);
                         }
+                    },
+                    error: function(xhr, status, error) {
+                        var errorMessage = '削除中にエラーが発生しました。';
+                        if (xhr.responseJSON && xhr.responseJSON.data) {
+                            errorMessage = xhr.responseJSON.data;
+                        } else if (xhr.statusText) {
+                            errorMessage = '通信エラー: ' + xhr.statusText;
+                        } else if (error) {
+                            errorMessage = 'エラー: ' + error;
+                        }
+                        alert(errorMessage);
                     }
                 });
             }
@@ -452,8 +707,16 @@ class NewsCrawlerGenreSettings {
                         jQuery('#execution-result-content').html('エラー: ' + response.data);
                     }
                 },
-                error: function() {
-                    jQuery('#execution-result-content').html('実行中にエラーが発生しました。');
+                error: function(xhr, status, error) {
+                    var errorMessage = '実行中にエラーが発生しました。';
+                    if (xhr.responseJSON && xhr.responseJSON.data) {
+                        errorMessage = xhr.responseJSON.data;
+                    } else if (xhr.statusText) {
+                        errorMessage = '通信エラー: ' + xhr.statusText;
+                    } else if (error) {
+                        errorMessage = 'エラー: ' + error;
+                    }
+                    jQuery('#execution-result-content').html('エラー: ' + errorMessage);
                 },
                 complete: function() {
                     button.prop('disabled', false).text(originalText);
@@ -516,6 +779,7 @@ class NewsCrawlerGenreSettings {
         echo '<th>タイプ</th>';
         echo '<th>キーワード</th>';
         echo '<th>カテゴリー</th>';
+        echo '<th>アイキャッチ</th>';
         echo '<th>操作</th>';
         echo '</tr>';
         echo '</thead>';
@@ -546,10 +810,25 @@ class NewsCrawlerGenreSettings {
             $content_type_label = $setting['content_type'] === 'news' ? 'ニュース' : 'YouTube';
             
             echo '<tr>';
+            // アイキャッチ設定の表示
+            $featured_image_status = '';
+            if (isset($setting['auto_featured_image']) && $setting['auto_featured_image']) {
+                $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'template';
+                $method_labels = array(
+                    'template' => 'テンプレート',
+                    'ai' => 'AI生成',
+                    'unsplash' => 'Unsplash'
+                );
+                $featured_image_status = '有効 (' . $method_labels[$method] . ')';
+            } else {
+                $featured_image_status = '無効';
+            }
+            
             echo '<td><strong>' . esc_html($setting['genre_name']) . '</strong></td>';
             echo '<td>' . esc_html($content_type_label) . '</td>';
             echo '<td><span class="keywords-display" title="' . esc_attr(implode(', ', $setting['keywords'])) . '">' . esc_html($keywords_display) . '</span></td>';
             echo '<td><span class="categories-display" title="' . esc_attr(implode(', ', $categories)) . '">' . esc_html($categories_display) . '</span></td>';
+            echo '<td>' . esc_html($featured_image_status) . '</td>';
             echo '<td class="action-buttons">';
             echo '<button type="button" class="button" onclick="editGenreSetting(\'' . esc_js($id) . '\')">編集</button>';
             echo '<button type="button" class="button" onclick="duplicateGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">複製</button>';
@@ -590,6 +869,8 @@ class NewsCrawlerGenreSettings {
             'keywords' => $keywords,
             'post_categories' => $post_categories,
             'post_status' => sanitize_text_field($_POST['post_status']),
+            'auto_featured_image' => isset($_POST['auto_featured_image']) ? 1 : 0,
+            'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'template'),
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
         );
@@ -704,6 +985,24 @@ class NewsCrawlerGenreSettings {
         }
     }
     
+    /**
+     * 投稿にアイキャッチを生成・設定
+     */
+    private function generate_featured_image_for_post($post_id, $title, $keywords, $setting) {
+        if (!isset($setting['auto_featured_image']) || !$setting['auto_featured_image']) {
+            return false;
+        }
+        
+        if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
+            return false;
+        }
+        
+        $generator = new NewsCrawlerFeaturedImageGenerator();
+        $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'template';
+        
+        return $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+    }
+    
     private function execute_news_crawling($setting) {
         // NewsCrawlerクラスのインスタンスを作成して実行
         if (!class_exists('NewsCrawler')) {
@@ -741,6 +1040,24 @@ class NewsCrawlerGenreSettings {
             // 一時的にオプションを更新
             $original_options = get_option('news_crawler_settings', array());
             update_option('news_crawler_settings', array_merge($original_options, $temp_options));
+            
+            // アイキャッチ生成のために現在の設定を一時保存
+            error_log('Genre Settings - News: Saving current setting for featured image generation');
+            error_log('Genre Settings - News: Auto featured image: ' . (isset($setting['auto_featured_image']) && $setting['auto_featured_image'] ? 'Yes' : 'No'));
+            if (isset($setting['featured_image_method'])) {
+                error_log('Genre Settings - News: Featured image method: ' . $setting['featured_image_method']);
+            }
+            error_log('Genre Settings - News: Setting to save: ' . print_r($setting, true));
+            
+            $transient_result = set_transient('news_crawler_current_genre_setting', $setting, 300); // 5分間有効
+            error_log('Genre Settings - News: Transient save result: ' . ($transient_result ? 'Success' : 'Failed'));
+            
+            // 保存直後に確認
+            $saved_setting = get_transient('news_crawler_current_genre_setting');
+            error_log('Genre Settings - News: Verification - saved setting exists: ' . ($saved_setting ? 'Yes' : 'No'));
+            if ($saved_setting) {
+                error_log('Genre Settings - News: Verification - saved setting content: ' . print_r($saved_setting, true));
+            }
             
             try {
                 $news_crawler = new NewsCrawler();
@@ -817,6 +1134,24 @@ class NewsCrawlerGenreSettings {
             $original_options = get_option('youtube_crawler_settings', array());
             $merged_options = array_merge($original_options, $temp_options);
             update_option('youtube_crawler_settings', $merged_options);
+            
+            // アイキャッチ生成のために現在の設定を一時保存
+            error_log('Genre Settings - YouTube: Saving current setting for featured image generation');
+            error_log('Genre Settings - YouTube: Auto featured image: ' . (isset($setting['auto_featured_image']) && $setting['auto_featured_image'] ? 'Yes' : 'No'));
+            if (isset($setting['featured_image_method'])) {
+                error_log('Genre Settings - YouTube: Featured image method: ' . $setting['featured_image_method']);
+            }
+            error_log('Genre Settings - YouTube: Setting to save: ' . print_r($setting, true));
+            
+            $transient_result = set_transient('news_crawler_current_genre_setting', $setting, 300); // 5分間有効
+            error_log('Genre Settings - YouTube: Transient save result: ' . ($transient_result ? 'Success' : 'Failed'));
+            
+            // 保存直後に確認
+            $saved_setting = get_transient('news_crawler_current_genre_setting');
+            error_log('Genre Settings - YouTube: Verification - saved setting exists: ' . ($saved_setting ? 'Yes' : 'No'));
+            if ($saved_setting) {
+                error_log('Genre Settings - YouTube: Verification - saved setting content: ' . print_r($saved_setting, true));
+            }
             
             try {
                 $youtube_crawler = new NewsCrawlerYouTubeCrawler();

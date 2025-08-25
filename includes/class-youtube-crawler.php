@@ -630,7 +630,73 @@ class NewsCrawlerYouTubeCrawler {
             update_post_meta($post_id, '_youtube_video_' . $index . '_channel', $video['channel_title']);
         }
         
+        // アイキャッチ生成
+        $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        
         return $post_id;
+    }
+    
+    /**
+     * アイキャッチ画像を生成
+     */
+    private function maybe_generate_featured_image($post_id, $title, $keywords) {
+        error_log('YouTubeCrawler: maybe_generate_featured_image called for post ' . $post_id);
+        error_log('YouTubeCrawler: Title: ' . $title);
+        error_log('YouTubeCrawler: Keywords: ' . implode(', ', $keywords));
+        
+        // ジャンル設定からの実行かどうかを確認
+        $genre_setting = get_transient('news_crawler_current_genre_setting');
+        
+        error_log('YouTubeCrawler: Genre setting exists: ' . ($genre_setting ? 'Yes' : 'No'));
+        if ($genre_setting) {
+            error_log('YouTubeCrawler: Genre setting content: ' . print_r($genre_setting, true));
+            error_log('YouTubeCrawler: Auto featured image enabled: ' . (isset($genre_setting['auto_featured_image']) && $genre_setting['auto_featured_image'] ? 'Yes' : 'No'));
+            if (isset($genre_setting['featured_image_method'])) {
+                error_log('YouTubeCrawler: Featured image method: ' . $genre_setting['featured_image_method']);
+            }
+        } else {
+            error_log('YouTubeCrawler: No genre setting found in transient storage');
+            // 基本設定からアイキャッチ生成設定を確認
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            
+            error_log('YouTubeCrawler: Checking basic settings for featured image generation');
+            error_log('YouTubeCrawler: Basic settings: ' . print_r($basic_settings, true));
+            
+            // 基本設定でアイキャッチ生成が有効かチェック
+            $auto_featured_enabled = isset($basic_settings['auto_featured_image']) && $basic_settings['auto_featured_image'];
+            if (!$auto_featured_enabled) {
+                error_log('YouTubeCrawler: Featured image generation skipped - not enabled in basic settings');
+                return false;
+            }
+            
+            // 基本設定から設定を作成
+            $genre_setting = array(
+                'auto_featured_image' => true,
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
+            );
+            error_log('YouTubeCrawler: Using basic settings for featured image generation');
+        }
+        
+        if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
+            error_log('YouTubeCrawler: Featured image generation skipped - not enabled');
+            return false;
+        }
+        
+        if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
+            error_log('YouTubeCrawler: Featured image generator class not found');
+            return false;
+        }
+        
+        error_log('YouTubeCrawler: Creating featured image generator instance');
+        $generator = new NewsCrawlerFeaturedImageGenerator();
+        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
+        
+        error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
+        
+        $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+        error_log('YouTubeCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
+        
+        return $result;
     }
     
     private function is_duplicate_video($video) {
