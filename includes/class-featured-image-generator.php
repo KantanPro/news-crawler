@@ -324,7 +324,7 @@ class NewsCrawlerFeaturedImageGenerator {
                 // 日本語TrueTypeフォントを使用して日本語を直接描画
                 error_log('Featured Image Generator: Using TTF font for Japanese text');
                 $this->draw_japanese_text_with_ttf($image, $text, $font_size, $color, $width, $height, $font_path);
-            } else {
+        } else {
                 // 日本語フォントが利用できない場合はエラーメッセージを描画
                 error_log('Featured Image Generator: Font test failed or imagettftext not available');
                 $error_message = 'Japanese Font Required';
@@ -548,7 +548,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $safe_line = preg_replace('/[^\x00-\x7F]/', '?', $line);
             
             $text_width = $scaled_char_width * strlen($safe_line);
-            $x = ($width - $text_width) / 2;
+        $x = ($width - $text_width) / 2;
             $y = $start_y + ($index * $line_height);
             
             // 拡大描画のために文字を1文字ずつ処理
@@ -1300,7 +1300,7 @@ class NewsCrawlerFeaturedImageGenerator {
             // 最初のキーワードを使用、または複数のキーワードを組み合わせ
             if (count($keywords) == 1) {
                 $main_keyword = $keywords[0];
-            } else {
+        } else {
                 // 複数のキーワードがある場合は最初の2つを使用
                 $main_keyword = implode('・', array_slice($keywords, 0, 2));
             }
