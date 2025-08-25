@@ -4,10 +4,25 @@
 
 # 設定
 PLUGIN_NAME="news-crawler"
-PLUGIN_VERSION="1.3.0"
+
+# プラグインファイルからバージョンを動的に取得
+PLUGIN_VERSION=$(grep -E 'Version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' "$PLUGIN_NAME.php" | sed 's/.*Version:[[:space:]]*//' | head -1)
+
+# バージョンが取得できない場合のフォールバック
+if [ -z "$PLUGIN_VERSION" ]; then
+    echo "警告: プラグインファイルからバージョンを取得できませんでした。デフォルト値を使用します。"
+    PLUGIN_VERSION="1.0.0"
+fi
+
 TODAY=$(date +%Y%m%d)
 OUTPUT_DIR="/Users/kantanpro/Desktop/Game_TEST_UP"
 ZIP_FILENAME="${PLUGIN_NAME}_${PLUGIN_VERSION}_${TODAY}.zip"
+
+echo "プラグイン名: $PLUGIN_NAME"
+echo "バージョン: $PLUGIN_VERSION"
+echo "作成日: $TODAY"
+echo "出力ファイル: $ZIP_FILENAME"
+echo ""
 
 # 出力ディレクトリが存在しない場合は作成
 if [ ! -d "$OUTPUT_DIR" ]; then
