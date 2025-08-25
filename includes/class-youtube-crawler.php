@@ -633,6 +633,18 @@ class NewsCrawlerYouTubeCrawler {
         // アイキャッチ生成
         $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         
+        // AI要約生成（メタデータ設定後に呼び出し）
+        error_log('YouTubeCrawler: About to call AI summarizer for YouTube post ' . $post_id);
+        if (class_exists('NewsCrawlerOpenAISummarizer')) {
+            error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
+            $summarizer = new NewsCrawlerOpenAISummarizer();
+            error_log('YouTubeCrawler: Calling generate_summary for post ' . $post_id);
+            $summarizer->generate_summary($post_id);
+            error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
+        } else {
+            error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class NOT found');
+        }
+        
         return $post_id;
     }
     

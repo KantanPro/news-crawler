@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.5.1
+ * Version: 1.5.2
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -21,6 +21,8 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-youtube-crawler.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-featured-image-generator.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
 
 // プラグイン初期化
 function news_crawler_init() {
@@ -58,6 +60,16 @@ function news_crawler_init() {
     // アイキャッチ画像管理画面クラスを初期化
     if (class_exists('News_Crawler_Eyecatch_Admin')) {
         new News_Crawler_Eyecatch_Admin();
+    }
+    
+    // AI要約生成クラスを初期化
+    if (class_exists('NewsCrawlerOpenAISummarizer')) {
+        new NewsCrawlerOpenAISummarizer();
+    }
+    
+    // 投稿編集画面の要約生成クラスを初期化
+    if (class_exists('NewsCrawlerPostEditorSummary')) {
+        new NewsCrawlerPostEditorSummary();
     }
 }
 add_action('plugins_loaded', 'news_crawler_init');
@@ -738,6 +750,18 @@ class YouTubeCrawler {
         error_log('NewsCrawler: About to call maybe_generate_featured_image for YouTube post ' . $post_id);
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         error_log('NewsCrawler: YouTube maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
+        
+        // AI要約生成（メタデータ設定後に呼び出し）
+        error_log('NewsCrawler: About to call AI summarizer for YouTube post ' . $post_id);
+        if (class_exists('NewsCrawlerOpenAISummarizer')) {
+            error_log('NewsCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
+            $summarizer = new NewsCrawlerOpenAISummarizer();
+            error_log('NewsCrawler: Calling generate_summary for post ' . $post_id);
+            $summarizer->generate_summary($post_id);
+            error_log('NewsCrawler: generate_summary completed for post ' . $post_id);
+        } else {
+            error_log('NewsCrawler: NewsCrawlerOpenAISummarizer class NOT found');
+        }
         
         return $post_id;
     }
@@ -1771,6 +1795,12 @@ class NewsCrawler {
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         error_log('NewsCrawler: News maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
         
+        // AI要約生成（メタデータ設定後に呼び出し）
+        if (class_exists('NewsCrawlerOpenAISummarizer')) {
+            $summarizer = new NewsCrawlerOpenAISummarizer();
+            $summarizer->generate_summary($post_id);
+        }
+        
         return $post_id;
     }
     
@@ -1886,6 +1916,12 @@ class NewsCrawler {
         error_log('NewsCrawler: About to call maybe_generate_featured_image for news post ' . $post_id);
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         error_log('NewsCrawler: News maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
+        
+        // AI要約生成（メタデータ設定後に呼び出し）
+        if (class_exists('NewsCrawlerOpenAISummarizer')) {
+            $summarizer = new NewsCrawlerOpenAISummarizer();
+            $summarizer->generate_summary($post_id);
+        }
         
         return $post_id;
     }
