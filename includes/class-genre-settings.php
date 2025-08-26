@@ -657,6 +657,13 @@ class NewsCrawlerGenreSettings {
                                                 </td>
                                             </tr>
                                             <tr>
+                                                <th scope="row" style="padding: 5px 0;">開始実行日時</th>
+                                                <td style="padding: 5px 0;">
+                                                    <input type="datetime-local" id="start-execution-time" name="start_execution_time" style="width: 200px;">
+                                                    <p class="description" style="margin: 5px 0 0 0;">自動投稿の開始実行日時を選択してください</p>
+                                                </td>
+                                            </tr>
+                                            <tr>
                                                 <th scope="row" style="padding: 5px 0;">次回実行予定</th>
                                                 <td style="padding: 5px 0;">
                                                     <span id="next-execution-time">未設定</span>
@@ -783,25 +790,44 @@ class NewsCrawlerGenreSettings {
                 updateNextExecutionTime();
             });
             
+            // 開始実行日時変更時
+            $('#start-execution-time').change(function() {
+                updateNextExecutionTime();
+            });
+            
             // 次回実行予定時刻を更新
             function updateNextExecutionTime() {
                 var frequency = $('#posting-frequency').val();
                 var customDays = $('#custom-frequency-days').val();
+                var startTime = $('#start-execution-time').val();
                 var now = new Date();
                 var nextExecution = new Date();
                 
+                // 開始実行日時が設定されている場合は、その日時から計算
+                if (startTime) {
+                    var startDate = new Date(startTime);
+                    // 開始日時が過去の場合は現在時刻から計算
+                    if (startDate <= now) {
+                        startDate = now;
+                    }
+                    nextExecution = new Date(startDate);
+                } else {
+                    // 開始日時が設定されていない場合は現在時刻から計算
+                    nextExecution = new Date(now);
+                }
+                
                 switch (frequency) {
                     case 'daily':
-                        nextExecution.setDate(now.getDate() + 1);
+                        nextExecution.setDate(nextExecution.getDate() + 1);
                         break;
                     case 'weekly':
-                        nextExecution.setDate(now.getDate() + 7);
+                        nextExecution.setDate(nextExecution.getDate() + 7);
                         break;
                     case 'monthly':
-                        nextExecution.setMonth(now.getMonth() + 1);
+                        nextExecution.setMonth(nextExecution.getMonth() + 1);
                         break;
                     case 'custom':
-                        nextExecution.setDate(now.getDate() + parseInt(customDays));
+                        nextExecution.setDate(nextExecution.getDate() + parseInt(customDays));
                         break;
                 }
                 
@@ -813,6 +839,15 @@ class NewsCrawlerGenreSettings {
                 
                 $('#next-execution-time').text(timeString);
             }
+            
+            // 初期表示時に開始実行日時を現在時刻に設定
+            var now = new Date();
+            var nowString = now.getFullYear() + '-' + 
+                           (now.getMonth() + 1).toString().padStart(2, '0') + '-' + 
+                           now.getDate().toString().padStart(2, '0') + 'T' +
+                           now.getHours().toString().padStart(2, '0') + ':' +
+                           now.getMinutes().toString().padStart(2, '0');
+            $('#start-execution-time').val(nowString);
             
             // 初期表示時に次回実行予定時刻を更新
             updateNextExecutionTime();
@@ -847,7 +882,8 @@ class NewsCrawlerGenreSettings {
                     auto_posting: autoPosting,
                     posting_frequency: $('#posting-frequency').val(),
                     custom_frequency_days: $('#custom-frequency-days').val(),
-                    max_posts_per_execution: $('#max-posts-per-execution').val()
+                    max_posts_per_execution: $('#max-posts-per-execution').val(),
+                    start_execution_time: $('#start-execution-time').val()
                 };
                 
                 // デバッグ情報をコンソールに出力
@@ -887,6 +923,18 @@ class NewsCrawlerGenreSettings {
                 $('#genre-id').val('');
                 $('#cancel-edit').hide();
                 $('#news-settings, #youtube-settings').hide();
+                
+                // 開始実行日時を現在時刻にリセット
+                var now = new Date();
+                var nowString = now.getFullYear() + '-' + 
+                               (now.getMonth() + 1).toString().padStart(2, '0') + '-' + 
+                               now.getDate().toString().padStart(2, '0') + 'T' +
+                               now.getHours().toString().padStart(2, '0') + ':' +
+                               now.getMinutes().toString().padStart(2, '0');
+                $('#start-execution-time').val(nowString);
+                
+                // 次回実行予定時刻を更新
+                updateNextExecutionTime();
             });
         });
         
@@ -920,6 +968,7 @@ class NewsCrawlerGenreSettings {
                         jQuery('#posting-frequency').val(setting.posting_frequency || 'daily').trigger('change');
                         jQuery('#custom-frequency-days').val(setting.custom_frequency_days || 7);
                         jQuery('#max-posts-per-execution').val(setting.max_posts_per_execution || 3);
+                        jQuery('#start-execution-time').val(setting.start_execution_time || '');
                         jQuery('#cancel-edit').show();
                         
                         // フォームまでスクロール
@@ -1158,7 +1207,18 @@ class NewsCrawlerGenreSettings {
                     'custom' => 'カスタム'
                 );
                 $max_posts = isset($setting['max_posts_per_execution']) ? $setting['max_posts_per_execution'] : 3;
+                
+                // 開始実行日時の表示
+                $start_time_display = '';
+                if (!empty($setting['start_execution_time'])) {
+                    $start_time = strtotime($setting['start_execution_time']);
+                    $start_time_display = '開始: ' . date('m/d H:i', $start_time);
+                }
+                
                 $auto_posting_status = '有効 (' . $frequency_labels[$frequency] . ', ' . $max_posts . '件)';
+                if ($start_time_display) {
+                    $auto_posting_status .= ' ' . $start_time_display;
+                }
             } else {
                 $auto_posting_status = '無効';
             }
@@ -1223,6 +1283,7 @@ class NewsCrawlerGenreSettings {
             'posting_frequency' => sanitize_text_field($_POST['posting_frequency'] ?? 'daily'),
             'custom_frequency_days' => intval($_POST['custom_frequency_days'] ?? 7),
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
+            'start_execution_time' => sanitize_text_field($_POST['start_execution_time'] ?? ''),
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
         );
@@ -1825,7 +1886,24 @@ class NewsCrawlerGenreSettings {
      * 次回実行時刻を更新
      */
     private function update_next_execution_time($genre_id, $setting) {
-        update_option('news_crawler_last_execution_' . $genre_id, current_time('timestamp'));
+        $now = current_time('timestamp');
+        $next_execution_time = $now;
+        
+        // 開始実行日時が設定されている場合
+        if (!empty($setting['start_execution_time'])) {
+            $start_time = strtotime($setting['start_execution_time']);
+            
+            // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
+            if ($start_time > $now) {
+                $next_execution_time = $start_time;
+            }
+        }
+        
+        // 最後の実行時刻を更新
+        update_option('news_crawler_last_execution_' . $genre_id, $next_execution_time);
+        
+        // 次回実行時刻も保存
+        update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
     }
     
     /**
