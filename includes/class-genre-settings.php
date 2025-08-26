@@ -22,6 +22,9 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
         add_action('wp_ajax_test_openai_summary', array($this, 'test_openai_summary'));
+        add_action('wp_ajax_test_auto_posting', array($this, 'test_auto_posting'));
+        add_action('wp_ajax_check_auto_posting_schedule', array($this, 'check_auto_posting_schedule'));
+        add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         
         // 自動投稿のスケジュール処理
         add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
@@ -690,6 +693,29 @@ class NewsCrawlerGenreSettings {
                         <?php $this->render_genre_settings_list($genre_settings); ?>
                     </div>
                 </div>
+                
+                <!-- 自動投稿実行レポート -->
+                <div class="card" style="max-width: none; margin-top: 20px;">
+                    <h2>自動投稿実行レポート</h2>
+                    
+                    <!-- テスト実行とスケジュール確認 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: #f0f6fc; border: 1px solid #0073aa; border-radius: 4px;">
+                        <h3 style="margin-top: 0;">テスト実行とスケジュール確認</h3>
+                        <p>自動投稿の動作をテストしたり、スケジュール状況を確認できます。</p>
+                        
+                        <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
+                        <button type="button" id="check-schedule" class="button button-secondary">スケジュール状況を確認</button>
+                        <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
+                        
+                        <div id="test-result" style="margin-top: 15px; display: none;">
+                            <div id="test-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="auto-posting-reports">
+                        <?php $this->render_auto_posting_reports(); ?>
+                    </div>
+                </div>
             </div>
             
             <!-- 実行結果表示エリア -->
@@ -936,6 +962,109 @@ class NewsCrawlerGenreSettings {
                 // 次回実行予定時刻を更新
                 updateNextExecutionTime();
             });
+            
+            // 自動投稿テスト実行
+            $('#test-auto-posting').click(function() {
+                var button = $(this);
+                var resultDiv = $('#test-result');
+                var resultContent = $('#test-result-content');
+                
+                button.prop('disabled', true).text('テスト実行中...');
+                resultDiv.show();
+                resultContent.html('自動投稿のテスト実行を開始します...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'test_auto_posting',
+                        nonce: '<?php echo wp_create_nonce('auto_posting_test_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultContent.html('✅ テスト実行完了\n\n' + response.data);
+                        } else {
+                            resultContent.html('❌ テスト実行失敗\n\n' + response.data);
+                        }
+                    },
+                    error: function() {
+                        resultContent.html('❌ 通信エラーが発生しました');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('自動投稿をテスト実行');
+                    }
+                });
+            });
+            
+            // スケジュール状況確認
+            $('#check-schedule').click(function() {
+                var button = $(this);
+                var resultDiv = $('#test-result');
+                var resultContent = $('#test-result-content');
+                
+                button.prop('disabled', true).text('確認中...');
+                resultDiv.show();
+                resultContent.html('スケジュール状況を確認中...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'check_auto_posting_schedule',
+                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultContent.html('📅 スケジュール状況\n\n' + response.data);
+                        } else {
+                            resultContent.html('❌ 確認失敗\n\n' + response.data);
+                        }
+                    },
+                    error: function() {
+                        resultContent.html('❌ 通信エラーが発生しました');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('スケジュール状況を確認');
+                    }
+                });
+            });
+            
+            // 強制実行
+            $('#force-execution').click(function() {
+                var button = $(this);
+                var resultDiv = $('#test-result');
+                var resultContent = $('#test-result-content');
+                
+                button.prop('disabled', true).text('実行中...');
+                resultDiv.show();
+                resultContent.html('自動投稿を強制実行中...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'force_auto_posting_execution',
+                        nonce: '<?php echo wp_create_nonce('auto_posting_force_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultContent.html('✅ 強制実行完了\n\n' + response.data);
+                            // レポートを更新
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            resultContent.html('❌ 強制実行失敗\n\n' + response.data);
+                        }
+                    },
+                    error: function() {
+                        resultContent.html('❌ 通信エラーが発生しました');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('強制実行（今すぐ）');
+                    }
+                });
+            });
         });
         
         // 編集ボタンクリック
@@ -1126,6 +1255,28 @@ class NewsCrawlerGenreSettings {
         }
         .action-buttons .button {
             margin-right: 5px;
+        }
+        .genre-report {
+            background: #f9f9f9;
+            border-left: 4px solid #0073aa;
+        }
+        .genre-report h3 {
+            margin-top: 0;
+            color: #0073aa;
+        }
+        .genre-report table {
+            margin-top: 10px;
+        }
+        .genre-report details {
+            margin-top: 15px;
+        }
+        .genre-report summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #0073aa;
+        }
+        .genre-report summary:hover {
+            color: #005a87;
         }
         </style>
         <?php
@@ -1757,80 +1908,173 @@ class NewsCrawlerGenreSettings {
      * 自動投稿の実行処理
      */
     public function execute_auto_posting() {
+        error_log('Auto Posting Execution - Starting...');
+        
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
+        error_log('Auto Posting Execution - Found ' . count($genre_settings) . ' genre settings');
+        error_log('Auto Posting Execution - Current time: ' . date('Y-m-d H:i:s', $current_time));
+        
+        $executed_count = 0;
+        $skipped_count = 0;
+        
         foreach ($genre_settings as $genre_id => $setting) {
+            error_log('Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            
             // 自動投稿が無効または設定されていない場合はスキップ
             if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
+                error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting disabled');
+                $skipped_count++;
                 continue;
             }
+            
+            error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled');
             
             // 次回実行時刻をチェック
             $next_execution = $this->get_next_execution_time($setting);
+            error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution: ' . date('Y-m-d H:i:s', $next_execution));
+            
             if ($next_execution > $current_time) {
+                error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet');
+                $skipped_count++;
                 continue;
             }
             
+            error_log('Auto Posting Execution - Executing genre: ' . $setting['genre_name']);
+            
             // 自動投稿を実行
             $this->execute_auto_posting_for_genre($setting);
+            $executed_count++;
             
             // 次回実行時刻を更新
             $this->update_next_execution_time($genre_id, $setting);
         }
+        
+        error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
     }
     
     /**
      * 指定されたジャンルの自動投稿を実行
      */
     private function execute_auto_posting_for_genre($setting) {
+        $genre_id = $setting['id'];
+        $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+        
+        error_log('Execute Auto Posting for Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+        
         try {
-            // 投稿記事数上限を適用
-            $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+            // 実行前のチェック
+            error_log('Execute Auto Posting for Genre - Performing pre-execution check...');
+            $check_result = $this->pre_execution_check($setting);
+            error_log('Execute Auto Posting for Genre - Pre-execution check result: ' . print_r($check_result, true));
             
-            if ($setting['content_type'] === 'news') {
-                $this->execute_news_crawling_with_limit($setting, $max_posts);
-            } elseif ($setting['content_type'] === 'youtube') {
-                $this->execute_youtube_crawling_with_limit($setting, $max_posts);
+            if (!$check_result['can_execute']) {
+                error_log('Execute Auto Posting for Genre - Cannot execute: ' . $check_result['reason']);
+                $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
+                return;
             }
             
-            // 実行ログを記録
-            $this->log_auto_posting_execution($setting['id'], 'success');
+            error_log('Execute Auto Posting for Genre - Pre-execution check passed');
+            
+            // 投稿記事数上限をチェック
+            error_log('Execute Auto Posting for Genre - Checking post limit...');
+            $existing_posts = $this->count_recent_posts_by_genre($genre_id);
+            error_log('Execute Auto Posting for Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
+            
+            if ($existing_posts >= $max_posts) {
+                error_log('Execute Auto Posting for Genre - Post limit reached');
+                $this->log_auto_posting_execution($genre_id, 'skipped', "投稿数上限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）");
+                return;
+            }
+            
+            // 実行可能な投稿数を計算
+            $available_posts = $max_posts - $existing_posts;
+            error_log('Execute Auto Posting for Genre - Available posts: ' . $available_posts);
+            
+            // クロール実行
+            error_log('Execute Auto Posting for Genre - Starting crawl execution...');
+            $result = '';
+            if ($setting['content_type'] === 'news') {
+                error_log('Execute Auto Posting for Genre - Executing news crawling...');
+                $result = $this->execute_news_crawling_with_limit($setting, $available_posts);
+            } elseif ($setting['content_type'] === 'youtube') {
+                error_log('Execute Auto Posting for Genre - Executing YouTube crawling...');
+                $result = $this->execute_youtube_crawling_with_limit($setting, $available_posts);
+            }
+            
+            error_log('Execute Auto Posting for Genre - Crawl execution result: ' . $result);
+            
+            // 実行結果をログに記録
+            error_log('Execute Auto Posting for Genre - Logging success result...');
+            $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}");
+            error_log('Execute Auto Posting for Genre - Success logged');
             
         } catch (Exception $e) {
+            error_log('Execute Auto Posting for Genre - Exception occurred: ' . $e->getMessage());
             // エラーログを記録
-            $this->log_auto_posting_execution($setting['id'], 'error', $e->getMessage());
+            $this->log_auto_posting_execution($genre_id, 'error', "実行エラー: " . $e->getMessage());
         }
+        
+        error_log('Execute Auto Posting for Genre - Completed for genre: ' . $setting['genre_name']);
+    }
+    
+    /**
+     * 実行前のチェック
+     */
+    private function pre_execution_check($setting) {
+        $result = array('can_execute' => true, 'reason' => '');
+        
+        // 基本設定のチェック
+        if ($setting['content_type'] === 'youtube') {
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            if (empty($basic_settings['youtube_api_key'])) {
+                $result['can_execute'] = false;
+                $result['reason'] = 'YouTube APIキーが設定されていません';
+                return $result;
+            }
+        }
+        
+        // ニュースソースのチェック
+        if ($setting['content_type'] === 'news' && empty($setting['news_sources'])) {
+            $result['can_execute'] = false;
+            $result['reason'] = 'ニュースソースが設定されていません';
+            return $result;
+        }
+        
+        // YouTubeチャンネルのチェック
+        if ($setting['content_type'] === 'youtube' && empty($setting['youtube_channels'])) {
+            $result['can_execute'] = false;
+            $result['reason'] = 'YouTubeチャンネルが設定されていません';
+            return $result;
+        }
+        
+        // キーワードのチェック
+        if (empty($setting['keywords'])) {
+            $result['can_execute'] = false;
+            $result['reason'] = 'キーワードが設定されていません';
+            return $result;
+        }
+        
+        return $result;
     }
     
     /**
      * ニュースクロールを投稿数制限付きで実行
      */
     private function execute_news_crawling_with_limit($setting, $max_posts) {
-        // 既存の投稿数をチェック
-        $existing_posts = $this->count_recent_posts_by_genre($setting['id']);
-        if ($existing_posts >= $max_posts) {
-            return;
-        }
-        
         // 投稿数制限を適用してクロール実行
-        $setting['max_articles'] = min($setting['max_articles'] ?? 10, $max_posts - $existing_posts);
-        $this->execute_news_crawling($setting);
+        $setting['max_articles'] = min($setting['max_articles'] ?? 10, $max_posts);
+        return $this->execute_news_crawling($setting);
     }
     
     /**
      * YouTubeクロールを投稿数制限付きで実行
      */
     private function execute_youtube_crawling_with_limit($setting, $max_posts) {
-        // 既存の投稿数をチェック
-        $existing_posts = $this->count_recent_posts_by_genre($setting['id']);
-        if ($existing_posts >= $max_posts) {
-            return;
-        }
-        
         // 投稿数制限を適用してクロール実行
-        $setting['max_videos'] = min($setting['max_videos'] ?? 5, $max_posts - $existing_posts);
-        $this->execute_youtube_crawling($setting);
+        $setting['max_videos'] = min($setting['max_videos'] ?? 5, $max_posts);
+        return $this->execute_youtube_crawling($setting);
     }
     
     /**
@@ -1910,21 +2154,35 @@ class NewsCrawlerGenreSettings {
      * 自動投稿の実行ログを記録
      */
     private function log_auto_posting_execution($genre_id, $status, $message = '') {
-        $logs = get_option('news_crawler_auto_posting_logs', array());
+        error_log('Log Auto Posting Execution - Starting to log for genre ID: ' . $genre_id . ', status: ' . $status . ', message: ' . $message);
         
-        $logs[] = array(
+        $logs = get_option('news_crawler_auto_posting_logs', array());
+        error_log('Log Auto Posting Execution - Current logs count: ' . count($logs));
+        
+        $new_log_entry = array(
             'genre_id' => $genre_id,
             'status' => $status,
             'message' => $message,
             'timestamp' => current_time('mysql')
         );
         
+        error_log('Log Auto Posting Execution - New log entry: ' . print_r($new_log_entry, true));
+        
+        $logs[] = $new_log_entry;
+        
         // ログは最新100件まで保持
         if (count($logs) > 100) {
             $logs = array_slice($logs, -100);
         }
         
-        update_option('news_crawler_auto_posting_logs', $logs);
+        error_log('Log Auto Posting Execution - Logs after adding new entry: ' . count($logs));
+        
+        $update_result = update_option('news_crawler_auto_posting_logs', $logs);
+        error_log('Log Auto Posting Execution - Update result: ' . ($update_result ? 'Success' : 'Failed'));
+        
+        // 更新後の確認
+        $updated_logs = get_option('news_crawler_auto_posting_logs', array());
+        error_log('Log Auto Posting Execution - Verification: updated logs count: ' . count($updated_logs));
     }
     
     /**
@@ -1941,6 +2199,170 @@ class NewsCrawlerGenreSettings {
             
             update_option('news_crawler_auto_posting_logs', $logs);
         }
+    }
+    
+    /**
+     * 自動投稿実行レポートを表示
+     */
+    public function render_auto_posting_reports() {
+        $genre_settings = $this->get_genre_settings();
+        $logs = get_option('news_crawler_auto_posting_logs', array());
+        
+        if (empty($logs)) {
+            echo '<p>自動投稿の実行履歴がありません。</p>';
+            return;
+        }
+        
+        // ジャンルIDでグループ化
+        $reports_by_genre = array();
+        foreach ($logs as $log) {
+            $genre_id = $log['genre_id'];
+            if (!isset($reports_by_genre[$genre_id])) {
+                $reports_by_genre[$genre_id] = array();
+            }
+            $reports_by_genre[$genre_id][] = $log;
+        }
+        
+        foreach ($reports_by_genre as $genre_id => $genre_logs) {
+            $genre_setting = isset($genre_settings[$genre_id]) ? $genre_settings[$genre_id] : null;
+            $genre_name = $genre_setting ? $genre_setting['genre_name'] : '不明なジャンル';
+            
+            echo '<div class="genre-report" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px;">';
+            echo '<h3>' . esc_html($genre_name) . ' の実行レポート</h3>';
+            
+            // 最新のログから詳細情報を取得
+            $latest_log = end($genre_logs);
+            $execution_details = $this->get_execution_details($genre_id, $latest_log);
+            
+            echo '<table class="widefat" style="margin-top: 10px;">';
+            echo '<thead><tr><th>項目</th><th>詳細</th></tr></thead>';
+            echo '<tbody>';
+            
+            // 実行状況
+            echo '<tr><td>実行状況</td><td>';
+            if ($latest_log['status'] === 'success') {
+                echo '<span style="color: green;">✓ 成功</span>';
+            } elseif ($latest_log['status'] === 'skipped') {
+                echo '<span style="color: orange;">⚠ スキップ</span>';
+            } else {
+                echo '<span style="color: red;">✗ 失敗</span>';
+            }
+            echo '</td></tr>';
+            
+            // 実行日時
+            echo '<tr><td>実行日時</td><td>' . esc_html($latest_log['timestamp']) . '</td></tr>';
+            
+            // 実行結果の詳細
+            if (!empty($execution_details)) {
+                foreach ($execution_details as $detail) {
+                    echo '<tr><td>' . esc_html($detail['label']) . '</td><td>' . esc_html($detail['value']) . '</td></tr>';
+                }
+            }
+            
+            // メッセージ
+            if (!empty($latest_log['message'])) {
+                echo '<tr><td>メッセージ</td><td>' . esc_html($latest_log['message']) . '</td></tr>';
+            }
+            
+            echo '</tbody></table>';
+            
+            // 過去の実行履歴
+            if (count($genre_logs) > 1) {
+                echo '<details style="margin-top: 10px;">';
+                echo '<summary>過去の実行履歴</summary>';
+                echo '<table class="widefat" style="margin-top: 10px;">';
+                echo '<thead><tr><th>実行日時</th><th>状況</th><th>メッセージ</th></tr></thead>';
+                echo '<tbody>';
+                
+                // 最新5件を表示
+                $recent_logs = array_slice(array_reverse($genre_logs), 0, 5);
+                foreach ($recent_logs as $log) {
+                    $status_color = $log['status'] === 'success' ? 'green' : ($log['status'] === 'skipped' ? 'orange' : 'red');
+                    $status_icon = $log['status'] === 'success' ? '✓' : ($log['status'] === 'skipped' ? '⚠' : '✗');
+                    
+                    echo '<tr>';
+                    echo '<td>' . esc_html($log['timestamp']) . '</td>';
+                    echo '<td><span style="color: ' . $status_color . ';">' . $status_icon . ' ' . esc_html($log['status']) . '</span></td>';
+                    echo '<td>' . esc_html($log['message']) . '</td>';
+                    echo '</tr>';
+                }
+                
+                echo '</tbody></table>';
+                echo '</details>';
+            }
+            
+            echo '</div>';
+        }
+    }
+    
+    /**
+     * 実行詳細情報を取得
+     */
+    private function get_execution_details($genre_id, $log) {
+        $details = array();
+        
+        // 次回実行予定時刻
+        $next_execution = get_option('news_crawler_next_execution_' . $genre_id);
+        if ($next_execution) {
+            $next_time = date('Y-m-d H:i:s', $next_execution);
+            $details[] = array('label' => '次回実行予定', 'value' => $next_time);
+        }
+        
+        // 最後の実行時刻
+        $last_execution = get_option('news_crawler_last_execution_' . $genre_id);
+        if ($last_execution) {
+            $last_time = date('Y-m-d H:i:s', $last_execution);
+            $details[] = array('label' => '最後の実行', 'value' => $last_time);
+        }
+        
+        // スキップ理由の詳細分析
+        if ($log['status'] === 'skipped') {
+            $skip_reasons = $this->analyze_skip_reasons($genre_id);
+            if (!empty($skip_reasons)) {
+                $details[] = array('label' => 'スキップ理由', 'value' => implode(', ', $skip_reasons));
+            }
+        }
+        
+        return $details;
+    }
+    
+    /**
+     * スキップ理由を分析
+     */
+    private function analyze_skip_reasons($genre_id) {
+        $reasons = array();
+        $genre_settings = $this->get_genre_settings();
+        
+        if (!isset($genre_settings[$genre_id])) {
+            return array('ジャンル設定が見つかりません');
+        }
+        
+        $setting = $genre_settings[$genre_id];
+        
+        // 基本設定のチェック
+        if ($setting['content_type'] === 'youtube') {
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            if (empty($basic_settings['youtube_api_key'])) {
+                $reasons[] = 'YouTube APIキーが設定されていません';
+            }
+        }
+        
+        // ニュースソースのチェック
+        if ($setting['content_type'] === 'news' && empty($setting['news_sources'])) {
+            $reasons[] = 'ニュースソースが設定されていません';
+        }
+        
+        // YouTubeチャンネルのチェック
+        if ($setting['content_type'] === 'youtube' && empty($setting['youtube_channels'])) {
+            $reasons[] = 'YouTubeチャンネルが設定されていません';
+        }
+        
+        // キーワードのチェック
+        if (empty($setting['keywords'])) {
+            $reasons[] = 'キーワードが設定されていません';
+        }
+        
+        return $reasons;
     }
     
     /**
@@ -2032,5 +2454,191 @@ class NewsCrawlerGenreSettings {
         }
     }
     
-
+    /**
+     * 自動投稿のテスト実行用AJAXハンドラー
+     */
+    public function test_auto_posting() {
+        check_ajax_referer('auto_posting_test_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $genre_settings = $this->get_genre_settings();
+        $auto_posting_enabled = 0;
+        $test_results = array();
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                $auto_posting_enabled++;
+                
+                // 実行前チェック
+                $check_result = $this->pre_execution_check($setting);
+                $test_results[] = "ジャンル: " . $setting['genre_name'];
+                $test_results[] = "  実行可能: " . ($check_result['can_execute'] ? 'はい' : 'いいえ');
+                if (!$check_result['can_execute']) {
+                    $test_results[] = "  理由: " . $check_result['reason'];
+                }
+                
+                // 次回実行時刻
+                $next_execution = $this->get_next_execution_time($setting);
+                $test_results[] = "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution);
+                
+                $test_results[] = "";
+            }
+        }
+        
+        if ($auto_posting_enabled === 0) {
+            wp_send_json_success("自動投稿が有効になっているジャンル設定がありません。\n\nジャンル設定で「自動投稿を有効にする」にチェックを入れてください。");
+        }
+        
+        $result = "自動投稿が有効なジャンル設定: {$auto_posting_enabled}件\n\n";
+        $result .= implode("\n", $test_results);
+        
+        wp_send_json_success($result);
+    }
+    
+    /**
+     * 自動投稿のスケジュール状況確認用AJAXハンドラー
+     */
+    public function check_auto_posting_schedule() {
+        check_ajax_referer('auto_posting_schedule_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $current_time = current_time('timestamp');
+        $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
+        
+        $result = "現在時刻: " . date('Y-m-d H:i:s', $current_time) . "\n";
+        $result .= "次回cron実行予定: " . ($next_cron ? date('Y-m-d H:i:s', $next_cron) : '未設定') . "\n\n";
+        
+        $genre_settings = $this->get_genre_settings();
+        $auto_posting_count = 0;
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                $auto_posting_count++;
+                $next_execution = $this->get_next_execution_time($setting);
+                $status = $next_execution <= $current_time ? '実行可能' : '待機中';
+                
+                $result .= "ジャンル: " . $setting['genre_name'] . "\n";
+                $result .= "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . "\n";
+                $result .= "  状況: " . $status . "\n\n";
+            }
+        }
+        
+        if ($auto_posting_count === 0) {
+            $result .= "自動投稿が有効なジャンル設定がありません。";
+        }
+        
+        wp_send_json_success($result);
+    }
+    
+    /**
+     * 自動投稿の強制実行用AJAXハンドラー
+     */
+    public function force_auto_posting_execution() {
+        check_ajax_referer('auto_posting_force_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        try {
+            // デバッグ情報を記録
+            error_log('Force Auto Posting Execution - Starting...');
+            
+            // 強制実行用の自動投稿処理を実行
+            $this->execute_auto_posting_forced();
+            
+            // 実行後のログ確認
+            $logs = get_option('news_crawler_auto_posting_logs', array());
+            error_log('Force Auto Posting Execution - Logs after execution: ' . print_r($logs, true));
+            
+            $result = "自動投稿の強制実行が完了しました。\n\n";
+            $result .= "実行結果は自動投稿実行レポートで確認できます。\n";
+            $result .= "記録されたログ数: " . count($logs) . "件";
+            
+            wp_send_json_success($result);
+            
+        } catch (Exception $e) {
+            error_log('Force Auto Posting Execution - Error: ' . $e->getMessage());
+            wp_send_json_error('強制実行中にエラーが発生しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 強制実行用の自動投稿処理（開始実行日時の制限を無視）
+     */
+    private function execute_auto_posting_forced() {
+        error_log('Force Auto Posting Execution - Starting forced execution...');
+        
+        $genre_settings = $this->get_genre_settings();
+        $current_time = current_time('timestamp');
+        
+        error_log('Force Auto Posting Execution - Found ' . count($genre_settings) . ' genre settings');
+        error_log('Force Auto Posting Execution - Current time: ' . date('Y-m-d H:i:s', $current_time));
+        
+        $executed_count = 0;
+        $skipped_count = 0;
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            error_log('Force Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            
+            // 自動投稿が無効または設定されていない場合はスキップ
+            if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
+                error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting disabled');
+                $skipped_count++;
+                continue;
+            }
+            
+            error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled - FORCING EXECUTION');
+            
+            // 強制実行時は開始実行日時の制限を無視
+            $this->execute_auto_posting_for_genre($setting);
+            $executed_count++;
+            
+            // 次回実行時刻を更新（現在時刻から計算）
+            $this->update_next_execution_time_forced($genre_id, $setting);
+        }
+        
+        error_log('Force Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
+    }
+    
+    /**
+     * 強制実行用の次回実行時刻更新（現在時刻から計算）
+     */
+    private function update_next_execution_time_forced($genre_id, $setting) {
+        $now = current_time('timestamp');
+        $next_execution_time = $now;
+        
+        // 投稿頻度に基づいて次回実行時刻を計算
+        $frequency = isset($setting['posting_frequency']) ? $setting['posting_frequency'] : 'daily';
+        $custom_days = isset($setting['custom_frequency_days']) ? intval($setting['custom_frequency_days']) : 7;
+        
+        switch ($frequency) {
+            case 'daily':
+                $next_execution_time = strtotime('+1 day', $now);
+                break;
+            case 'weekly':
+                $next_execution_time = strtotime('+1 week', $now);
+                break;
+            case 'monthly':
+                $next_execution_time = strtotime('+1 month', $now);
+                break;
+            case 'custom':
+                $next_execution_time = strtotime('+' . $custom_days . ' days', $now);
+                break;
+        }
+        
+        // 最後の実行時刻を更新
+        update_option('news_crawler_last_execution_' . $genre_id, $now);
+        
+        // 次回実行時刻も保存
+        update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
+        
+        error_log('Force Auto Posting Execution - Updated next execution time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
+    }
 }
