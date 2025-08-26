@@ -776,6 +776,12 @@ class YouTubeCrawler {
         update_post_meta($post_id, '_youtube_videos_count', count($videos));
         update_post_meta($post_id, '_youtube_crawled_date', current_time('mysql'));
         
+        // ジャンルIDを保存（自動投稿用）
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            update_post_meta($post_id, '_youtube_crawler_genre_id', $current_genre_setting['id']);
+        }
+        
         foreach ($videos as $index => $video) {
             update_post_meta($post_id, '_youtube_video_' . $index . '_title', $video['title']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_id', $video['video_id']);
@@ -1039,6 +1045,7 @@ class NewsCrawler {
         add_action('wp_ajax_news_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_news_crawler_test_fetch', array($this, 'test_fetch'));
         register_activation_hook(__FILE__, array($this, 'activate'));
+        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
         // 自動投稿機能は廃止、手動実行のみ
     }
@@ -1475,6 +1482,24 @@ class NewsCrawler {
         }
     }
     
+    public function deactivate() {
+        // プラグイン無効化時の処理
+        // 自動投稿のcronジョブをクリーンアップ
+        wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
+        
+        // 一時的なデータをクリーンアップ
+        delete_transient('news_crawler_current_genre_setting');
+        
+        // 自動投稿関連のオプションをクリーンアップ
+        delete_option('news_crawler_auto_posting_logs');
+        
+        // 各ジャンルの実行時刻オプションをクリーンアップ
+        $genre_settings = get_option('news_crawler_genre_settings', array());
+        foreach ($genre_settings as $genre_id => $setting) {
+            delete_option('news_crawler_last_execution_' . $genre_id);
+        }
+    }
+    
     public function crawl_news() {
         $options = get_option($this->option_name, array());
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
@@ -1869,6 +1894,12 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_summary', true);
         update_post_meta($post_id, '_news_articles_count', count($articles));
         update_post_meta($post_id, '_news_crawled_date', current_time('mysql'));
+        
+        // ジャンルIDを保存（自動投稿用）
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            update_post_meta($post_id, '_news_crawler_genre_id', $current_genre_setting['id']);
+        }
         
         foreach ($articles as $index => $article) {
             update_post_meta($post_id, '_news_article_' . $index . '_title', $article['title']);

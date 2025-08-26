@@ -624,6 +624,12 @@ class NewsCrawlerYouTubeCrawler {
         update_post_meta($post_id, '_youtube_videos_count', count($videos));
         update_post_meta($post_id, '_youtube_crawled_date', current_time('mysql'));
         
+        // ジャンルIDを保存（自動投稿用）
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            update_post_meta($post_id, '_news_crawler_genre_id', $current_genre_setting['id']);
+        }
+        
         foreach ($videos as $index => $video) {
             update_post_meta($post_id, '_youtube_video_' . $index . '_title', $video['title']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_id', $video['video_id']);

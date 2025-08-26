@@ -22,6 +22,10 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
         add_action('wp_ajax_test_openai_summary', array($this, 'test_openai_summary'));
+        
+        // 自動投稿のスケジュール処理
+        add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
+        add_action('wp_loaded', array($this, 'setup_auto_posting_cron'));
     }
     
     public function add_admin_menu() {
@@ -204,7 +208,7 @@ class NewsCrawlerGenreSettings {
     
     public function auto_featured_image_callback() {
         $options = get_option('news_crawler_basic_settings', array());
-        $enabled = isset($options['auto_featured_image']) ? $options['auto_featured_image'] : false;
+        $enabled = isset($options['auto_featured_image']) ? $options['auto_featured_image'] : true; // デフォルトをtrueに変更
         echo '<input type="checkbox" name="news_crawler_basic_settings[auto_featured_image]" value="1" ' . checked(1, $enabled, false) . ' />';
         echo '<label for="news_crawler_basic_settings[auto_featured_image]">投稿作成時に自動でアイキャッチを生成する</label>';
         echo '<p class="description">ジャンル設定で個別に設定されていない場合に適用されます。</p>';
@@ -236,7 +240,7 @@ class NewsCrawlerGenreSettings {
     
     public function featured_image_method_callback() {
         $options = get_option('news_crawler_basic_settings', array());
-        $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'template';
+        $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
         
         $methods = array(
             'template' => 'テンプレート生成（軽量・高速）',
@@ -609,16 +613,57 @@ class NewsCrawlerGenreSettings {
                                 <th scope="row">アイキャッチ自動生成</th>
                                 <td>
                                     <label>
-                                        <input type="checkbox" id="auto-featured-image" name="auto_featured_image" value="1">
+                                        <input type="checkbox" id="auto-featured-image" name="auto_featured_image" value="1" checked>
                                         投稿作成時にアイキャッチを自動生成する
                                     </label>
                                     <div id="featured-image-settings" style="margin-top: 10px; display: none;">
                                         <select id="featured-image-method" name="featured_image_method">
                                             <option value="template">テンプレート生成</option>
-                                            <option value="ai">AI画像生成 (OpenAI DALL-E)</option>
+                                            <option value="ai" selected>AI画像生成 (OpenAI DALL-E)</option>
                                             <option value="unsplash">Unsplash画像取得</option>
                                         </select>
                                         <p class="description">アイキャッチの生成方法を選択してください。</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">自動投稿</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="auto-posting" name="auto_posting" value="1">
+                                        自動投稿を有効にする
+                                    </label>
+                                    <div id="auto-posting-settings" style="margin-top: 10px; display: none;">
+                                        <table class="form-table" style="margin: 0;">
+                                            <tr>
+                                                <th scope="row" style="padding: 5px 0;">投稿頻度</th>
+                                                <td style="padding: 5px 0;">
+                                                    <select id="posting-frequency" name="posting_frequency">
+                                                        <option value="daily">毎日</option>
+                                                        <option value="weekly">1週間</option>
+                                                        <option value="monthly">毎月</option>
+                                                        <option value="custom">カスタム</option>
+                                                    </select>
+                                                    <div id="custom-frequency-settings" style="margin-top: 5px; display: none;">
+                                                        <input type="number" id="custom-frequency-days" name="custom_frequency_days" value="7" min="1" max="365" style="width: 80px;" /> 日ごと
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="padding: 5px 0;">投稿記事数上限</th>
+                                                <td style="padding: 5px 0;">
+                                                    <input type="number" id="max-posts-per-execution" name="max_posts_per_execution" value="3" min="1" max="20" style="width: 80px;" /> 件
+                                                    <p class="description" style="margin: 5px 0 0 0;">1回の実行で作成する投稿の最大数</p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="padding: 5px 0;">次回実行予定</th>
+                                                <td style="padding: 5px 0;">
+                                                    <span id="next-execution-time">未設定</span>
+                                                    <p class="description" style="margin: 5px 0 0 0;">自動投稿の次回実行予定時刻</p>
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </div>
                                 </td>
                             </tr>
@@ -713,9 +758,75 @@ class NewsCrawlerGenreSettings {
                 }
             });
             
+            // 自動投稿チェックボックス変更時の設定表示切り替え
+            $('#auto-posting').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#auto-posting-settings').show();
+                } else {
+                    $('#auto-posting-settings').hide();
+                }
+            });
+            
+            // 投稿頻度変更時のカスタム設定表示切り替え
+            $('#posting-frequency').change(function() {
+                var frequency = $(this).val();
+                if (frequency === 'custom') {
+                    $('#custom-frequency-settings').show();
+                } else {
+                    $('#custom-frequency-settings').hide();
+                }
+                updateNextExecutionTime();
+            });
+            
+            // カスタム頻度日数変更時
+            $('#custom-frequency-days').change(function() {
+                updateNextExecutionTime();
+            });
+            
+            // 次回実行予定時刻を更新
+            function updateNextExecutionTime() {
+                var frequency = $('#posting-frequency').val();
+                var customDays = $('#custom-frequency-days').val();
+                var now = new Date();
+                var nextExecution = new Date();
+                
+                switch (frequency) {
+                    case 'daily':
+                        nextExecution.setDate(now.getDate() + 1);
+                        break;
+                    case 'weekly':
+                        nextExecution.setDate(now.getDate() + 7);
+                        break;
+                    case 'monthly':
+                        nextExecution.setMonth(now.getMonth() + 1);
+                        break;
+                    case 'custom':
+                        nextExecution.setDate(now.getDate() + parseInt(customDays));
+                        break;
+                }
+                
+                var timeString = nextExecution.getFullYear() + '年' + 
+                               (nextExecution.getMonth() + 1) + '月' + 
+                               nextExecution.getDate() + '日 ' +
+                               nextExecution.getHours().toString().padStart(2, '0') + ':' +
+                               nextExecution.getMinutes().toString().padStart(2, '0');
+                
+                $('#next-execution-time').text(timeString);
+            }
+            
+            // 初期表示時に次回実行予定時刻を更新
+            updateNextExecutionTime();
+            
+            // 初期表示時にアイキャッチ設定を表示
+            $('#featured-image-settings').show();
+            
             // フォーム送信
             $('#genre-settings-form').submit(function(e) {
                 e.preventDefault();
+                
+                // チェックボックスの値を明示的に処理
+                var autoFeaturedImage = $('#auto-featured-image').is(':checked') ? 1 : 0;
+                var autoPosting = $('#auto-posting').is(':checked') ? 1 : 0;
                 
                 var formData = {
                     action: 'genre_settings_save',
@@ -731,9 +842,19 @@ class NewsCrawlerGenreSettings {
                     embed_type: $('#embed-type').val(),
                     post_categories: $('#post-categories').val(),
                     post_status: $('#post-status').val(),
-                    auto_featured_image: $('#auto-featured-image').is(':checked') ? 1 : 0,
-                    featured_image_method: $('#featured-image-method').val()
+                    auto_featured_image: autoFeaturedImage,
+                    featured_image_method: $('#featured-image-method').val(),
+                    auto_posting: autoPosting,
+                    posting_frequency: $('#posting-frequency').val(),
+                    custom_frequency_days: $('#custom-frequency-days').val(),
+                    max_posts_per_execution: $('#max-posts-per-execution').val()
                 };
+                
+                // デバッグ情報をコンソールに出力
+                console.log('Form submission - auto_posting checkbox checked:', $('#auto-posting').is(':checked'));
+                console.log('Form submission - auto_posting processed value:', autoPosting);
+                console.log('Form submission - auto_posting in formData:', formData.auto_posting);
+                console.log('Form submission - full formData:', formData);
                 
                 $.ajax({
                     url: ajaxurl,
@@ -795,6 +916,10 @@ class NewsCrawlerGenreSettings {
                         jQuery('#post-status').val(setting.post_status || 'draft');
                         jQuery('#auto-featured-image').prop('checked', setting.auto_featured_image == 1).trigger('change');
                         jQuery('#featured-image-method').val(setting.featured_image_method || 'template');
+                        jQuery('#auto-posting').prop('checked', setting.auto_posting == 1).trigger('change');
+                        jQuery('#posting-frequency').val(setting.posting_frequency || 'daily').trigger('change');
+                        jQuery('#custom-frequency-days').val(setting.custom_frequency_days || 7);
+                        jQuery('#max-posts-per-execution').val(setting.max_posts_per_execution || 3);
                         jQuery('#cancel-edit').show();
                         
                         // フォームまでスクロール
@@ -971,6 +1096,7 @@ class NewsCrawlerGenreSettings {
         echo '<th>キーワード</th>';
         echo '<th>カテゴリー</th>';
         echo '<th>アイキャッチ</th>';
+        echo '<th>自動投稿</th>';
         echo '<th>操作</th>';
         echo '</tr>';
         echo '</thead>';
@@ -1020,6 +1146,24 @@ class NewsCrawlerGenreSettings {
             echo '<td><span class="keywords-display" title="' . esc_attr(implode(', ', $setting['keywords'])) . '">' . esc_html($keywords_display) . '</span></td>';
             echo '<td><span class="categories-display" title="' . esc_attr(implode(', ', $categories)) . '">' . esc_html($categories_display) . '</span></td>';
             echo '<td>' . esc_html($featured_image_status) . '</td>';
+            
+            // 自動投稿設定の表示
+            $auto_posting_status = '';
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                $frequency = isset($setting['posting_frequency']) ? $setting['posting_frequency'] : 'daily';
+                $frequency_labels = array(
+                    'daily' => '毎日',
+                    'weekly' => '1週間',
+                    'monthly' => '毎月',
+                    'custom' => 'カスタム'
+                );
+                $max_posts = isset($setting['max_posts_per_execution']) ? $setting['max_posts_per_execution'] : 3;
+                $auto_posting_status = '有効 (' . $frequency_labels[$frequency] . ', ' . $max_posts . '件)';
+            } else {
+                $auto_posting_status = '無効';
+            }
+            
+            echo '<td>' . esc_html($auto_posting_status) . '</td>';
             echo '<td class="action-buttons">';
             echo '<button type="button" class="button" onclick="editGenreSetting(\'' . esc_js($id) . '\')">編集</button>';
             echo '<button type="button" class="button" onclick="duplicateGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">複製</button>';
@@ -1040,6 +1184,9 @@ class NewsCrawlerGenreSettings {
             wp_send_json_error('権限がありません');
         }
         
+        // デバッグ情報を記録
+        error_log('Genre Settings Save - POST data: ' . print_r($_POST, true));
+        
         $genre_id = sanitize_text_field($_POST['genre_id']);
         $genre_name = sanitize_text_field($_POST['genre_name']);
         $content_type = sanitize_text_field($_POST['content_type']);
@@ -1054,6 +1201,16 @@ class NewsCrawlerGenreSettings {
             $post_categories = array('blog');
         }
         
+        // 自動投稿の値を明示的に処理
+        $auto_posting = 0;
+        if (isset($_POST['auto_posting'])) {
+            if ($_POST['auto_posting'] === '1' || $_POST['auto_posting'] === 1) {
+                $auto_posting = 1;
+            }
+        }
+        error_log('Genre Settings Save - Raw auto_posting from POST: ' . (isset($_POST['auto_posting']) ? $_POST['auto_posting'] : 'not set'));
+        error_log('Genre Settings Save - Processed auto_posting value: ' . $auto_posting);
+        
         $setting = array(
             'genre_name' => $genre_name,
             'content_type' => $content_type,
@@ -1062,9 +1219,17 @@ class NewsCrawlerGenreSettings {
             'post_status' => sanitize_text_field($_POST['post_status']),
             'auto_featured_image' => isset($_POST['auto_featured_image']) ? 1 : 0,
             'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'template'),
+            'auto_posting' => $auto_posting,
+            'posting_frequency' => sanitize_text_field($_POST['posting_frequency'] ?? 'daily'),
+            'custom_frequency_days' => intval($_POST['custom_frequency_days'] ?? 7),
+            'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
         );
+        
+        // デバッグ情報を記録
+        error_log('Genre Settings Save - Processed auto_posting value: ' . $auto_posting);
+        error_log('Genre Settings Save - Final setting array: ' . print_r($setting, true));
         
         if ($content_type === 'news') {
             $setting['news_sources'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['news_sources']))));
@@ -1081,12 +1246,19 @@ class NewsCrawlerGenreSettings {
             // 新規作成
             $genre_id = uniqid('genre_');
             $setting['created_at'] = current_time('mysql');
+            error_log('Genre Settings Save - Creating new genre setting');
         } else {
             // 更新
             if (!isset($genre_settings[$genre_id])) {
                 wp_send_json_error('指定された設定が見つかりません');
             }
             $setting['created_at'] = $genre_settings[$genre_id]['created_at'];
+            
+            // 既存の設定と比較
+            $existing_setting = $genre_settings[$genre_id];
+            error_log('Genre Settings Save - Updating existing genre setting');
+            error_log('Genre Settings Save - Previous auto_posting value: ' . ($existing_setting['auto_posting'] ?? 'not set'));
+            error_log('Genre Settings Save - New auto_posting value: ' . $setting['auto_posting']);
         }
         
         $setting['id'] = $genre_id;
@@ -1094,6 +1266,29 @@ class NewsCrawlerGenreSettings {
         
         update_option($this->option_name, $genre_settings);
         
+        // 保存後の確認
+        $saved_settings = get_option($this->option_name, array());
+        if (isset($saved_settings[$genre_id])) {
+            error_log('Genre Settings Save - Verification: saved auto_posting value: ' . $saved_settings[$genre_id]['auto_posting']);
+        } else {
+            error_log('Genre Settings Save - Verification: setting not found after save');
+        }
+        
+        // 自動投稿の設定に応じて次回実行時刻を管理
+        if (isset($setting['auto_posting']) && $setting['auto_posting'] == 1) {
+            // 自動投稿が有効な場合、次回実行時刻を設定
+            error_log('Genre Settings Save - Auto posting enabled, setting next execution time');
+            $this->update_next_execution_time($genre_id, $setting);
+        } else {
+            // 自動投稿が無効な場合、次回実行時刻とログをクリア
+            error_log('Genre Settings Save - Auto posting disabled, clearing execution time and logs');
+            delete_option('news_crawler_last_execution_' . $genre_id);
+            
+            // 自動投稿関連のログから該当ジャンルのエントリを削除
+            $this->cleanup_auto_posting_logs($genre_id);
+        }
+        
+        error_log('Genre Settings Save - Final auto_posting value in setting: ' . $setting['auto_posting']);
         wp_send_json_success('設定を保存しました');
     }
     
@@ -1113,6 +1308,10 @@ class NewsCrawlerGenreSettings {
         
         unset($genre_settings[$genre_id]);
         update_option($this->option_name, $genre_settings);
+        
+        // 自動投稿関連のデータをクリーンアップ
+        delete_option('news_crawler_last_execution_' . $genre_id);
+        $this->cleanup_auto_posting_logs($genre_id);
         
         wp_send_json_success('設定を削除しました');
     }
@@ -1482,6 +1681,188 @@ class NewsCrawlerGenreSettings {
         $stats[$genre_id]['last_execution'] = current_time('mysql');
         
         update_option($stats_option, $stats);
+    }
+    
+    /**
+     * 自動投稿のスケジュール設定
+     */
+    public function setup_auto_posting_cron() {
+        if (!wp_next_scheduled('news_crawler_auto_posting_cron')) {
+            wp_schedule_event(time(), 'hourly', 'news_crawler_auto_posting_cron');
+        }
+    }
+    
+    /**
+     * 自動投稿の実行処理
+     */
+    public function execute_auto_posting() {
+        $genre_settings = $this->get_genre_settings();
+        $current_time = current_time('timestamp');
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            // 自動投稿が無効または設定されていない場合はスキップ
+            if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
+                continue;
+            }
+            
+            // 次回実行時刻をチェック
+            $next_execution = $this->get_next_execution_time($setting);
+            if ($next_execution > $current_time) {
+                continue;
+            }
+            
+            // 自動投稿を実行
+            $this->execute_auto_posting_for_genre($setting);
+            
+            // 次回実行時刻を更新
+            $this->update_next_execution_time($genre_id, $setting);
+        }
+    }
+    
+    /**
+     * 指定されたジャンルの自動投稿を実行
+     */
+    private function execute_auto_posting_for_genre($setting) {
+        try {
+            // 投稿記事数上限を適用
+            $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+            
+            if ($setting['content_type'] === 'news') {
+                $this->execute_news_crawling_with_limit($setting, $max_posts);
+            } elseif ($setting['content_type'] === 'youtube') {
+                $this->execute_youtube_crawling_with_limit($setting, $max_posts);
+            }
+            
+            // 実行ログを記録
+            $this->log_auto_posting_execution($setting['id'], 'success');
+            
+        } catch (Exception $e) {
+            // エラーログを記録
+            $this->log_auto_posting_execution($setting['id'], 'error', $e->getMessage());
+        }
+    }
+    
+    /**
+     * ニュースクロールを投稿数制限付きで実行
+     */
+    private function execute_news_crawling_with_limit($setting, $max_posts) {
+        // 既存の投稿数をチェック
+        $existing_posts = $this->count_recent_posts_by_genre($setting['id']);
+        if ($existing_posts >= $max_posts) {
+            return;
+        }
+        
+        // 投稿数制限を適用してクロール実行
+        $setting['max_articles'] = min($setting['max_articles'] ?? 10, $max_posts - $existing_posts);
+        $this->execute_news_crawling($setting);
+    }
+    
+    /**
+     * YouTubeクロールを投稿数制限付きで実行
+     */
+    private function execute_youtube_crawling_with_limit($setting, $max_posts) {
+        // 既存の投稿数をチェック
+        $existing_posts = $this->count_recent_posts_by_genre($setting['id']);
+        if ($existing_posts >= $max_posts) {
+            return;
+        }
+        
+        // 投稿数制限を適用してクロール実行
+        $setting['max_videos'] = min($setting['max_videos'] ?? 5, $max_posts - $existing_posts);
+        $this->execute_youtube_crawling($setting);
+    }
+    
+    /**
+     * ジャンル別の最近の投稿数をカウント
+     */
+    private function count_recent_posts_by_genre($genre_id) {
+        $args = array(
+            'post_type' => 'post',
+            'post_status' => array('publish', 'draft', 'pending'),
+            'meta_query' => array(
+                array(
+                    'key' => '_news_crawler_genre_id',
+                    'value' => $genre_id,
+                    'compare' => '='
+                )
+            ),
+            'date_query' => array(
+                array(
+                    'after' => '1 day ago'
+                )
+            ),
+            'posts_per_page' => -1,
+            'fields' => 'ids'
+        );
+        
+        $query = new WP_Query($args);
+        return $query->found_posts;
+    }
+    
+    /**
+     * 次回実行時刻を取得
+     */
+    private function get_next_execution_time($setting) {
+        $last_execution = get_option('news_crawler_last_execution_' . $setting['id'], 0);
+        $frequency = $setting['posting_frequency'] ?? 'daily';
+        
+        switch ($frequency) {
+            case 'daily':
+                return $last_execution + (24 * 60 * 60); // 24時間後
+            case 'weekly':
+                return $last_execution + (7 * 24 * 60 * 60); // 7日後
+            case 'monthly':
+                return $last_execution + (30 * 24 * 60 * 60); // 30日後
+            case 'custom':
+                $days = $setting['custom_frequency_days'] ?? 7;
+                return $last_execution + ($days * 24 * 60 * 60);
+            default:
+                return $last_execution + (24 * 60 * 60);
+        }
+    }
+    
+    /**
+     * 次回実行時刻を更新
+     */
+    private function update_next_execution_time($genre_id, $setting) {
+        update_option('news_crawler_last_execution_' . $genre_id, current_time('timestamp'));
+    }
+    
+    /**
+     * 自動投稿の実行ログを記録
+     */
+    private function log_auto_posting_execution($genre_id, $status, $message = '') {
+        $logs = get_option('news_crawler_auto_posting_logs', array());
+        
+        $logs[] = array(
+            'genre_id' => $genre_id,
+            'status' => $status,
+            'message' => $message,
+            'timestamp' => current_time('mysql')
+        );
+        
+        // ログは最新100件まで保持
+        if (count($logs) > 100) {
+            $logs = array_slice($logs, -100);
+        }
+        
+        update_option('news_crawler_auto_posting_logs', $logs);
+    }
+    
+    /**
+     * 指定されたジャンルの自動投稿ログをクリーンアップ
+     */
+    private function cleanup_auto_posting_logs($genre_id) {
+        $logs = get_option('news_crawler_auto_posting_logs', array());
+        
+        if (!empty($logs)) {
+            // 指定されたジャンルのログエントリを削除
+            $logs = array_filter($logs, function($log) use ($genre_id) {
+                return $log['genre_id'] !== $genre_id;
+            });
+            
+            update_option('news_crawler_auto_posting_logs', $logs);
+        }
     }
     
     /**
