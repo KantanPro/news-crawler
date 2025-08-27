@@ -204,11 +204,6 @@ class NewsCrawlerGenreSettings {
             'twitter_sharer_settings'
         );
         
-        add_settings_field(
-            'twitter_access_token',
-            'Access Token',
-        );
-        
         // 重複チェック設定セクション
         add_settings_section(
             'duplicate_check_settings',

@@ -4,7 +4,7 @@ Tags: news, crawler, rss, automation, content, youtube
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.7.2
+Stable tag: 1.7.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -99,8 +99,8 @@ YouTube Data API v3のAPIキーが必要です。Google Cloud Consoleで取得�
 
 == Changelog ==
 
-= 1.7.2 (2025年8月27日) =
-* 強制更新のバグ修正
+= 1.7.3 (2025年8月27日) =
+* 重複した記事を生成のバグ修正
 
 = 1.7.0 (2025年8月27日) =
 * Xに自動投稿
