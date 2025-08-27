@@ -2159,8 +2159,10 @@ class NewsCrawlerGenreSettings {
             $this->execute_auto_posting_for_genre($setting);
             $executed_count++;
             
-            // 次回実行時刻を更新
-            $this->update_next_execution_time($genre_id, $setting);
+            // 次回実行時刻を更新（強制実行時は更新しない）
+            if (!$is_forced) {
+                $this->update_next_execution_time($genre_id, $setting);
+            }
         }
         
         error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
@@ -2169,7 +2171,7 @@ class NewsCrawlerGenreSettings {
     /**
      * 指定されたジャンルの自動投稿を実行
      */
-    private function execute_auto_posting_for_genre($setting) {
+    private function execute_auto_posting_for_genre($setting, $is_forced = false) {
         $genre_id = $setting['id'];
         $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
         
@@ -2764,7 +2766,7 @@ class NewsCrawlerGenreSettings {
     }
     
     /**
-     * 強制実行用の自動投稿処理（開始実行日時の制限を無視）
+     * 強制実行用の自動投稿処理（開始実行日時の制限を無視、既存の自動投稿設定のスケジュールを復元・維持）
      */
     private function execute_auto_posting_forced() {
         error_log('Force Auto Posting Execution - Starting forced execution...');
@@ -2790,11 +2792,12 @@ class NewsCrawlerGenreSettings {
             
             error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled - FORCING EXECUTION');
             
-            // 強制実行時は開始実行日時の制限を無視
-            $this->execute_auto_posting_for_genre($setting);
+            // 強制実行時は開始実行日時の制限を無視して即座に実行
+            // 次回実行時刻は既存の自動投稿設定のスケジュールを復元・維持
+            $this->execute_auto_posting_for_genre($setting, true);
             $executed_count++;
             
-            // 次回実行時刻を更新（現在時刻から計算）
+            // 強制実行時は既存の自動投稿設定に基づいて正しいスケジュールを復元・維持
             $this->update_next_execution_time_forced($genre_id, $setting);
         }
         
@@ -2802,37 +2805,96 @@ class NewsCrawlerGenreSettings {
     }
     
     /**
-     * 強制実行用の次回実行時刻更新（現在時刻から計算）
+     * 強制実行用の次回実行時刻更新（既存の自動投稿設定のスケジュールを復元・維持）
      */
     private function update_next_execution_time_forced($genre_id, $setting) {
+        // 強制実行時は既存の自動投稿設定に基づいて正しいスケジュールを復元・維持
+        error_log('Force Auto Posting Execution - Restoring schedule based on existing auto posting settings for genre ' . $genre_id);
+        
         $now = current_time('timestamp');
         $next_execution_time = $now;
         
+        // 開始実行日時が設定されている場合は、その設定を優先
+        if (!empty($setting['start_execution_time'])) {
+            $start_time = strtotime($setting['start_execution_time']);
+            
+            // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
+            if ($start_time > $now) {
+                $next_execution_time = $start_time;
+                error_log('Force Auto Posting Execution - Using start_execution_time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
+            } else {
+                // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
+                $next_execution_time = $this->calculate_next_execution_from_start_time($setting, $start_time);
+                error_log('Force Auto Posting Execution - Calculated from start_time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
+            }
+        } else {
+            // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度に基づいて計算
+            $next_execution_time = $this->calculate_next_execution_from_now($setting, $now);
+            error_log('Force Auto Posting Execution - Calculated from now for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
+        }
+        
+        // 正しいスケジュールを設定
+        update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
+        
+        error_log('Force Auto Posting Execution - Restored correct schedule for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
+    }
+    
+    /**
+     * 開始時刻から次回実行時刻を計算
+     */
+    private function calculate_next_execution_from_start_time($setting, $start_time) {
+        $now = current_time('timestamp');
+        $frequency = $setting['posting_frequency'] ?? 'daily';
+        
+        // 開始時刻から現在時刻までの経過時間を計算
+        $elapsed_time = $now - $start_time;
+        
         // 投稿頻度に基づいて次回実行時刻を計算
-        $frequency = isset($setting['posting_frequency']) ? $setting['posting_frequency'] : 'daily';
-        $custom_days = isset($setting['custom_frequency_days']) ? intval($setting['custom_frequency_days']) : 7;
+        switch ($frequency) {
+            case 'daily':
+                $interval = 24 * 60 * 60; // 24時間
+                break;
+            case 'weekly':
+                $interval = 7 * 24 * 60 * 60; // 7日
+                break;
+            case 'monthly':
+                $interval = 30 * 24 * 60 * 60; // 30日
+                break;
+            case 'custom':
+                $days = $setting['custom_frequency_days'] ?? 7;
+                $interval = $days * 24 * 60 * 60;
+                break;
+            default:
+                $interval = 24 * 60 * 60;
+        }
+        
+        // 経過時間から次の実行時刻を計算
+        $next_execution = $start_time;
+        while ($next_execution <= $now) {
+            $next_execution += $interval;
+        }
+        
+        return $next_execution;
+    }
+    
+    /**
+     * 現在時刻から次回実行時刻を計算
+     */
+    private function calculate_next_execution_from_now($setting, $now) {
+        $frequency = $setting['posting_frequency'] ?? 'daily';
         
         switch ($frequency) {
             case 'daily':
-                $next_execution_time = strtotime('+1 day', $now);
-                break;
+                return $now + (24 * 60 * 60); // 24時間後
             case 'weekly':
-                $next_execution_time = strtotime('+1 week', $now);
-                break;
+                return $now + (7 * 24 * 60 * 60); // 7日後
             case 'monthly':
-                $next_execution_time = strtotime('+1 month', $now);
-                break;
+                return $now + (30 * 24 * 60 * 60); // 30日後
             case 'custom':
-                $next_execution_time = strtotime('+' . $custom_days . ' days', $now);
-                break;
+                $days = $setting['custom_frequency_days'] ?? 7;
+                return $now + ($days * 24 * 60 * 60);
+            default:
+                return $now + (24 * 60 * 60);
         }
-        
-        // 最後の実行時刻を更新
-        update_option('news_crawler_last_execution_' . $genre_id, $now);
-        
-        // 次回実行時刻も保存
-        update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
-        
-        error_log('Force Auto Posting Execution - Updated next execution time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
     }
 }
