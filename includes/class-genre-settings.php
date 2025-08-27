@@ -21,7 +21,7 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_load', array($this, 'load_genre_setting'));
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
-        add_action('wp_ajax_test_openai_summary', array($this, 'test_openai_summary'));
+
         add_action('wp_ajax_test_auto_posting', array($this, 'test_auto_posting'));
         add_action('wp_ajax_check_auto_posting_schedule', array($this, 'check_auto_posting_schedule'));
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
@@ -595,86 +595,6 @@ class NewsCrawlerGenreSettings {
                 submit_button();
                 ?>
             </form>
-            
-            <hr>
-            
-            <h2>AI要約生成のテスト</h2>
-            <p>OpenAI APIを使用した要約生成機能をテストできます。テスト用のサンプルテキストで要約とまとめを生成します。</p>
-            
-            <div class="card">
-                <h3>テスト用サンプルテキスト</h3>
-                <textarea id="test-text" rows="8" cols="80" style="width: 100%;">人工知能（AI）技術の進歩により、私たちの日常生活は大きく変化しています。スマートフォンの音声アシスタントから、自動運転車、医療診断システムまで、AIは様々な分野で活用されています。
-
-特に注目されているのは、ChatGPTなどの大規模言語モデル（LLM）の登場です。これらの技術により、自然な会話のような対話が可能になり、文章作成、翻訳、プログラミング支援など、多様なタスクを支援できるようになりました。
-
-しかし、AI技術の発展とともに、プライバシーの保護、雇用への影響、AIの倫理的な使用など、様々な課題も浮上しています。これらの課題に対して、適切な規制やガイドラインの策定が求められています。</textarea>
-                
-                <p>
-                    <button type="button" id="test-summary-generation" class="button button-primary">要約生成をテスト</button>
-                    <span id="test-status" style="margin-left: 10px;"></span>
-                </p>
-                
-                <div id="test-result" style="display: none; margin-top: 20px; padding: 15px; background: #f7f7f7; border: 1px solid #ccc; border-radius: 4px;">
-                    <h4>生成結果：</h4>
-                    <div id="test-summary-content"></div>
-                </div>
-            </div>
-            
-            <script>
-            jQuery(document).ready(function($) {
-                $('#test-summary-generation').click(function() {
-                    var button = $(this);
-                    var statusSpan = $('#test-status');
-                    var resultDiv = $('#test-result');
-                    var resultContent = $('#test-summary-content');
-                    
-                    button.prop('disabled', true);
-                    statusSpan.html('要約生成中...');
-                    resultDiv.hide();
-                    
-                    var testText = $('#test-text').val();
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        dataType: 'json',
-                        data: {
-                            action: 'test_openai_summary',
-                            nonce: '<?php echo wp_create_nonce('openai_summary_test_nonce'); ?>',
-                            text: testText
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                var result = response.data;
-                                var html = '';
-                                
-                                if (result.summary) {
-                                    html += '<h5>この記事の要約</h5>';
-                                    html += '<p>' + result.summary + '</p>';
-                                }
-                                
-                                if (result.conclusion) {
-                                    html += '<h5>まとめ</h5>';
-                                    html += '<p>' + result.conclusion + '</p>';
-                                }
-                                
-                                resultContent.html(html);
-                                resultDiv.show();
-                                statusSpan.html('✅ 完了');
-                            } else {
-                                statusSpan.html('❌ エラー: ' + response.data);
-                            }
-                        },
-                        error: function() {
-                            statusSpan.html('❌ 通信エラー');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false);
-                        }
-                    });
-                });
-            });
-            </script>
             
             <hr>
             
@@ -2657,94 +2577,7 @@ class NewsCrawlerGenreSettings {
         return $reasons;
     }
     
-    /**
-     * OpenAI要約生成のテスト用AJAXハンドラー
-     */
-    public function test_openai_summary() {
-        check_ajax_referer('openai_summary_test_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $test_text = sanitize_textarea_field($_POST['text']);
-        
-        if (empty($test_text)) {
-            wp_send_json_error('テスト用テキストが入力されていません');
-        }
-        
-        // 基本設定からOpenAI APIキーを取得
-        $basic_settings = get_option('news_crawler_basic_settings', array());
-        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
-        
-        if (empty($api_key)) {
-            wp_send_json_error('OpenAI APIキーが設定されていません');
-        }
-        
-        try {
-            // OpenAI APIを使用して要約を生成
-            $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
-                'headers' => array(
-                    'Authorization' => 'Bearer ' . $api_key,
-                    'Content-Type' => 'application/json',
-                ),
-                'body' => json_encode(array(
-                    'model' => 'gpt-3.5-turbo',
-                    'messages' => array(
-                        array(
-                            'role' => 'system',
-                            'content' => 'あなたは優秀なニュース編集者です。与えられた記事の内容を分析し、簡潔で分かりやすい要約とまとめを作成してください。'
-                        ),
-                        array(
-                            'role' => 'user',
-                            'content' => "以下の記事の内容を分析して、以下の形式で回答してください：\n\n記事内容：\n{$test_text}\n\n回答形式：\n## この記事の要約\n（記事の要点を3-4行で簡潔にまとめてください）\n\n## まとめ\n（記事の内容を踏まえた考察や今後の展望を2-3行で述べてください）\n\n注意：\n- 要約は事実に基づいて客観的に作成してください\n- まとめは読者の理解を深めるような洞察を含めてください\n- 日本語で自然な文章にしてください"
-                        )
-                    ),
-                    'max_tokens' => 1000,
-                    'temperature' => 0.7
-                )),
-                'timeout' => 60
-            ));
-            
-            if (is_wp_error($response)) {
-                wp_send_json_error('OpenAI API呼び出しエラー: ' . $response->get_error_message());
-            }
-            
-            $body = wp_remote_retrieve_body($response);
-            $data = json_decode($body, true);
-            
-            if (!$data || !isset($data['choices'][0]['message']['content'])) {
-                wp_send_json_error('OpenAI APIレスポンスの解析に失敗しました');
-            }
-            
-            $response_content = $data['choices'][0]['message']['content'];
-            
-            // レスポンスから要約とまとめを抽出
-            $summary = '';
-            $conclusion = '';
-            
-            if (preg_match('/## この記事の要約\s*(.+?)(?=\s*##|\s*$)/s', $response_content, $matches)) {
-                $summary = trim($matches[1]);
-            }
-            
-            if (preg_match('/## まとめ\s*(.+?)(?=\s*##|\s*$)/s', $response_content, $matches)) {
-                $conclusion = trim($matches[1]);
-            }
-            
-            if (empty($summary) && empty($conclusion)) {
-                $summary = 'AIによる要約生成中にエラーが発生しました。';
-                $conclusion = '要約の生成に失敗しました。';
-            }
-            
-            wp_send_json_success(array(
-                'summary' => $summary,
-                'conclusion' => $conclusion
-            ));
-            
-        } catch (Exception $e) {
-            wp_send_json_error('要約生成中にエラーが発生しました: ' . $e->getMessage());
-        }
-    }
+
     
     /**
      * X（Twitter）接続テスト用AJAXハンドラー

@@ -33,23 +33,23 @@ class NewsCrawlerOpenAISummarizer {
      * 投稿作成後に要約とまとめを生成するかどうかを判定
      */
     public function maybe_generate_summary($post_id, $post, $update) {
-        error_log('NewsCrawlerOpenAISummarizer: maybe_generate_summary called for post ' . $post_id . ', update: ' . ($update ? 'true' : 'false'));
+        error_log('NewsCrawlerOpenAISummarizer: maybe_generate_summaryが投稿ID ' . $post_id . ' で呼び出されました。更新: ' . ($update ? 'true' : 'false'));
         
         // 新規投稿のみ処理（更新時はスキップ）
         if ($update) {
-            error_log('NewsCrawlerOpenAISummarizer: Skipping update post');
+            error_log('NewsCrawlerOpenAISummarizer: 更新投稿のためスキップいたします');
             return;
         }
         
         // 投稿タイプがpostでない場合はスキップ
         if ($post->post_type !== 'post') {
-            error_log('NewsCrawlerOpenAISummarizer: Skipping non-post type: ' . $post->post_type);
+            error_log('NewsCrawlerOpenAISummarizer: 投稿タイプではないためスキップいたします: ' . $post->post_type);
             return;
         }
         
         // 既に要約が生成されている場合はスキップ
         if (get_post_meta($post_id, '_openai_summary_generated', true)) {
-            error_log('NewsCrawlerOpenAISummarizer: Summary already generated for post ' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の要約は既に生成されております');
             return;
         }
         
@@ -57,16 +57,16 @@ class NewsCrawlerOpenAISummarizer {
         $is_news_summary = get_post_meta($post_id, '_news_summary', true);
         $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
         
-        error_log('NewsCrawlerOpenAISummarizer: Post meta check - _news_summary: ' . ($is_news_summary ? 'true' : 'false') . ', _youtube_summary: ' . ($is_youtube_summary ? 'true' : 'false'));
+        error_log('NewsCrawlerOpenAISummarizer: 投稿メタデータの確認 - _news_summary: ' . ($is_news_summary ? 'true' : 'false') . ', _youtube_summary: ' . ($is_youtube_summary ? 'true' : 'false'));
         
         if (!$is_news_summary && !$is_youtube_summary) {
-            error_log('NewsCrawlerOpenAISummarizer: Skipping non-news/youtube post');
+            error_log('NewsCrawlerOpenAISummarizer: ニュースまたはYouTube投稿ではないためスキップいたします');
             return;
         }
         
         // OpenAI APIキーが設定されていない場合はスキップ
         if (empty($this->api_key)) {
-            error_log('NewsCrawlerOpenAISummarizer: OpenAI APIキーが設定されていません');
+            error_log('NewsCrawlerOpenAISummarizer: OpenAI APIキーが設定されておりません');
             return;
         }
         
@@ -78,11 +78,11 @@ class NewsCrawlerOpenAISummarizer {
             return;
         }
         
-        error_log('NewsCrawlerOpenAISummarizer: All checks passed, executing summary generation immediately for post ' . $post_id);
+        error_log('NewsCrawlerOpenAISummarizer: すべてのチェックが完了いたしました。投稿ID ' . $post_id . ' の要約生成を即座に実行いたします');
         
         // 即座に要約とまとめを生成
         $result = $this->generate_summary($post_id);
-        error_log('NewsCrawlerOpenAISummarizer: Immediate summary generation result: ' . ($result ? 'Success' : 'Failed'));
+        error_log('NewsCrawlerOpenAISummarizer: 即座の要約生成結果: ' . ($result ? '成功' : '失敗'));
         
         // 非同期でも実行（バックアップとして）
         wp_schedule_single_event(time() + 10, 'news_crawler_generate_summary', array($post_id));
@@ -92,30 +92,30 @@ class NewsCrawlerOpenAISummarizer {
      * 要約とまとめを生成するメイン処理
      */
     public function generate_summary($post_id) {
-        error_log('NewsCrawlerOpenAISummarizer: generate_summary called for post ' . $post_id);
+        error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の要約生成が呼び出されました');
         
         $post = get_post($post_id);
         if (!$post) {
-            error_log('NewsCrawlerOpenAISummarizer: Post not found for ID ' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の投稿が見つかりませんでした');
             return false;
         }
         
         // 既に要約が生成されている場合はスキップ
         if (get_post_meta($post_id, '_openai_summary_generated', true)) {
-            error_log('NewsCrawlerOpenAISummarizer: Summary already generated for post ' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の要約は既に生成されております');
             return false;
         }
         
         try {
-            error_log('NewsCrawlerOpenAISummarizer: Starting OpenAI summary generation for post ' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' のOpenAI要約生成を開始いたします');
             
             // 投稿内容から要約とまとめを生成
             $summary_result = $this->generate_summary_with_openai($post->post_content, $post->post_title);
             
-            error_log('NewsCrawlerOpenAISummarizer: OpenAI result: ' . print_r($summary_result, true));
+            error_log('NewsCrawlerOpenAISummarizer: OpenAI結果: ' . print_r($summary_result, true));
             
             if ($summary_result && isset($summary_result['summary']) && isset($summary_result['conclusion'])) {
-                error_log('NewsCrawlerOpenAISummarizer: Summary generation successful, updating post content');
+                error_log('NewsCrawlerOpenAISummarizer: 要約生成が成功いたしました。投稿内容を更新いたします');
                 
                 // 投稿内容に要約とまとめを追加
                 $updated_content = $this->append_summary_to_post($post->post_content, $summary_result['summary'], $summary_result['conclusion']);
@@ -126,7 +126,7 @@ class NewsCrawlerOpenAISummarizer {
                     'post_content' => $updated_content
                 ));
                 
-                error_log('NewsCrawlerOpenAISummarizer: Post update result: ' . print_r($update_result, true));
+                error_log('NewsCrawlerOpenAISummarizer: 投稿更新結果: ' . print_r($update_result, true));
                 
                 if ($update_result && !is_wp_error($update_result)) {
                     // 要約生成完了のメタデータを保存
@@ -135,16 +135,16 @@ class NewsCrawlerOpenAISummarizer {
                     update_post_meta($post_id, '_openai_summary_text', $summary_result['summary']);
                     update_post_meta($post_id, '_openai_conclusion_text', $summary_result['conclusion']);
                     
-                    error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの生成が完了しました。投稿ID: ' . $post_id);
+                    error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの生成が正常に完了いたしました。投稿ID: ' . $post_id);
                     return true;
                 } else {
-                    error_log('NewsCrawlerOpenAISummarizer: Post update failed: ' . print_r($update_result, true));
+                    error_log('NewsCrawlerOpenAISummarizer: 投稿更新に失敗いたしました: ' . print_r($update_result, true));
                 }
             } else {
-                error_log('NewsCrawlerOpenAISummarizer: Summary generation failed or incomplete result');
+                error_log('NewsCrawlerOpenAISummarizer: 要約生成に失敗いたしました。または不完全な結果です');
             }
         } catch (Exception $e) {
-            error_log('NewsCrawlerOpenAISummarizer: 要約生成中にエラーが発生しました: ' . $e->getMessage());
+            error_log('NewsCrawlerOpenAISummarizer: 要約生成中にエラーが発生いたしました: ' . $e->getMessage());
         }
         
         return false;
@@ -154,26 +154,26 @@ class NewsCrawlerOpenAISummarizer {
      * OpenAI APIを使用して要約とまとめを生成
      */
     private function generate_summary_with_openai($content, $title) {
-        error_log('NewsCrawlerOpenAISummarizer: generate_summary_with_openai called with title: ' . $title);
+        error_log('NewsCrawlerOpenAISummarizer: タイトル「' . $title . '」でOpenAI要約生成が呼び出されました');
         
         if (empty($this->api_key)) {
-            error_log('NewsCrawlerOpenAISummarizer: API key is empty');
+            error_log('NewsCrawlerOpenAISummarizer: APIキーが空です');
             return false;
         }
         
         // 投稿内容をテキストとして抽出（HTMLタグを除去）
         $text_content = wp_strip_all_tags($content);
-        error_log('NewsCrawlerOpenAISummarizer: Text content length: ' . mb_strlen($text_content));
+        error_log('NewsCrawlerOpenAISummarizer: テキスト内容の長さ: ' . mb_strlen($text_content) . '文字');
         
         // 内容が短すぎる場合はスキップ
         if (mb_strlen($text_content) < 100) {
-            error_log('NewsCrawlerOpenAISummarizer: Content too short, skipping');
+            error_log('NewsCrawlerOpenAISummarizer: 内容が短すぎるためスキップいたします');
             return false;
         }
         
         // プロンプトを作成
         $prompt = $this->create_summary_prompt($text_content, $title);
-        error_log('NewsCrawlerOpenAISummarizer: Prompt created, length: ' . mb_strlen($prompt));
+        error_log('NewsCrawlerOpenAISummarizer: プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
         
         // OpenAI APIを呼び出し
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
@@ -186,7 +186,7 @@ class NewsCrawlerOpenAISummarizer {
                 'messages' => array(
                     array(
                         'role' => 'system',
-                        'content' => 'あなたは優秀なニュース編集者です。与えられた記事の内容を分析し、簡潔で分かりやすい要約とまとめを作成してください。'
+                        'content' => 'あなたは親しみやすく、分かりやすい文章を書くのが得意なニュース編集者です。難しい専門用語は避けて、誰でも理解できるような表現を使い、読者が「なるほど！」と思えるような要約とまとめを作成いたします。絶対に「ですます調」で書いてください。文末は必ず「です」「ます」「ございます」で終わらせてください。禁止：「〜している」「〜である」「〜だろう」「〜れる」で終わる文章は絶対に書かないでください。回答を書く前に、すべての文末が「です」「ます」「ございます」で終わっているか必ず確認してください。'
                     ),
                     array(
                         'role' => 'user',
@@ -194,33 +194,33 @@ class NewsCrawlerOpenAISummarizer {
                     )
                 ),
                 'max_tokens' => $this->max_tokens,
-                'temperature' => 0.7
+                'temperature' => 0.3
             )),
             'timeout' => 60
         ));
         
         if (is_wp_error($response)) {
-            error_log('NewsCrawlerOpenAISummarizer: OpenAI API呼び出しエラー: ' . $response->get_error_message());
+            error_log('NewsCrawlerOpenAISummarizer: OpenAI API呼び出しエラーが発生いたしました: ' . $response->get_error_message());
             return false;
         }
         
         $body = wp_remote_retrieve_body($response);
-        error_log('NewsCrawlerOpenAISummarizer: API response body length: ' . strlen($body));
+        error_log('NewsCrawlerOpenAISummarizer: APIレスポンス本文の長さ: ' . strlen($body) . '文字');
         
         $data = json_decode($body, true);
-        error_log('NewsCrawlerOpenAISummarizer: API response data: ' . print_r($data, true));
+        error_log('NewsCrawlerOpenAISummarizer: APIレスポンスデータ: ' . print_r($data, true));
         
         if (!$data || !isset($data['choices'][0]['message']['content'])) {
-            error_log('NewsCrawlerOpenAISummarizer: OpenAI APIレスポンスの解析に失敗しました');
+            error_log('NewsCrawlerOpenAISummarizer: OpenAI APIレスポンスの解析に失敗いたしました');
             return false;
         }
         
         $response_content = $data['choices'][0]['message']['content'];
-        error_log('NewsCrawlerOpenAISummarizer: OpenAI response content: ' . $response_content);
+        error_log('NewsCrawlerOpenAISummarizer: OpenAIレスポンス内容: ' . $response_content);
         
         // レスポンスから要約とまとめを抽出
         $result = $this->parse_openai_response($response_content);
-        error_log('NewsCrawlerOpenAISummarizer: Parsed result: ' . print_r($result, true));
+        error_log('NewsCrawlerOpenAISummarizer: 解析結果: ' . print_r($result, true));
         return $result;
     }
     
@@ -228,7 +228,9 @@ class NewsCrawlerOpenAISummarizer {
      * OpenAI API用のプロンプトを作成
      */
     private function create_summary_prompt($content, $title) {
-        return "以下の記事の内容を分析して、以下の形式で回答してください：
+        return "【最重要】必ず「ですます調」で書いてください！文末は「です」「ます」「ございます」で終わらせてください！
+
+以下の記事の内容を分析して、以下の形式で回答いたします：
 
 記事タイトル：{$title}
 
@@ -237,22 +239,48 @@ class NewsCrawlerOpenAISummarizer {
 
 回答形式：
 ## この記事の要約
-（記事の要点を3-4行で簡潔にまとめてください）
+（記事の要点を3-4行で、誰でも理解できるように分かりやすくまとめてください。専門用語がある場合は、簡単な言葉で説明いたします）
 
 ## まとめ
-（記事の内容を踏まえた考察や今後の展望を2-3行で述べてください）
+（記事の内容を踏まえて、読者の生活や仕事に役立つような洞察や今後の展望を2-3行で述べてください。具体的で実用的なアドバイスを含めてください）
+
+【重要】文体のルール（絶対に守ってください）：
+- 必ず「ですます調」で書いてください
+- 文末は必ず「です」「ます」「ございます」で終わってください
+- 「〜している」→「〜しております」
+- 「〜している」→「〜しております」
+- 「〜となる」→「〜となります」
+- 「〜になる」→「〜になります」
+- 「〜がある」→「〜がございます」
+- 「〜が必要」→「〜が必要です」
+- 「〜である」→「〜でございます」
+- 「〜だろう」→「〜になります」
+- 「〜される」→「〜されます」
+- 「〜される」→「〜されます」
+
+【絶対禁止事項】：
+- 「〜している」で終わる文章は絶対に書かないでください
+- 「〜である」で終わる文章は絶対に書かないでください
+- 「〜だろう」で終わる文章は絶対に書かないでください
+- 「〜れる」で終わる文章は絶対に書かないでください
+
+【最終確認】：
+回答を書く前に、すべての文末が「です」「ます」「ございます」で終わっているか必ず確認してください。
 
 注意：
-- 要約は事実に基づいて客観的に作成してください
-- まとめは読者の理解を深めるような洞察を含めてください
-- 日本語で自然な文章にしてください";
+- 要約は事実に基づいて客観的に作成いたします
+- まとめは読者の理解を深め、実際に活用できるような内容にしてください
+- 日本語で自然で親しみやすい文章にしてください
+- 必ず「〜です」「〜ます」の丁寧語を使い、読みやすい文体にしてください
+- 難しい概念は身近な例えを使って説明いたします
+- 文末は必ず「です」「ます」「ございます」で終わるようにしてください";
     }
     
     /**
      * OpenAI APIのレスポンスから要約とまとめを抽出
      */
     private function parse_openai_response($response) {
-        error_log('NewsCrawlerOpenAISummarizer: parse_openai_response called with response: ' . $response);
+        error_log('NewsCrawlerOpenAISummarizer: レスポンス「' . $response . '」でOpenAIレスポンス解析が呼び出されました');
         
         $summary = '';
         $conclusion = '';
@@ -260,24 +288,24 @@ class NewsCrawlerOpenAISummarizer {
         // 要約部分を抽出
         if (preg_match('/## この記事の要約\s*(.+?)(?=\s*##|\s*$)/s', $response, $matches)) {
             $summary = trim($matches[1]);
-            error_log('NewsCrawlerOpenAISummarizer: Summary extracted: ' . $summary);
+            error_log('NewsCrawlerOpenAISummarizer: 要約が抽出されました: ' . $summary);
         } else {
-            error_log('NewsCrawlerOpenAISummarizer: Failed to extract summary');
+            error_log('NewsCrawlerOpenAISummarizer: 要約の抽出に失敗いたしました');
         }
         
         // まとめ部分を抽出
         if (preg_match('/## まとめ\s*(.+?)(?=\s*##|\s*$)/s', $response, $matches)) {
             $conclusion = trim($matches[1]);
-            error_log('NewsCrawlerOpenAISummarizer: Conclusion extracted: ' . $conclusion);
+            error_log('NewsCrawlerOpenAISummarizer: まとめが抽出されました: ' . $conclusion);
         } else {
-            error_log('NewsCrawlerOpenAISummarizer: Failed to extract conclusion');
+            error_log('NewsCrawlerOpenAISummarizer: まとめの抽出に失敗いたしました');
         }
         
         // 抽出に失敗した場合は、レスポンス全体を要約として使用
         if (empty($summary) && empty($conclusion)) {
-            error_log('NewsCrawlerOpenAISummarizer: Both summary and conclusion extraction failed, using fallback');
-            $summary = 'AIによる要約生成中にエラーが発生しました。';
-            $conclusion = '要約の生成に失敗しました。';
+            error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの両方の抽出に失敗いたしました。フォールバックを使用いたします');
+            $summary = '申し訳ございませんが、AIによる要約の生成中にエラーが発生いたしました。記事の内容をご確認いただけますと幸いです。';
+            $conclusion = '要約の生成に失敗いたしました。記事の内容を直接お読みいただくことをお勧めいたします。';
         }
         
         $result = array(
@@ -285,7 +313,7 @@ class NewsCrawlerOpenAISummarizer {
             'conclusion' => $conclusion
         );
         
-        error_log('NewsCrawlerOpenAISummarizer: Final parsed result: ' . print_r($result, true));
+        error_log('NewsCrawlerOpenAISummarizer: 最終解析結果: ' . print_r($result, true));
         return $result;
     }
     
@@ -293,7 +321,7 @@ class NewsCrawlerOpenAISummarizer {
      * 投稿内容に要約とまとめを追加
      */
     private function append_summary_to_post($content, $summary, $conclusion) {
-        error_log('NewsCrawlerOpenAISummarizer: append_summary_to_post called with summary: ' . $summary . ', conclusion: ' . $conclusion);
+        error_log('NewsCrawlerOpenAISummarizer: 要約「' . $summary . '」とまとめ「' . $conclusion . '」で投稿への要約追加が呼び出されました');
         
         // 要約とまとめのHTMLブロックを作成
         $summary_html = "\n\n";
@@ -321,11 +349,11 @@ class NewsCrawlerOpenAISummarizer {
         $summary_html .= '</div>';
         $summary_html .= '<!-- /wp:group -->';
         
-        error_log('NewsCrawlerOpenAISummarizer: Generated summary HTML: ' . $summary_html);
+        error_log('NewsCrawlerOpenAISummarizer: 要約HTMLが生成されました: ' . $summary_html);
         
         // 投稿内容の末尾に追加
         $result = $content . $summary_html;
-        error_log('NewsCrawlerOpenAISummarizer: Final content length: ' . strlen($result));
+        error_log('NewsCrawlerOpenAISummarizer: 最終コンテンツの長さ: ' . strlen($result) . '文字');
         
         return $result;
     }

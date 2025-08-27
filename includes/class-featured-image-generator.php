@@ -170,6 +170,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         if (isset($data['error'])) {
             error_log('Featured Image Generator - AI: API Error: ' . $data['error']['message']);
+            // ユーザーフレンドリーなエラーメッセージをログに追加
+            error_log('Featured Image Generator - AI: 画像生成中にエラーが発生いたしました。詳細: ' . $data['error']['message']);
         }
         
         return false;
@@ -1516,8 +1518,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * AI画像生成用のプロンプトを作成
      */
     private function create_ai_prompt($title, $keywords, $settings) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'modern, clean, professional';
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a featured image for a blog post about';
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'modern, clean, professional, engaging';
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create an attractive and engaging featured image for a blog post about';
         
         $keyword_text = !empty($keywords) ? implode(', ', array_slice($keywords, 0, 3)) : '';
         
@@ -1525,7 +1527,7 @@ class NewsCrawlerFeaturedImageGenerator {
         if (!empty($keyword_text)) {
             $prompt .= ' related to ' . $keyword_text;
         }
-        $prompt .= '. Style: ' . $style . '. No text overlay.';
+        $prompt .= '. Style: ' . $style . '. The image should be visually appealing and draw readers\' attention. No text overlay. High quality, professional appearance.';
         
         return $prompt;
     }
@@ -1562,8 +1564,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'modern, clean, professional';
-        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a featured image for a blog post about';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'modern, clean, professional, engaging';
+        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create an attractive and engaging featured image for a blog post about';
         
         // Unsplash設定
         $sanitized['unsplash_access_key'] = isset($input['unsplash_access_key']) ? sanitize_text_field($input['unsplash_access_key']) : '';
@@ -1644,7 +1646,13 @@ class NewsCrawlerFeaturedImageGenerator {
                 <table class="form-table">
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'modern, clean, professional'); ?>" size="50" /></td>
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'modern, clean, professional, engaging'); ?>" size="50" />
+                        <p class="description">画像のスタイルを指定してください（例：modern, clean, professional, engaging, vibrant, minimalist）</p></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">ベースプロンプト</th>
+                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create an attractive and engaging featured image for a blog post about'); ?></textarea>
+                        <p class="description">AI画像生成の基本となるプロンプトを指定してください。タイトルは自動で追加されます。</p></td>
                     </tr>
                 </table>
             </div>
