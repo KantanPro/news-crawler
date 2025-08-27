@@ -99,6 +99,9 @@ YouTube Data API v3のAPIキーが必要です。Google Cloud Consoleで取得�
 
 == Changelog ==
 
+= 1.7.4 (2025年1月27日) =
+* YouTube APIのクォータ制限対応
+
 = 1.7.3 (2025年8月27日) =
 * 重複した記事を生成のバグ修正
 
