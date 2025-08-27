@@ -207,6 +207,35 @@ class NewsCrawlerGenreSettings {
         add_settings_field(
             'twitter_access_token',
             'Access Token',
+        );
+        
+        // 重複チェック設定セクション
+        add_settings_section(
+            'duplicate_check_settings',
+            '重複チェック設定',
+            array($this, 'duplicate_check_section_callback'),
+            'news-crawler-basic'
+        );
+        
+        add_settings_field(
+            'duplicate_check_strictness',
+            '重複チェックの厳しさ',
+            array($this, 'duplicate_check_strictness_callback'),
+            'news-crawler-basic',
+            'duplicate_check_settings'
+        );
+        
+        add_settings_field(
+            'duplicate_check_period',
+            '重複チェック期間',
+            array($this, 'duplicate_check_period_callback'),
+            'news-crawler-basic',
+            'duplicate_check_settings'
+        );
+        
+        add_settings_field(
+            'twitter_access_token',
+            'Access Token',
             array($this, 'twitter_access_token_callback'),
             'news-crawler-basic',
             'twitter_sharer_settings'
@@ -393,6 +422,48 @@ class NewsCrawlerGenreSettings {
         echo '<p class="description">ハッシュタグをスペース区切りで入力してください（例：#ニュース #自動投稿）</p>';
     }
     
+    public function duplicate_check_section_callback() {
+        echo '<p>重複チェックの厳しさと期間を設定できます。より厳しい設定にすると重複を防げますが、誤ってスキップされる可能性も高くなります。</p>';
+    }
+    
+    public function duplicate_check_strictness_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $strictness = isset($options['duplicate_check_strictness']) ? $options['duplicate_check_strictness'] : 'medium';
+        
+        $strictness_levels = array(
+            'low' => '緩い（類似度70%以上で重複判定）',
+            'medium' => '標準（類似度80%以上で重複判定）',
+            'high' => '厳しい（類似度90%以上で重複判定）'
+        );
+        
+        echo '<select name="news_crawler_basic_settings[duplicate_check_strictness]">';
+        foreach ($strictness_levels as $value => $label) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($value, $strictness, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">重複チェックの厳しさを選択してください。標準設定を推奨します。</p>';
+    }
+    
+    public function duplicate_check_period_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $period = isset($options['duplicate_check_period']) ? $options['duplicate_check_period'] : '30';
+        
+        $periods = array(
+            '7' => '7日間',
+            '14' => '14日間',
+            '30' => '30日間（推奨）',
+            '60' => '60日間',
+            '90' => '90日間'
+        );
+        
+        echo '<select name="news_crawler_basic_settings[duplicate_check_period]">';
+        foreach ($periods as $value => $label) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($value, $period, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">重複チェックを行う期間を選択してください。期間が長いほど重複を防げますが、処理時間が長くなります。</p>';
+    }
+    
     public function featured_image_method_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
@@ -514,6 +585,19 @@ class NewsCrawlerGenreSettings {
         
         if (isset($input['twitter_hashtags'])) {
             $sanitized['twitter_hashtags'] = sanitize_text_field($input['twitter_hashtags']);
+        }
+        
+        // 重複チェック設定の処理
+        if (isset($input['duplicate_check_strictness'])) {
+            $allowed_strictness = array('low', 'medium', 'high');
+            $strictness = sanitize_text_field($input['duplicate_check_strictness']);
+            $sanitized['duplicate_check_strictness'] = in_array($strictness, $allowed_strictness) ? $strictness : 'medium';
+        }
+        
+        if (isset($input['duplicate_check_period'])) {
+            $allowed_periods = array('7', '14', '30', '60', '90');
+            $period = sanitize_text_field($input['duplicate_check_period']);
+            $sanitized['duplicate_check_period'] = in_array($period, $allowed_periods) ? $period : '30';
         }
         
         return $sanitized;

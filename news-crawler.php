@@ -820,22 +820,100 @@ class YouTubeCrawler {
     private function is_duplicate_video($video) {
         global $wpdb;
         $video_id = $video['video_id'];
+        $title = $video['title'];
         
-        // 過去30日以内の投稿のみをチェック（重複チェックを緩和）
-        $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+        // 基本設定から重複チェック設定を取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $strictness = isset($basic_settings['duplicate_check_strictness']) ? $basic_settings['duplicate_check_strictness'] : 'medium';
+        $period = isset($basic_settings['duplicate_check_period']) ? intval($basic_settings['duplicate_check_period']) : 30;
         
+        // 厳しさに応じて類似度の閾値を設定
+        $title_similarity_threshold = 0.85; // デフォルト
+        
+        switch ($strictness) {
+            case 'low':
+                $title_similarity_threshold = 0.75;
+                break;
+            case 'high':
+                $title_similarity_threshold = 0.95;
+                break;
+            default: // medium
+                $title_similarity_threshold = 0.85;
+                break;
+        }
+        
+        // 1. 動画IDの完全一致チェック（設定された期間）
         $existing_video = $wpdb->get_var($wpdb->prepare(
             "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
              INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
              WHERE pm.meta_key LIKE %s AND pm.meta_value = %s 
-             AND p.post_date >= %s 
+             AND p.post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)
              AND p.post_status IN ('publish', 'draft', 'pending', 'private')",
             '_youtube_video_%_id',
             $video_id,
-            $thirty_days_ago
+            $period
         ));
         
-        return $existing_video ? true : false;
+        if ($existing_video) {
+            error_log('NewsCrawler: 動画ID重複で重複を検出: ' . $video_id);
+            return true;
+        }
+        
+        // 2. タイトルの完全一致チェック（設定された期間）
+        $exact_title_match = $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} 
+             WHERE post_title = %s 
+             AND post_type = 'post' 
+             AND post_status IN ('publish', 'draft', 'pending', 'private') 
+             AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $title,
+            $period
+        ));
+        
+        if ($exact_title_match) {
+            error_log('NewsCrawler: 動画タイトル完全一致で重複を検出: ' . $title);
+            return true;
+        }
+        
+        // 3. 高類似度タイトルチェック（設定された期間、設定された類似度以上）
+        $similar_titles = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, post_title FROM {$wpdb->posts} 
+             WHERE post_type = 'post' 
+             AND post_status IN ('publish', 'draft', 'pending', 'private') 
+             AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $period
+        ));
+        
+        foreach ($similar_titles as $existing_post) {
+            $similarity = $this->calculate_title_similarity($title, $existing_post->post_title);
+            if ($similarity >= $title_similarity_threshold) {
+                error_log('NewsCrawler: 動画タイトル高類似度で重複を検出: ' . $title . ' vs ' . $existing_post->post_title . ' (類似度: ' . $similarity . ', 閾値: ' . $title_similarity_threshold . ')');
+                return true;
+            }
+        }
+        
+        // 4. チャンネル名とタイトルの組み合わせチェック（設定された期間）
+        if (!empty($video['channel_title'])) {
+            $channel_title_match = $wpdb->get_var($wpdb->prepare(
+                "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
+                 INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+                 WHERE pm.meta_key LIKE %s 
+                 AND pm.meta_value = %s 
+                 AND p.post_title = %s
+                 AND p.post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+                '_youtube_video_%_channel',
+                $video['channel_title'],
+                $title,
+                $period
+            ));
+            
+            if ($channel_title_match) {
+                error_log('NewsCrawler: チャンネル名とタイトルの組み合わせで重複を検出: ' . $video['channel_title'] . ' - ' . $title);
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     private function fetch_channel_videos($channel_id, $max_results = 20) {
@@ -2063,20 +2141,164 @@ class NewsCrawler {
     private function is_duplicate_article($article) {
         global $wpdb;
         $title = $article['title'];
-        $similar_titles = $wpdb->get_var($wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_title LIKE %s AND post_type = 'post' AND post_status IN ('publish', 'draft', 'pending') AND post_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
-            '%' . $wpdb->esc_like($title) . '%'
-        ));
-        if ($similar_titles) return true;
         
+        // 基本設定から重複チェック設定を取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $strictness = isset($basic_settings['duplicate_check_strictness']) ? $basic_settings['duplicate_check_strictness'] : 'medium';
+        $period = isset($basic_settings['duplicate_check_period']) ? intval($basic_settings['duplicate_check_period']) : 30;
+        
+        // 厳しさに応じて類似度の閾値を設定
+        $title_similarity_threshold = 0.8; // デフォルト
+        $content_similarity_threshold = 0.7; // デフォルト
+        
+        switch ($strictness) {
+            case 'low':
+                $title_similarity_threshold = 0.7;
+                $content_similarity_threshold = 0.6;
+                break;
+            case 'high':
+                $title_similarity_threshold = 0.9;
+                $content_similarity_threshold = 0.8;
+                break;
+            default: // medium
+                $title_similarity_threshold = 0.8;
+                $content_similarity_threshold = 0.7;
+                break;
+        }
+        
+        // 1. 完全一致タイトルチェック（設定された期間）
+        $exact_title_match = $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} 
+             WHERE post_title = %s 
+             AND post_type = 'post' 
+             AND post_status IN ('publish', 'draft', 'pending') 
+             AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $title,
+            $period
+        ));
+        if ($exact_title_match) {
+            error_log('NewsCrawler: 完全一致タイトルで重複を検出: ' . $title);
+            return true;
+        }
+        
+        // 2. 高類似度タイトルチェック（設定された期間、設定された類似度以上）
+        $similar_titles = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, post_title FROM {$wpdb->posts} 
+             WHERE post_type = 'post' 
+             AND post_status IN ('publish', 'draft', 'pending') 
+             AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $period
+        ));
+        
+        foreach ($similar_titles as $existing_post) {
+            $similarity = $this->calculate_title_similarity($title, $existing_post->post_title);
+            if ($similarity >= $title_similarity_threshold) {
+                error_log('NewsCrawler: 高類似度タイトルで重複を検出: ' . $title . ' vs ' . $existing_post->post_title . ' (類似度: ' . $similarity . ', 閾値: ' . $title_similarity_threshold . ')');
+                return true;
+            }
+        }
+        
+        // 3. URL重複チェック（設定された期間）
         if (!empty($article['link'])) {
             $existing_url = $wpdb->get_var($wpdb->prepare(
-                "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_news_source' AND meta_value = %s",
-                $article['link']
+                "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
+                 INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+                 WHERE pm.meta_key = '_news_source' 
+                 AND pm.meta_value = %s 
+                 AND p.post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+                $article['link'],
+                $period
             ));
-            if ($existing_url) return true;
+            if ($existing_url) {
+                error_log('NewsCrawler: URL重複で重複を検出: ' . $article['link']);
+                return true;
+            }
         }
+        
+        // 4. 内容の類似性チェック（設定された期間、設定された類似度以上）
+        if (!empty($article['excerpt']) || !empty($article['news_content'])) {
+            $content_text = '';
+            if (!empty($article['excerpt'])) $content_text .= $article['excerpt'] . ' ';
+            if (!empty($article['news_content'])) $content_text .= $article['news_content'] . ' ';
+            if (!empty($article['description'])) $content_text .= $article['description'] . ' ';
+            
+            $recent_posts = $wpdb->get_results($wpdb->prepare(
+                "SELECT ID, post_content FROM {$wpdb->posts} 
+                 WHERE post_type = 'post' 
+                 AND post_status IN ('publish', 'draft', 'pending') 
+                 AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+                $period
+            ));
+            
+            foreach ($recent_posts as $existing_post) {
+                $content_similarity = $this->calculate_content_similarity($content_text, $existing_post->post_content);
+                if ($content_similarity >= $content_similarity_threshold) {
+                    error_log('NewsCrawler: 内容類似性で重複を検出: ' . $title . ' (類似度: ' . $content_similarity . ', 閾値: ' . $content_similarity_threshold . ')');
+                    return true;
+                }
+            }
+        }
+        
         return false;
+    }
+    
+    /**
+     * タイトルの類似度を計算（レーベンシュタイン距離ベース）
+     */
+    private function calculate_title_similarity($title1, $title2) {
+        $title1 = mb_strtolower(trim($title1));
+        $title2 = mb_strtolower(trim($title2));
+        
+        // 完全一致
+        if ($title1 === $title2) {
+            return 1.0;
+        }
+        
+        // 片方が空
+        if (empty($title1) || empty($title2)) {
+            return 0.0;
+        }
+        
+        // レーベンシュタイン距離を計算
+        $distance = levenshtein($title1, $title2);
+        $max_length = max(mb_strlen($title1), mb_strlen($title2));
+        
+        // 類似度を計算（距離が小さいほど類似度が高い）
+        $similarity = 1 - ($distance / $max_length);
+        
+        return max(0, $similarity);
+    }
+    
+    /**
+     * 内容の類似度を計算（キーワードベース）
+     */
+    private function calculate_content_similarity($content1, $content2) {
+        $content1 = mb_strtolower(trim($content1));
+        $content2 = mb_strtolower(trim($content2));
+        
+        // 片方が空
+        if (empty($content1) || empty($content2)) {
+            return 0.0;
+        }
+        
+        // キーワードを抽出（2文字以上の単語）
+        preg_match_all('/\b\w{2,}\b/', $content1, $matches1);
+        preg_match_all('/\b\w{2,}\b/', $content2, $matches2);
+        
+        $keywords1 = array_unique($matches1[0]);
+        $keywords2 = array_unique($matches2[0]);
+        
+        if (empty($keywords1) || empty($keywords2)) {
+            return 0.0;
+        }
+        
+        // 共通キーワード数を計算
+        $common_keywords = array_intersect($keywords1, $keywords2);
+        $total_keywords = array_unique(array_merge($keywords1, $keywords2));
+        
+        $similarity = count($common_keywords) / count($total_keywords);
+        
+        return $similarity;
     }
     
     private function calculate_quality_score($article) {
