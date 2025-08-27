@@ -4,7 +4,7 @@ Tags: news, crawler, rss, automation, content, youtube
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.7.3
+Stable tag: 1.7.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 

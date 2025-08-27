@@ -19,8 +19,15 @@ class NewsCrawlerYouTubeCrawler {
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $this->api_key = isset($basic_settings['youtube_api_key']) ? $basic_settings['youtube_api_key'] : '';
         
+        // APIキーの設定状況をログに記録
+        if (empty($this->api_key)) {
+            error_log('YouTubeCrawler: APIキーが設定されていません');
+        } else {
+            error_log('YouTubeCrawler: APIキーが設定されています（長さ: ' . strlen($this->api_key) . '文字）');
+        }
+        
         // メニュー登録は新しいジャンル設定システムで管理されるため無効化
-        // add_action('admin_menu', array($this, 'add_admin_menu'));
+        // add_action('admin_menu', array($this, 'manual_run'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_youtube_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_youtube_crawler_test_fetch', array($this, 'test_fetch'));
@@ -376,6 +383,13 @@ class NewsCrawlerYouTubeCrawler {
         
         if (empty($api_key)) {
             return 'YouTube APIキーが設定されていません。基本設定で設定してください。';
+        }
+        
+        // クォータ超過チェック
+        $quota_exceeded_time = get_option('youtube_api_quota_exceeded', 0);
+        if ($quota_exceeded_time > 0 && (time() - $quota_exceeded_time) < 86400) { // 24時間
+            $remaining_hours = ceil((86400 - (time() - $quota_exceeded_time)) / 3600);
+            return 'YouTube APIのクォータ制限により、' . $remaining_hours . '時間後に再試行してください。';
         }
         
         $this->api_key = $api_key;
@@ -742,6 +756,12 @@ class NewsCrawlerYouTubeCrawler {
     }
     
     private function fetch_channel_videos($channel_id, $max_results = 20) {
+        // APIキーの検証
+        if (empty($this->api_key)) {
+            throw new Exception('YouTube APIキーが設定されていません');
+        }
+        
+        // クォータ効率化のため、検索APIと動画詳細APIを統合
         $api_url = 'https://www.googleapis.com/youtube/v3/search';
         $params = array(
             'key' => $this->api_key,
@@ -759,11 +779,38 @@ class NewsCrawlerYouTubeCrawler {
             throw new Exception('APIリクエストに失敗しました: ' . $response->get_error_message());
         }
         
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            
+            // クォータ超過エラーの特別処理
+            if ($response_code === 403 && strpos($body, 'quotaExceeded') !== false) {
+                // クォータ超過時刻を記録
+                update_option('youtube_api_quota_exceeded', time());
+                throw new Exception('YouTube APIのクォータ（利用制限）を超過しています。24時間後に再試行してください。');
+            }
+            
+            throw new Exception('APIリクエストが失敗しました。HTTPステータス: ' . $response_code . '、レスポンス: ' . substr($body, 0, 500));
+        }
+        
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
         
-        if (!$data || !isset($data['items'])) {
-            throw new Exception('APIレスポンスの解析に失敗しました');
+        // デバッグ情報をログに記録
+        error_log('YouTube API Response for channel ' . $channel_id . ': ' . print_r($data, true));
+        
+        if (!$data) {
+            throw new Exception('APIレスポンスのJSON解析に失敗しました。レスポンス: ' . substr($body, 0, 500));
+        }
+        
+        if (!isset($data['items'])) {
+            $error_message = isset($data['error']['message']) ? $data['error']['message'] : '不明なエラー';
+            $error_code = isset($data['error']['code']) ? $data['error']['code'] : '不明';
+            throw new Exception('APIレスポンスにitemsが含まれていません。エラー: ' . $error_message . ' (コード: ' . $error_code . ')');
+        }
+        
+        if (empty($data['items'])) {
+            throw new Exception('チャンネルに動画が存在しません。チャンネルID: ' . $channel_id);
         }
         
         $videos = array();
@@ -771,9 +818,8 @@ class NewsCrawlerYouTubeCrawler {
             $snippet = $item['snippet'];
             $video_id = $item['id']['videoId'];
             
-            // 動画の詳細情報を取得
-            $video_details = $this->fetch_video_details($video_id);
-            
+            // クォータ節約のため、基本的な情報のみを使用
+            // 動画の詳細情報は必要最小限に制限
             $videos[] = array(
                 'video_id' => $video_id,
                 'title' => $snippet['title'],
@@ -782,8 +828,8 @@ class NewsCrawlerYouTubeCrawler {
                 'channel_id' => $snippet['channelId'],
                 'published_at' => date('Y-m-d H:i:s', strtotime($snippet['publishedAt'])),
                 'thumbnail' => $snippet['thumbnails']['high']['url'] ?? '',
-                'duration' => $video_details['duration'] ?? '',
-                'view_count' => $video_details['view_count'] ?? 0
+                'duration' => '', // クォータ節約のため一時的に無効化
+                'view_count' => 0  // クォータ節約のため一時的に無効化
             );
         }
         
@@ -791,6 +837,12 @@ class NewsCrawlerYouTubeCrawler {
     }
     
     private function fetch_video_details($video_id) {
+        // APIキーの検証
+        if (empty($this->api_key)) {
+            error_log('YouTube Video Details: APIキーが設定されていません');
+            return array();
+        }
+        
         $api_url = 'https://www.googleapis.com/youtube/v3/videos';
         $params = array(
             'key' => $this->api_key,
@@ -802,13 +854,31 @@ class NewsCrawlerYouTubeCrawler {
         $response = wp_remote_get($url, array('timeout' => 30));
         
         if (is_wp_error($response)) {
+            error_log('YouTube Video Details: APIリクエストに失敗しました: ' . $response->get_error_message());
+            return array();
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            error_log('YouTube Video Details: APIリクエストが失敗しました。HTTPステータス: ' . $response_code . '、レスポンス: ' . substr($body, 0, 500));
             return array();
         }
         
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
         
-        if (!$data || !isset($data['items'][0])) {
+        // デバッグ情報をログに記録
+        error_log('YouTube Video Details API Response for video ' . $video_id . ': ' . print_r($data, true));
+        
+        if (!$data) {
+            error_log('YouTube Video Details: JSON解析に失敗しました。レスポンス: ' . substr($body, 0, 500));
+            return array();
+        }
+        
+        if (!isset($data['items']) || empty($data['items'])) {
+            $error_message = isset($data['error']['message']) ? $data['error']['message'] : '不明なエラー';
+            error_log('YouTube Video Details: itemsが含まれていません。エラー: ' . $error_message);
             return array();
         }
         
