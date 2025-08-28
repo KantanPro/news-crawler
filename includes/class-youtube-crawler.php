@@ -647,11 +647,8 @@ class NewsCrawlerYouTubeCrawler {
         update_post_meta($post_id, '_news_crawler_ready', false);
         
         // News Crawler用のメタデータを設定
-        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
-        update_post_meta($post_id, '_news_crawler_twitter', 'yes'); // カスタムツイート用
-        update_post_meta($post_id, '_news_crawler_template_x', 'yes'); // X用テンプレート
-        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes'); // Mastodon用テンプレート
-        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes'); // Bluesky用テンプレート
+        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
+        update_post_meta($post_id, '_news_crawler_ready', false);
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -680,8 +677,7 @@ class NewsCrawlerYouTubeCrawler {
             error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class NOT found');
         }
         
-        // X（Twitter）自動シェア（投稿成功後）
-        $this->maybe_share_to_twitter($post_id, $post_title);
+        // X（Twitter）自動シェア機能は削除済み
         
         // News Crawler用の処理のため、投稿ステータス変更を遅延実行
         if ($status !== 'draft') {
@@ -954,191 +950,9 @@ class NewsCrawlerYouTubeCrawler {
         return $category->term_id;
     }
     
-    /**
-     * 投稿成功後にX（Twitter）にシェアするかチェック
-     */
-    private function maybe_share_to_twitter($post_id, $post_title) {
-        // 基本設定からX（Twitter）設定を取得
-        $basic_settings = get_option('news_crawler_basic_settings', array());
-        
-        // X（Twitter）シェアが有効でない場合はスキップ
-        if (empty($basic_settings['twitter_enabled'])) {
-            return;
-        }
-        
-        // 必要な認証情報が不足している場合はスキップ
-        if (empty($basic_settings['twitter_bearer_token']) || empty($basic_settings['twitter_api_key']) || 
-            empty($basic_settings['twitter_api_secret']) || empty($basic_settings['twitter_access_token']) || 
-            empty($basic_settings['twitter_access_token_secret'])) {
-            error_log('YouTubeCrawler Twitter: 必要な認証情報が不足しています');
-            return;
-        }
-        
-        // 既にシェア済みの場合はスキップ
-        if (get_post_meta($post_id, '_twitter_shared', true)) {
-            return;
-        }
-        
-        // X（Twitter）にシェア
-        $this->share_to_twitter($post_id, $post_title, $basic_settings);
-    }
+    // X（Twitter）シェア機能は削除済み
     
-    /**
-     * X（Twitter）にシェア
-     */
-    private function share_to_twitter($post_id, $post_title, $settings) {
-        // メッセージを作成
-        $message = $this->create_twitter_message($post_id, $post_title, $settings);
-        
-        // 文字数制限チェック（280文字）
-        if (mb_strlen($message) > 280) {
-            $message = mb_substr($message, 0, 277) . '...';
-        }
-        
-        try {
-            // Twitter API v2で投稿
-            $result = $this->post_tweet($message, $settings);
-            
-            if ($result && isset($result['data']['id'])) {
-                // シェア成功
-                update_post_meta($post_id, '_twitter_shared', true);
-                update_post_meta($post_id, '_twitter_tweet_id', $result['data']['id']);
-                update_post_meta($post_id, '_twitter_shared_date', current_time('mysql'));
-                
-                error_log('YouTubeCrawler Twitter: 投稿ID ' . $post_id . ' をX（Twitter）にシェアしました。Tweet ID: ' . $result['data']['id']);
-            } else {
-                error_log('YouTubeCrawler Twitter: 投稿ID ' . $post_id . ' のX（Twitter）シェアに失敗しました');
-            }
-        } catch (Exception $e) {
-            error_log('YouTubeCrawler Twitter: 投稿ID ' . $post_id . ' のX（Twitter）シェアでエラーが発生: ' . $e->getMessage());
-        }
-    }
-    
-    /**
-     * Twitter投稿用メッセージを作成
-     */
-    private function create_twitter_message($post_id, $post_title, $settings) {
-        $template = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : '{title}';
-        
-        // カテゴリー情報を取得
-        $categories = get_the_category($post_id);
-        $category_names = array();
-        foreach ($categories as $category) {
-            $category_names[] = $category->name;
-        }
-        $category_text = implode('、', $category_names);
-        
-        // OGP設定を取得
-        $ogp_settings = get_option('news_crawler_ogp_settings', array());
-        $include_description = isset($ogp_settings['twitter_include_description']) ? $ogp_settings['twitter_include_description'] : true;
-        $description_length = isset($ogp_settings['twitter_description_length']) ? $ogp_settings['twitter_description_length'] : 100;
-        
-        // 抜粋を取得（HTMLタグを除去）
-        $post = get_post($post_id);
-        $excerpt = '';
-        if ($include_description) {
-            $excerpt = wp_strip_all_tags($post->post_excerpt);
-            if (empty($excerpt)) {
-                $excerpt = wp_strip_all_tags(wp_trim_words($post->post_content, $description_length / 10, ''));
-            }
-            // 指定された長さに制限
-            if (mb_strlen($excerpt) > $description_length) {
-                $excerpt = mb_substr($excerpt, 0, $description_length) . '...';
-            }
-        }
-        
-        // 変数を置換
-        $message = str_replace(
-            array('{title}', '{excerpt}', '{category}'),
-            array($post_title, $excerpt, $category_text),
-            $template
-        );
-        
-        // リンクを含める場合
-        if (!empty($settings['twitter_include_link'])) {
-            $permalink = get_permalink($post_id);
-            $message .= ' ' . $permalink;
-        }
-        
-        // ハッシュタグを追加
-        if (!empty($settings['twitter_hashtags'])) {
-            $hashtags = explode(' ', $settings['twitter_hashtags']);
-            foreach ($hashtags as $tag) {
-                if (!empty($tag) && strpos($tag, '#') === 0) {
-                    $message .= ' ' . $tag;
-                } elseif (!empty($tag)) {
-                    $message .= ' #' . ltrim($tag, '#');
-                }
-            }
-        }
-        
-        return $message;
-    }
-    
-    /**
-     * Twitter API v2で投稿
-     */
-    private function post_tweet($message, $settings) {
-        // OAuth 1.0a認証ヘッダーを作成
-        $oauth = array(
-            'oauth_consumer_key' => $settings['twitter_api_key'],
-            'oauth_nonce' => wp_generate_password(32, false),
-            'oauth_signature_method' => 'HMAC-SHA1',
-            'oauth_timestamp' => time(),
-            'oauth_token' => $settings['twitter_access_token'],
-            'oauth_version' => '1.0'
-        );
-        
-        $url = 'https://api.twitter.com/2/tweets';
-        $method = 'POST';
-        
-        // パラメータをソート
-        ksort($oauth);
-        
-        // 署名ベース文字列を作成
-        $base_string = $method . '&' . rawurlencode($url) . '&';
-        $base_string .= rawurlencode(http_build_query($oauth, '', '&', PHP_QUERY_RFC3986));
-        
-        // 署名キーを作成
-        $signature_key = rawurlencode($settings['twitter_api_secret']) . '&' . rawurlencode($settings['twitter_access_token_secret']);
-        
-        // 署名を生成
-        $oauth['oauth_signature'] = base64_encode(hash_hmac('sha1', $base_string, $signature_key, true));
-        
-        // Authorizationヘッダーを作成
-        $auth_header = 'OAuth ';
-        $auth_parts = array();
-        foreach ($oauth as $key => $value) {
-            $auth_parts[] = $key . '="' . rawurlencode($value) . '"';
-        }
-        $auth_header .= implode(', ', $auth_parts);
-        
-        // リクエストを送信
-        $response = wp_remote_post($url, array(
-            'headers' => array(
-                'Authorization' => $auth_header,
-                'Content-Type' => 'application/json'
-            ),
-            'body' => json_encode(array(
-                'text' => $message
-            )),
-            'timeout' => 30
-        ));
-        
-        if (is_wp_error($response)) {
-            throw new Exception('リクエストエラー: ' . $response->get_error_message());
-        }
-        
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        
-        if (wp_remote_retrieve_response_code($response) !== 201) {
-            $error_message = isset($data['errors'][0]['message']) ? $data['errors'][0]['message'] : '不明なエラー';
-            throw new Exception('Twitter API エラー: ' . $error_message);
-        }
-        
-        return $data;
-    }
+    // X（Twitter）シェア機能は削除済み
     
     /**
      * News Crawler用の処理のための投稿ステータス変更を遅延実行
