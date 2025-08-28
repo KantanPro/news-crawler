@@ -167,6 +167,14 @@ class NewsCrawlerGenreSettings {
             'summary_generation_settings'
         );
         
+        add_settings_field(
+            'summary_to_excerpt',
+            '要約をexcerptに設定',
+            array($this, 'summary_to_excerpt_callback'),
+            'news-crawler-basic',
+            'summary_generation_settings'
+        );
+        
         // X（Twitter）自動シェア設定セクションは廃止
         
         // 重複チェック設定セクション
@@ -279,6 +287,14 @@ class NewsCrawlerGenreSettings {
         }
         echo '</select>';
         echo '<p class="description">要約生成に使用するOpenAIモデルを選択してください。</p>';
+    }
+    
+    public function summary_to_excerpt_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $enabled = isset($options['summary_to_excerpt']) ? $options['summary_to_excerpt'] : true;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[summary_to_excerpt]" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[summary_to_excerpt]">生成された要約をshort excerptに設定する</label>';
+        echo '<p class="description">AI要約生成時に、生成された要約を投稿のexcerptフィールドに自動設定します。</p>';
     }
     
     // X（Twitter）自動シェア設定セクション
@@ -448,6 +464,10 @@ class NewsCrawlerGenreSettings {
             $allowed_models = array('gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo');
             $model = sanitize_text_field($input['summary_generation_model']);
             $sanitized['summary_generation_model'] = in_array($model, $allowed_models) ? $model : 'gpt-3.5-turbo';
+        }
+        
+        if (isset($input['summary_to_excerpt'])) {
+            $sanitized['summary_to_excerpt'] = (bool) $input['summary_to_excerpt'];
         }
         
         // テンプレート設定の処理
@@ -636,7 +656,7 @@ class NewsCrawlerGenreSettings {
             <div id="genre-settings-container">
                 <!-- ジャンル設定フォーム -->
                 <div class="card" style="max-width: none;">
-                    <h2>ジャンル設定の追加・編集</h2>
+                    <h2>投稿設定の追加・編集</h2>
                     <form id="genre-settings-form">
                         <input type="hidden" id="genre-id" name="genre_id" value="">
                         
@@ -1208,17 +1228,17 @@ class NewsCrawlerGenreSettings {
                         action: 'force_auto_posting_execution',
                         nonce: '<?php echo wp_create_nonce('auto_posting_force_nonce'); ?>'
                     },
-                    success: function(response) {
-                        if (response.success) {
-                            resultContent.html('✅ 強制実行完了\n\n' + response.data);
-                            // レポートを更新
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
-                        } else {
-                            resultContent.html('❌ 強制実行失敗\n\n' + response.data);
-                        }
-                    },
+                                success: function(response) {
+                if (response.success) {
+                    resultContent.html('✅ 強制実行完了\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                    // レポートを更新
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                }
+            },
                     error: function() {
                         resultContent.html('❌ 通信エラーが発生しました');
                     },
@@ -2163,31 +2183,47 @@ class NewsCrawlerGenreSettings {
             error_log('Execute Auto Posting for Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
             
             if ($existing_posts >= $max_posts) {
-                error_log('Execute Auto Posting for Genre - Post limit reached');
+                error_log('Execute Auto Posting for Genre - Post limit reached for genre: ' . $setting['genre_name']);
+                error_log('Execute Auto Posting for Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
                 $this->log_auto_posting_execution($genre_id, 'skipped', "投稿数上限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）");
                 return;
             }
             
             // 実行可能な投稿数を計算
             $available_posts = $max_posts - $existing_posts;
-            error_log('Execute Auto Posting for Genre - Available posts: ' . $available_posts);
+            error_log('Execute Auto Posting for Genre - Available posts: ' . $available_posts . ' for genre: ' . $setting['genre_name']);
             
             // クロール実行
             error_log('Execute Auto Posting for Genre - Starting crawl execution...');
             $result = '';
+            $post_id = null;
+            
             if ($setting['content_type'] === 'news') {
                 error_log('Execute Auto Posting for Genre - Executing news crawling...');
                 $result = $this->execute_news_crawling_with_limit($setting, $available_posts);
+                
+                // 投稿IDを抽出（結果から投稿IDを取得）
+                if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
+                    $post_id = intval($matches[1]);
+                    error_log('Execute Auto Posting for Genre - Extracted post ID: ' . $post_id);
+                }
             } elseif ($setting['content_type'] === 'youtube') {
                 error_log('Execute Auto Posting for Genre - Executing YouTube crawling...');
                 $result = $this->execute_youtube_crawling_with_limit($setting, $available_posts);
+                
+                // 投稿IDを抽出（結果から投稿IDを取得）
+                if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
+                    $post_id = intval($matches[1]);
+                    error_log('Execute Auto Posting for Genre - Extracted post ID: ' . $post_id);
+                }
             }
             
             error_log('Execute Auto Posting for Genre - Crawl execution result: ' . $result);
+            error_log('Execute Auto Posting for Genre - Extracted post ID: ' . ($post_id ?: 'Not found'));
             
-            // 実行結果をログに記録
+            // 実行結果をログに記録（投稿IDを含める）
             error_log('Execute Auto Posting for Genre - Logging success result...');
-            $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}");
+            $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}", $post_id);
             error_log('Execute Auto Posting for Genre - Success logged');
             
         } catch (Exception $e) {
@@ -2205,37 +2241,52 @@ class NewsCrawlerGenreSettings {
     private function pre_execution_check($setting) {
         $result = array('can_execute' => true, 'reason' => '');
         
+        error_log('Pre Execution Check - Starting check for genre: ' . $setting['genre_name']);
+        
         // 基本設定のチェック
         if ($setting['content_type'] === 'youtube') {
             $basic_settings = get_option('news_crawler_basic_settings', array());
             if (empty($basic_settings['youtube_api_key'])) {
                 $result['can_execute'] = false;
                 $result['reason'] = 'YouTube APIキーが設定されていません';
+                error_log('Pre Execution Check - YouTube API key not set');
                 return $result;
             }
+            error_log('Pre Execution Check - YouTube API key check passed');
         }
         
         // ニュースソースのチェック
-        if ($setting['content_type'] === 'news' && empty($setting['news_sources'])) {
-            $result['can_execute'] = false;
-            $result['reason'] = 'ニュースソースが設定されていません';
-            return $result;
+        if ($setting['content_type'] === 'news') {
+            if (empty($setting['news_sources'])) {
+                $result['can_execute'] = false;
+                $result['reason'] = 'ニュースソースが設定されていません';
+                error_log('Pre Execution Check - News sources not set for news content type');
+                return $result;
+            }
+            error_log('Pre Execution Check - News sources check passed: ' . implode(', ', $setting['news_sources']));
         }
         
         // YouTubeチャンネルのチェック
-        if ($setting['content_type'] === 'youtube' && empty($setting['youtube_channels'])) {
-            $result['can_execute'] = false;
-            $result['reason'] = 'YouTubeチャンネルが設定されていません';
-            return $result;
+        if ($setting['content_type'] === 'youtube') {
+            if (empty($setting['youtube_channels'])) {
+                $result['can_execute'] = false;
+                $result['reason'] = 'YouTubeチャンネルが設定されていません';
+                error_log('Pre Execution Check - YouTube channels not set for YouTube content type');
+                return $result;
+            }
+            error_log('Pre Execution Check - YouTube channels check passed: ' . implode(', ', $setting['youtube_channels']));
         }
         
         // キーワードのチェック
         if (empty($setting['keywords'])) {
             $result['can_execute'] = false;
             $result['reason'] = 'キーワードが設定されていません';
+            error_log('Pre Execution Check - Keywords not set');
             return $result;
         }
+        error_log('Pre Execution Check - Keywords check passed: ' . implode(', ', $setting['keywords']));
         
+        error_log('Pre Execution Check - All checks passed for genre: ' . $setting['genre_name']);
         return $result;
     }
     
@@ -2374,8 +2425,8 @@ class NewsCrawlerGenreSettings {
     /**
      * 自動投稿の実行ログを記録
      */
-    private function log_auto_posting_execution($genre_id, $status, $message = '') {
-        error_log('Log Auto Posting Execution - Starting to log for genre ID: ' . $genre_id . ', status: ' . $status . ', message: ' . $message);
+    private function log_auto_posting_execution($genre_id, $status, $message = '', $post_id = null) {
+        error_log('Log Auto Posting Execution - Starting to log for genre ID: ' . $genre_id . ', status: ' . $status . ', message: ' . $message . ', post_id: ' . ($post_id ?: 'null'));
         
         $logs = get_option('news_crawler_auto_posting_logs', array());
         error_log('Log Auto Posting Execution - Current logs count: ' . count($logs));
@@ -2384,8 +2435,15 @@ class NewsCrawlerGenreSettings {
             'genre_id' => $genre_id,
             'status' => $status,
             'message' => $message,
-            'timestamp' => current_time('mysql')
+            'timestamp' => current_time('mysql'),
+            'execution_time' => current_time('mysql') // execution_timeフィールドを追加
         );
+        
+        // 投稿IDが提供されている場合は追加
+        if ($post_id) {
+            $new_log_entry['post_id'] = $post_id;
+            error_log('Log Auto Posting Execution - Added post_id: ' . $post_id);
+        }
         
         error_log('Log Auto Posting Execution - New log entry: ' . print_r($new_log_entry, true));
         
@@ -2426,8 +2484,56 @@ class NewsCrawlerGenreSettings {
      * 自動投稿実行レポートを表示
      */
     public function render_auto_posting_reports() {
-        // 個別ジャンルレポートは非表示
-        return;
+        // 成功した最近の投稿履歴を1つ表示
+        $logs = get_option('news_crawler_auto_posting_logs', array());
+        
+        if (!empty($logs)) {
+            // 成功した投稿のログをフィルタリング
+            $success_logs = array_filter($logs, function($log) {
+                return $log['status'] === 'success' && !empty($log['post_id']);
+            });
+            
+            if (!empty($success_logs)) {
+                // 最新の成功ログを取得
+                $latest_success = end($success_logs);
+                
+                echo '<div class="card" style="margin-bottom: 20px;">';
+                echo '<h3>最近の成功投稿</h3>';
+                echo '<div style="background: #f0f8ff; padding: 15px; border-left: 4px solid #0073aa; border-radius: 4px;">';
+                
+                // 投稿タイトルを表示
+                $post_title = get_the_title($latest_success['post_id']);
+                if ($post_title) {
+                    echo '<p><strong>投稿タイトル:</strong> ' . esc_html($post_title) . '</p>';
+                }
+                
+                // 投稿日時を表示
+                if (!empty($latest_success['execution_time'])) {
+                    $execution_date = date('Y年n月j日 H:i', strtotime($latest_success['execution_time']));
+                    echo '<p><strong>投稿日時:</strong> ' . esc_html($execution_date) . '</p>';
+                }
+                
+                // ジャンル名を表示
+                if (!empty($latest_success['genre_id'])) {
+                    $genre_settings = $this->get_genre_settings();
+                    if (isset($genre_settings[$latest_success['genre_id']])) {
+                        $genre_name = $genre_settings[$latest_success['genre_id']]['genre_name'];
+                        echo '<p><strong>設定名:</strong> ' . esc_html($genre_name) . '</p>';
+                    }
+                }
+                
+                // 投稿へのリンクを表示
+                if (!empty($latest_success['post_id'])) {
+                    $post_url = get_permalink($latest_success['post_id']);
+                    if ($post_url) {
+                        echo '<p><a href="' . esc_url($post_url) . '" target="_blank" class="button button-small">投稿を表示</a></p>';
+                    }
+                }
+                
+                echo '</div>';
+                echo '</div>';
+            }
+        }
     }
     
     /**
@@ -2781,6 +2887,9 @@ class NewsCrawlerGenreSettings {
             }
             
             error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled - FORCING EXECUTION');
+            
+            // 設定の詳細をログに記録
+            error_log('Force Auto Posting Execution - Genre settings: ' . print_r($setting, true));
             
             // 強制実行時は開始実行日時の制限を無視して即座に実行
             // 次回実行時刻は既存の自動投稿設定のスケジュールを復元・維持

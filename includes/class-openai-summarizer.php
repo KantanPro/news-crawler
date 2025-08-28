@@ -120,11 +120,24 @@ class NewsCrawlerOpenAISummarizer {
                 // 投稿内容に要約とまとめを追加
                 $updated_content = $this->append_summary_to_post($post->post_content, $summary_result['summary'], $summary_result['conclusion']);
                 
-                // 投稿を更新
-                $update_result = wp_update_post(array(
+                // 基本設定で要約をexcerptに設定するかどうかを確認
+                $basic_settings = get_option('news_crawler_basic_settings', array());
+                $summary_to_excerpt = isset($basic_settings['summary_to_excerpt']) ? $basic_settings['summary_to_excerpt'] : true;
+                
+                $post_update_data = array(
                     'ID' => $post_id,
                     'post_content' => $updated_content
-                ));
+                );
+                
+                // 設定が有効な場合のみexcerptを設定
+                if ($summary_to_excerpt) {
+                    $excerpt = wp_trim_words($summary_result['summary'], 25, '...');
+                    $post_update_data['post_excerpt'] = $excerpt;
+                    error_log('NewsCrawlerOpenAISummarizer: 要約をexcerptに設定しました: ' . $excerpt);
+                }
+                
+                // 投稿を更新
+                $update_result = wp_update_post($post_update_data);
                 
                 error_log('NewsCrawlerOpenAISummarizer: 投稿更新結果: ' . print_r($update_result, true));
                 
