@@ -2392,7 +2392,7 @@ class NewsCrawlerGenreSettings {
      * 自動投稿実行レポートを表示
      */
     public function render_auto_posting_reports() {
-        // 成功した最近の投稿履歴を1つ表示
+        // 成功した投稿履歴を全て表示
         $logs = get_option('news_crawler_auto_posting_logs', array());
         
         if (!empty($logs)) {
@@ -2402,43 +2402,61 @@ class NewsCrawlerGenreSettings {
             });
             
             if (!empty($success_logs)) {
-                // 最新の成功ログを取得
-                $latest_success = end($success_logs);
+                // 成功ログを日時順にソート（最新が上）
+                usort($success_logs, function($a, $b) {
+                    return strtotime($b['execution_time']) - strtotime($a['execution_time']);
+                });
                 
                 echo '<div class="card" style="margin-bottom: 20px;">';
                 echo '<h3>最近の成功投稿</h3>';
-                echo '<div style="background: #f0f8ff; padding: 15px; border-left: 4px solid #0073aa; border-radius: 4px;">';
                 
-                // 投稿タイトルを表示
-                $post_title = get_the_title($latest_success['post_id']);
-                if ($post_title) {
-                    echo '<p><strong>投稿タイトル:</strong> ' . esc_html($post_title) . '</p>';
-                }
-                
-                // 投稿日時を表示
-                if (!empty($latest_success['execution_time'])) {
-                    $execution_date = date('Y年n月j日 H:i', strtotime($latest_success['execution_time']));
-                    echo '<p><strong>投稿日時:</strong> ' . esc_html($execution_date) . '</p>';
-                }
-                
-                // ジャンル名を表示
-                if (!empty($latest_success['genre_id'])) {
-                    $genre_settings = $this->get_genre_settings();
-                    if (isset($genre_settings[$latest_success['genre_id']])) {
-                        $genre_name = $genre_settings[$latest_success['genre_id']]['genre_name'];
-                        echo '<p><strong>設定名:</strong> ' . esc_html($genre_name) . '</p>';
+                // 全ての成功投稿レポートを表示
+                foreach ($success_logs as $index => $success_log) {
+                    $is_latest = ($index === 0);
+                    $border_color = $is_latest ? '#0073aa' : '#4CAF50';
+                    $background_color = $is_latest ? '#f0f8ff' : '#f0fff0';
+                    
+                    echo '<div style="background: ' . $background_color . '; padding: 15px; border-left: 4px solid ' . $border_color . '; border-radius: 4px; margin-bottom: 15px;">';
+                    
+                    // 最新の投稿かどうかを表示
+                    if ($is_latest) {
+                        echo '<p style="margin: 0 0 10px 0; font-weight: bold; color: #0073aa;">最新の成功投稿</p>';
+                    } else {
+                        echo '<p style="margin: 0 0 10px 0; font-weight: bold; color: #4CAF50;">成功投稿 #' . ($index + 1) . '</p>';
                     }
-                }
-                
-                // 投稿へのリンクを表示
-                if (!empty($latest_success['post_id'])) {
-                    $post_url = get_permalink($latest_success['post_id']);
-                    if ($post_url) {
-                        echo '<p><a href="' . esc_url($post_url) . '" target="_blank" class="button button-small">投稿を表示</a></p>';
+                    
+                    // 投稿タイトルを表示
+                    $post_title = get_the_title($success_log['post_id']);
+                    if ($post_title) {
+                        echo '<p><strong>投稿タイトル:</strong> ' . esc_html($post_title) . '</p>';
                     }
+                    
+                    // 投稿日時を表示
+                    if (!empty($success_log['execution_time'])) {
+                        $execution_date = date('Y年n月j日 H:i', strtotime($success_log['execution_time']));
+                        echo '<p><strong>投稿日時:</strong> ' . esc_html($execution_date) . '</p>';
+                    }
+                    
+                    // ジャンル名を表示
+                    if (!empty($success_log['genre_id'])) {
+                        $genre_settings = $this->get_genre_settings();
+                        if (isset($genre_settings[$success_log['genre_id']])) {
+                            $genre_name = $genre_settings[$success_log['genre_id']]['genre_name'];
+                            echo '<p><strong>設定名:</strong> ' . esc_html($genre_name) . '</p>';
+                        }
+                    }
+                    
+                    // 投稿へのリンクを表示
+                    if (!empty($success_log['post_id'])) {
+                        $post_url = get_permalink($success_log['post_id']);
+                        if ($post_url) {
+                            echo '<p><a href="' . esc_url($post_url) . '" target="_blank" class="button button-small">投稿を表示</a></p>';
+                        }
+                    }
+                    
+                    echo '</div>';
                 }
                 
-                echo '</div>';
                 echo '</div>';
             }
         }
