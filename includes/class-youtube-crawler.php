@@ -771,6 +771,31 @@ class NewsCrawlerYouTubeCrawler {
         return $existing_video ? $existing_video : false;
     }
     
+    /**
+     * 動画が期間制限内かどうかをチェック
+     */
+    private function is_video_within_age_limit($published_at) {
+        // 基本設定から期間制限設定を取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        
+        // 期間制限が無効の場合は常にtrue
+        if (!isset($basic_settings['enable_content_age_limit']) || !$basic_settings['enable_content_age_limit']) {
+            return true;
+        }
+        
+        // 制限月数を取得（デフォルト12ヶ月）
+        $limit_months = isset($basic_settings['content_age_limit_months']) ? intval($basic_settings['content_age_limit_months']) : 12;
+        
+        // 制限日時を計算
+        $limit_date = date('Y-m-d H:i:s', strtotime("-{$limit_months} months"));
+        
+        // 動画の公開日時を取得
+        $video_date = date('Y-m-d H:i:s', strtotime($published_at));
+        
+        // 動画の公開日が制限日時より新しい場合はtrue
+        return $video_date >= $limit_date;
+    }
+    
     private function fetch_channel_videos($channel_id, $max_results = 20) {
         // APIキーの検証
         if (empty($this->api_key)) {
@@ -833,6 +858,11 @@ class NewsCrawlerYouTubeCrawler {
         foreach ($data['items'] as $item) {
             $snippet = $item['snippet'];
             $video_id = $item['id']['videoId'];
+            
+            // 期間制限をチェック
+            if (!$this->is_video_within_age_limit($snippet['publishedAt'])) {
+                continue; // 古い動画はスキップ
+            }
             
             // クォータ節約のため、基本的な情報のみを使用
             // 動画の詳細情報は必要最小限に制限

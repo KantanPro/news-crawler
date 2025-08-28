@@ -202,7 +202,29 @@ class NewsCrawlerGenreSettings {
             'duplicate_check_settings'
         );
         
-
+        // コンテンツ取得期間制限設定セクション
+        add_settings_section(
+            'content_age_limit_settings',
+            'コンテンツ取得期間制限',
+            array($this, 'content_age_limit_section_callback'),
+            'news-crawler-basic'
+        );
+        
+        add_settings_field(
+            'enable_content_age_limit',
+            '期間制限を有効にする',
+            array($this, 'enable_content_age_limit_callback'),
+            'news-crawler-basic',
+            'content_age_limit_settings'
+        );
+        
+        add_settings_field(
+            'content_age_limit_months',
+            '過去何ヶ月まで取得するか',
+            array($this, 'content_age_limit_months_callback'),
+            'news-crawler-basic',
+            'content_age_limit_settings'
+        );
         
         add_settings_field(
             'twitter_hashtags',
@@ -410,6 +432,41 @@ class NewsCrawlerGenreSettings {
         echo '<p class="description">重複チェックを行う期間を選択してください。期間が長いほど重複を防げますが、処理時間が長くなります。</p>';
     }
     
+    public function content_age_limit_section_callback() {
+        echo '<p>古いコンテンツ（記事や動画）の取得を制限する設定です。何年も前の古いコンテンツが投稿されることを防げます。</p>';
+        echo '<p><strong>例：</strong>「過去12ヶ月まで」に設定すると、1年以上前の記事や動画は自動的に除外されます。</p>';
+    }
+    
+    public function enable_content_age_limit_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $enabled = isset($options['enable_content_age_limit']) ? $options['enable_content_age_limit'] : false;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[enable_content_age_limit]" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[enable_content_age_limit]">古いコンテンツの取得を制限する</label>';
+        echo '<p class="description">チェックを入れると、指定した期間より古いコンテンツは投稿されません。</p>';
+    }
+    
+    public function content_age_limit_months_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $months = isset($options['content_age_limit_months']) ? $options['content_age_limit_months'] : '12';
+        
+        $month_options = array(
+            '3' => '3ヶ月',
+            '6' => '6ヶ月',
+            '12' => '12ヶ月（1年）',
+            '18' => '18ヶ月',
+            '24' => '24ヶ月（2年）',
+            '36' => '36ヶ月（3年）',
+            '60' => '60ヶ月（5年）'
+        );
+        
+        echo '<select name="news_crawler_basic_settings[content_age_limit_months]">';
+        foreach ($month_options as $value => $label) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($value, $months, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">この期間より古いコンテンツは取得・投稿されません。適切な期間を選択してください。</p>';
+    }
+    
     public function featured_image_method_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
@@ -520,6 +577,17 @@ class NewsCrawlerGenreSettings {
             $allowed_periods = array('7', '14', '30', '60', '90');
             $period = sanitize_text_field($input['duplicate_check_period']);
             $sanitized['duplicate_check_period'] = in_array($period, $allowed_periods) ? $period : '30';
+        }
+        
+        // コンテンツ取得期間制限設定の処理
+        if (isset($input['enable_content_age_limit'])) {
+            $sanitized['enable_content_age_limit'] = (bool) $input['enable_content_age_limit'];
+        }
+        
+        if (isset($input['content_age_limit_months'])) {
+            $allowed_months = array('3', '6', '12', '18', '24', '36', '60');
+            $months = sanitize_text_field($input['content_age_limit_months']);
+            $sanitized['content_age_limit_months'] = in_array($months, $allowed_months) ? $months : '12';
         }
         
         return $sanitized;

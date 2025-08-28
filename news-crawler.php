@@ -2679,11 +2679,18 @@ class NewsCrawler {
             $namespaces = $item->getNamespaces(true);
             $dc = $item->children($namespaces['dc'] ?? '');
 
+            $article_date = date('Y-m-d H:i:s', strtotime((string)($item->pubDate ?? $item->published ?? $dc->date ?? 'now')));
+            
+            // 期間制限をチェック
+            if (!$this->is_article_within_age_limit($article_date)) {
+                continue; // 古い記事はスキップ
+            }
+
             $article = array(
                 'title' => (string)($item->title ?? ''),
                 'link' => (string)($item->link['href'] ?? $item->link ?? ''),
                 'description' => (string)($item->description ?? $item->summary ?? ''),
-                'article_date' => date('Y-m-d H:i:s', strtotime((string)($item->pubDate ?? $item->published ?? $dc->date ?? 'now'))),
+                'article_date' => $article_date,
                 'source' => $source_url
             );
             $article['excerpt'] = wp_strip_all_tags($article['description']);
@@ -2792,6 +2799,11 @@ class NewsCrawler {
                         }
                     }
                     
+                    // 期間制限をチェック
+                    if (!empty($article_date) && !$this->is_article_within_age_limit($article_date)) {
+                        continue; // 古い記事はスキップ
+                    }
+                    
                     $articles[] = array(
                         'title' => $title,
                         'link' => $link,
@@ -2844,13 +2856,18 @@ class NewsCrawler {
                 }
             }
 
-            $articles[] = array(
-                'title' => trim($title),
-                'excerpt' => $excerpt,
-                'news_content' => implode("\n\n", $paragraphs),
-                'article_date' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '',
-                'source' => $source,
-            );
+            // 期間制限をチェック
+            if (!empty($article_date) && !$this->is_article_within_age_limit($article_date)) {
+                // 古い記事はスキップ
+            } else {
+                $articles[] = array(
+                    'title' => trim($title),
+                    'excerpt' => $excerpt,
+                    'news_content' => implode("\n\n", $paragraphs),
+                    'article_date' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '',
+                    'source' => $source,
+                );
+            }
         }
         
         return $articles;
@@ -2893,6 +2910,31 @@ class NewsCrawler {
         $clean_name = ucfirst($clean_name); // 最初の文字を大文字に
         
         return $clean_name;
+    }
+    
+    /**
+     * 記事が期間制限内かどうかをチェック
+     */
+    private function is_article_within_age_limit($article_date) {
+        // 基本設定から期間制限設定を取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        
+        // 期間制限が無効の場合は常にtrue
+        if (!isset($basic_settings['enable_content_age_limit']) || !$basic_settings['enable_content_age_limit']) {
+            return true;
+        }
+        
+        // 制限月数を取得（デフォルト12ヶ月）
+        $limit_months = isset($basic_settings['content_age_limit_months']) ? intval($basic_settings['content_age_limit_months']) : 12;
+        
+        // 制限日時を計算
+        $limit_date = date('Y-m-d H:i:s', strtotime("-{$limit_months} months"));
+        
+        // 記事の日時を取得
+        $article_datetime = date('Y-m-d H:i:s', strtotime($article_date));
+        
+        // 記事の日時が制限日時より新しい場合はtrue
+        return $article_datetime >= $limit_date;
     }
     
     private function build_absolute_url($base_url, $relative_url) {
