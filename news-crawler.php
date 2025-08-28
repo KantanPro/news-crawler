@@ -23,6 +23,8 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php'
 require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-manager.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-settings.php';
 
 
 // プラグイン初期化
@@ -71,6 +73,16 @@ function news_crawler_init() {
     // 投稿編集画面の要約生成クラスを初期化
     if (class_exists('NewsCrawlerPostEditorSummary')) {
         new NewsCrawlerPostEditorSummary();
+    }
+    
+    // OGP管理クラスを初期化
+    if (class_exists('NewsCrawlerOGPManager')) {
+        new NewsCrawlerOGPManager();
+    }
+    
+    // OGP設定クラスを初期化
+    if (class_exists('NewsCrawlerOGPSettings')) {
+        new NewsCrawlerOGPSettings();
     }
     
 

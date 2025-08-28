@@ -26,6 +26,7 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_check_auto_posting_schedule', array($this, 'check_auto_posting_schedule'));
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
+        add_action('wp_ajax_reset_cron_schedule', array($this, 'reset_cron_schedule'));
         
         // 自動投稿のスケジュール処理
         add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
@@ -44,11 +45,11 @@ class NewsCrawlerGenreSettings {
             30
         );
         
-        // ジャンル設定サブメニュー
+        // 投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'ジャンル設定',
-            'ジャンル設定',
+            '投稿設定',
+            '投稿設定',
             'manage_options',
             'news-crawler-main',
             array($this, 'main_admin_page')
@@ -623,7 +624,7 @@ class NewsCrawlerGenreSettings {
         $genre_settings = $this->get_genre_settings();
         ?>
         <div class="wrap">
-            <h1>News Crawler - ジャンル設定</h1>
+            <h1>News Crawler - 投稿設定</h1>
             
             <!-- デバッグ情報表示エリア -->
             <div id="debug-info" style="margin-bottom: 20px; display: none;">
@@ -834,6 +835,7 @@ class NewsCrawlerGenreSettings {
                         
                         <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
                         <button type="button" id="check-schedule" class="button button-secondary">スケジュール状況を確認</button>
+                        <button type="button" id="reset-cron" class="button button-secondary">Cronスケジュールをリセット</button>
                         <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
                         
                         <div id="test-result" style="margin-top: 15px; display: none;">
@@ -1154,6 +1156,39 @@ class NewsCrawlerGenreSettings {
                     },
                     complete: function() {
                         button.prop('disabled', false).text('スケジュール状況を確認');
+                    }
+                });
+            });
+            
+            // Cronスケジュールリセット
+            $('#reset-cron').click(function() {
+                var button = $(this);
+                var resultDiv = $('#test-result');
+                var resultContent = $('#test-result-content');
+                
+                button.prop('disabled', true).text('リセット中...');
+                resultDiv.show();
+                resultContent.html('Cronスケジュールをリセット中...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'reset_cron_schedule',
+                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultContent.html('✅ ' + response.data);
+                        } else {
+                            resultContent.html('❌ リセット失敗\n\n' + response.data);
+                        }
+                    },
+                    error: function() {
+                        resultContent.html('❌ 通信エラーが発生しました');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('Cronスケジュールをリセット');
                     }
                 });
             });
@@ -2028,8 +2063,24 @@ class NewsCrawlerGenreSettings {
      * 自動投稿のスケジュール設定
      */
     public function setup_auto_posting_cron() {
-        if (!wp_next_scheduled('news_crawler_auto_posting_cron')) {
-            wp_schedule_event(time(), 'hourly', 'news_crawler_auto_posting_cron');
+        // 既存のスケジュールをクリア
+        wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
+        
+        // 現在時刻から確実に1時間後に開始するように設定
+        $current_time = current_time('timestamp');
+        $start_time = $current_time + (60 * 60); // 現在時刻から1時間後
+        
+        // デバッグ情報を記録
+        error_log('Auto Posting Cron - Current time: ' . date('Y-m-d H:i:s', $current_time));
+        error_log('Auto Posting Cron - Scheduled start time: ' . date('Y-m-d H:i:s', $start_time));
+        
+        // スケジュールを設定
+        $scheduled = wp_schedule_event($start_time, 'hourly', 'news_crawler_auto_posting_cron');
+        
+        if ($scheduled) {
+            error_log('Auto Posting Cron - Successfully scheduled at: ' . date('Y-m-d H:i:s', $start_time));
+        } else {
+            error_log('Auto Posting Cron - Failed to schedule');
         }
     }
     
@@ -2258,6 +2309,47 @@ class NewsCrawlerGenreSettings {
     }
     
     /**
+     * 表示用の次回実行時刻を計算（ジャンル別設定のスケジュールを正しく反映）
+     */
+    private function calculate_next_execution_time_for_display($setting) {
+        $now = current_time('timestamp');
+        
+        // 開始実行日時が設定されている場合
+        if (!empty($setting['start_execution_time'])) {
+            $start_time = strtotime($setting['start_execution_time']);
+            
+            // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
+            if ($start_time > $now) {
+                return $start_time;
+            }
+            
+            // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
+            return $this->calculate_next_execution_from_start_time($setting, $start_time);
+        }
+        
+        // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度に基づいて計算
+        return $this->calculate_next_execution_from_now($setting, $now);
+    }
+    
+    /**
+     * 投稿頻度のテキストを取得
+     */
+    private function get_frequency_text($frequency, $custom_days = 7) {
+        switch ($frequency) {
+            case 'daily':
+                return '毎日';
+            case 'weekly':
+                return '1週間ごと';
+            case 'monthly':
+                return '毎月';
+            case 'custom':
+                return $custom_days . '日ごと';
+            default:
+                return '毎日';
+        }
+    }
+    
+    /**
      * 次回実行時刻を更新
      */
     private function update_next_execution_time($genre_id, $setting) {
@@ -2336,94 +2428,9 @@ class NewsCrawlerGenreSettings {
      * 自動投稿実行レポートを表示
      */
     public function render_auto_posting_reports() {
-        $genre_settings = $this->get_genre_settings();
-        $logs = get_option('news_crawler_auto_posting_logs', array());
-        
-        if (empty($logs)) {
-            echo '<p>自動投稿の実行履歴がありません。</p>';
-            return;
-        }
-        
-        // ジャンルIDでグループ化
-        $reports_by_genre = array();
-        foreach ($logs as $log) {
-            $genre_id = $log['genre_id'];
-            if (!isset($reports_by_genre[$genre_id])) {
-                $reports_by_genre[$genre_id] = array();
-            }
-            $reports_by_genre[$genre_id][] = $log;
-        }
-        
-        foreach ($reports_by_genre as $genre_id => $genre_logs) {
-            $genre_setting = isset($genre_settings[$genre_id]) ? $genre_settings[$genre_id] : null;
-            $genre_name = $genre_setting ? $genre_setting['genre_name'] : '不明なジャンル';
-            
-            echo '<div class="genre-report" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px;">';
-            echo '<h3>' . esc_html($genre_name) . ' の実行レポート</h3>';
-            
-            // 最新のログから詳細情報を取得
-            $latest_log = end($genre_logs);
-            $execution_details = $this->get_execution_details($genre_id, $latest_log);
-            
-            echo '<table class="widefat" style="margin-top: 10px;">';
-            echo '<thead><tr><th>項目</th><th>詳細</th></tr></thead>';
-            echo '<tbody>';
-            
-            // 実行状況
-            echo '<tr><td>実行状況</td><td>';
-            if ($latest_log['status'] === 'success') {
-                echo '<span style="color: green;">✓ 成功</span>';
-            } elseif ($latest_log['status'] === 'skipped') {
-                echo '<span style="color: orange;">⚠ スキップ</span>';
-            } else {
-                echo '<span style="color: red;">✗ 失敗</span>';
-            }
-            echo '</td></tr>';
-            
-            // 実行日時
-            echo '<tr><td>実行日時</td><td>' . esc_html($latest_log['timestamp']) . '</td></tr>';
-            
-            // 実行結果の詳細
-            if (!empty($execution_details)) {
-                foreach ($execution_details as $detail) {
-                    echo '<tr><td>' . esc_html($detail['label']) . '</td><td>' . esc_html($detail['value']) . '</td></tr>';
-                }
-            }
-            
-            // メッセージ
-            if (!empty($latest_log['message'])) {
-                echo '<tr><td>メッセージ</td><td>' . esc_html($latest_log['message']) . '</td></tr>';
-            }
-            
-            echo '</tbody></table>';
-            
-            // 過去の実行履歴
-            if (count($genre_logs) > 1) {
-                echo '<details style="margin-top: 10px;">';
-                echo '<summary>過去の実行履歴</summary>';
-                echo '<table class="widefat" style="margin-top: 10px;">';
-                echo '<thead><tr><th>実行日時</th><th>状況</th><th>メッセージ</th></tr></thead>';
-                echo '<tbody>';
-                
-                // 最新5件を表示
-                $recent_logs = array_slice(array_reverse($genre_logs), 0, 5);
-                foreach ($recent_logs as $log) {
-                    $status_color = $log['status'] === 'success' ? 'green' : ($log['status'] === 'skipped' ? 'orange' : 'red');
-                    $status_icon = $log['status'] === 'success' ? '✓' : ($log['status'] === 'skipped' ? '⚠' : '✗');
-                    
-                    echo '<tr>';
-                    echo '<td>' . esc_html($log['timestamp']) . '</td>';
-                    echo '<td><span style="color: ' . $status_color . ';">' . $status_icon . ' ' . esc_html($log['status']) . '</span></td>';
-                    echo '<td>' . esc_html($log['message']) . '</td>';
-                    echo '</tr>';
-                }
-                
-                echo '</tbody></table>';
-                echo '</details>';
-            }
-            
-            echo '</div>';
-        }
+        // 個別ジャンルレポートは非表示
+        echo '<p>個別ジャンルレポートは非表示になっています。</p>';
+        return;
     }
     
     /**
@@ -2593,9 +2600,18 @@ class NewsCrawlerGenreSettings {
                     $test_results[] = "  理由: " . $check_result['reason'];
                 }
                 
-                // 次回実行時刻
-                $next_execution = $this->get_next_execution_time($setting);
+                // ジャンル別設定のスケジュールを正しく計算
+                $next_execution = $this->calculate_next_execution_time_for_display($setting);
                 $test_results[] = "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution);
+                
+                // スケジュール詳細を表示
+                if (!empty($setting['start_execution_time'])) {
+                    $start_time = strtotime($setting['start_execution_time']);
+                    $test_results[] = "  開始実行日時: " . date('Y-m-d H:i:s', $start_time);
+                }
+                
+                $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
+                $test_results[] = "  投稿頻度: " . $frequency_text;
                 
                 $test_results[] = "";
             }
@@ -2607,6 +2623,13 @@ class NewsCrawlerGenreSettings {
         
         $result = "自動投稿が有効なジャンル設定: {$auto_posting_enabled}件\n\n";
         $result .= implode("\n", $test_results);
+        
+        $result .= "\n=== テスト結果の説明 ===\n";
+        $result .= "・「実行可能: はい」の場合、設定されたスケジュールに従って自動投稿が実行されます\n";
+        $result .= "・「実行可能: いいえ」の場合、設定に問題があるため修正が必要です\n";
+        $result .= "・次回実行予定は、ジャンル別設定の開始実行日時と投稿頻度に基づいて計算されます\n";
+        $result .= "\n=== 注意事項 ===\n";
+        $result .= "・cronの次回実行予定が過去の日時になっている場合は、プラグインの再有効化が必要です";
         
         wp_send_json_success($result);
     }
@@ -2633,12 +2656,24 @@ class NewsCrawlerGenreSettings {
         foreach ($genre_settings as $genre_id => $setting) {
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
                 $auto_posting_count++;
-                $next_execution = $this->get_next_execution_time($setting);
+                
+                // ジャンル別設定のスケジュールを正しく計算
+                $next_execution = $this->calculate_next_execution_time_for_display($setting);
                 $status = $next_execution <= $current_time ? '実行可能' : '待機中';
                 
                 $result .= "ジャンル: " . $setting['genre_name'] . "\n";
                 $result .= "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . "\n";
-                $result .= "  状況: " . $status . "\n\n";
+                $result .= "  状況: " . $status . "\n";
+                
+                // スケジュール詳細を表示
+                if (!empty($setting['start_execution_time'])) {
+                    $start_time = strtotime($setting['start_execution_time']);
+                    $result .= "  開始実行日時: " . date('Y-m-d H:i:s', $start_time) . "\n";
+                }
+                
+                $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
+                $result .= "  投稿頻度: " . $frequency_text . "\n";
+                $result .= "\n";
             }
         }
         
@@ -2647,6 +2682,47 @@ class NewsCrawlerGenreSettings {
         }
         
         wp_send_json_success($result);
+    }
+    
+    /**
+     * CronスケジュールをリセットするAJAXハンドラー
+     */
+    public function reset_cron_schedule() {
+        check_ajax_referer('auto_posting_schedule_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        try {
+            // 既存のcronスケジュールをクリア
+            wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
+            
+            // 新しいcronスケジュールを設定
+            $this->setup_auto_posting_cron();
+            
+            // 設定されたスケジュールを確認
+            $next_scheduled = wp_next_scheduled('news_crawler_auto_posting_cron');
+            $current_time = current_time('timestamp');
+            
+            $result = "Cronスケジュールをリセットしました。\n\n";
+            $result .= "現在時刻: " . date('Y-m-d H:i:s', $current_time) . "\n";
+            $result .= "次回cron実行予定: " . ($next_scheduled ? date('Y-m-d H:i:s', $next_scheduled) : '未設定') . "\n";
+            
+            if ($next_scheduled && $next_scheduled <= $current_time) {
+                $result .= "\n⚠️ 警告: 次回実行予定が現在時刻以前になっています。\n";
+                $result .= "WordPressのcronシステムに問題がある可能性があります。";
+            } else {
+                $result .= "\n✅ 正常にスケジュールされました。";
+            }
+            
+            $result .= "\n\nスケジュール状況を再確認してください。";
+            
+            wp_send_json_success($result);
+            
+        } catch (Exception $e) {
+            wp_send_json_error('Cronスケジュールのリセット中にエラーが発生しました: ' . $e->getMessage());
+        }
     }
     
     /**

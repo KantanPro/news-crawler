@@ -1454,6 +1454,12 @@ class NewsCrawlerFeaturedImageGenerator {
         $thumbnail_result = set_post_thumbnail($post_id, $attachment_id);
         error_log('Featured Image Generator - Save: Set post thumbnail result: ' . ($thumbnail_result ? 'Success' : 'Failed'));
         
+        // OGPマネージャーに通知（存在する場合）
+        if (class_exists('NewsCrawlerOGPManager')) {
+            $ogp_manager = new NewsCrawlerOGPManager();
+            $ogp_manager->update_featured_image_meta($post_id, $attachment_id);
+        }
+        
         return $attachment_id;
     }
     
@@ -1510,6 +1516,12 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // 投稿のアイキャッチに設定
         set_post_thumbnail($post_id, $attachment_id);
+        
+        // OGPマネージャーに通知（存在する場合）
+        if (class_exists('NewsCrawlerOGPManager')) {
+            $ogp_manager = new NewsCrawlerOGPManager();
+            $ogp_manager->update_featured_image_meta($post_id, $attachment_id);
+        }
         
         return $attachment_id;
     }
