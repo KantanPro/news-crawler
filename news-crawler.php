@@ -23,7 +23,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php'
 require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-sns-auto-publisher.php';
+
 
 // プラグイン初期化
 function news_crawler_init() {
@@ -73,10 +73,7 @@ function news_crawler_init() {
         new NewsCrawlerPostEditorSummary();
     }
     
-    // SNS自動投稿クラスを初期化
-    if (class_exists('NewsCrawlerSNSAutoPublisher')) {
-        new NewsCrawlerSNSAutoPublisher();
-    }
+
     
 
 }

@@ -54,15 +54,7 @@ class NewsCrawlerGenreSettings {
             array($this, 'main_admin_page')
         );
         
-        // SNSシェアサブメニュー
-        add_submenu_page(
-            'news-crawler-main',
-            'SNSシェア',
-            'SNSシェア',
-            'manage_options',
-            'news-crawler-sns',
-            array($this, 'sns_settings_page')
-        );
+
         
         // 基本設定サブメニュー
         add_submenu_page(
@@ -599,109 +591,7 @@ class NewsCrawlerGenreSettings {
         <?php
     }
     
-    /**
-     * SNS設定ページ
-     */
-    public function sns_settings_page() {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
-        
-        // SNS自動投稿クラスの設定項目を登録
-        if (class_exists('NewsCrawlerSNSAutoPublisher')) {
-            $sns_publisher = new NewsCrawlerSNSAutoPublisher();
-            
-            // 設定項目を登録
-            $sns_publisher->admin_init();
-            
-            ?>
-            <div class="wrap">
-                <h1>SNSシェア</h1>
-                
-                <form method="post" action="options.php">
-                    <?php
-                    settings_fields('news_crawler_sns_settings');
-                    do_settings_sections('news-crawler-sns');
-                    submit_button('設定を保存');
-                    ?>
-                </form>
-                
-                <hr>
-                
-                <h2>接続テスト</h2>
-                <p>設定した認証情報でX（Twitter）APIへの接続をテストできます。</p>
-                <button type="button" id="test-sns-connection" class="button button-secondary">接続をテスト</button>
-                <div id="test-result"></div>
-                
-                <script>
-                jQuery(document).ready(function($) {
-                    // 接続テスト
-                    $('#test-sns-connection').on('click', function() {
-                        var button = $(this);
-                        var resultDiv = $('#test-result');
-                        
-                        button.prop('disabled', true).text('テスト中...');
-                        resultDiv.html('<p>接続をテスト中...</p>');
-                        
-                        $.ajax({
-                            url: ajaxurl,
-                            type: 'POST',
-                            data: {
-                                action: 'test_sns_connection',
-                                nonce: '<?php echo wp_create_nonce('test_sns_connection'); ?>'
-                            },
-                            success: function(response) {
-                                if (response.success) {
-                                    resultDiv.html('<p style="color: green;">✓ 接続成功: ' + response.data.message + '</p>');
-                                } else {
-                                    resultDiv.html('<p style="color: red;">✗ 接続失敗: ' + response.data.message + '</p>');
-                                }
-                            },
-                            error: function() {
-                                resultDiv.html('<p style="color: red;">✗ リクエストエラーが発生しました</p>');
-                            },
-                            complete: function() {
-                                button.prop('disabled', false).text('接続をテスト');
-                            }
-                        });
-                    });
-                    
-                    // メッセージプレビュー
-                    $('#preview-message').on('click', function() {
-                        var template = $('#x_message_template').val();
-                        var previewDiv = $('#message-preview');
-                        
-                        $.ajax({
-                            url: ajaxurl,
-                            type: 'POST',
-                            data: {
-                                action: 'preview_sns_message',
-                                template: template,
-                                nonce: '<?php echo wp_create_nonce('preview_sns_message'); ?>'
-                            },
-                            success: function(response) {
-                                if (response.success) {
-                                    previewDiv.html('<strong>プレビュー:</strong><br>' + response.data.message);
-                                    previewDiv.show();
-                                } else {
-                                    previewDiv.html('<p style="color: red;">プレビューの生成に失敗しました</p>');
-                                    previewDiv.show();
-                                }
-                            },
-                            error: function() {
-                                previewDiv.html('<p style="color: red;">プレビューの生成でエラーが発生しました</p>');
-                                previewDiv.show();
-                            }
-                        });
-                    });
-                });
-                </script>
-            </div>
-            <?php
-        } else {
-            echo '<div class="wrap"><h1>SNSシェア</h1><p>SNS自動投稿機能が利用できません。</p></div>';
-        }
-    }
+
     
     public function basic_settings_page() {
         ?>
