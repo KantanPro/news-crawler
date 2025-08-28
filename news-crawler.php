@@ -91,6 +91,38 @@ function news_crawler_init() {
 }
 add_action('plugins_loaded', 'news_crawler_init');
 
+// XPoster連携のための投稿ステータス変更フック
+add_action('news_crawler_update_post_status', 'news_crawler_do_update_post_status', 10, 2);
+
+function news_crawler_do_update_post_status($post_id, $status) {
+    if (!$post_id || !$status) {
+        return;
+    }
+    
+    // 投稿が存在するかチェック
+    $post = get_post($post_id);
+    if (!$post) {
+        return;
+    }
+    
+    // 現在のステータスと異なる場合のみ更新
+    if ($post->post_status !== $status) {
+        $update_data = array(
+            'ID' => $post_id,
+            'post_status' => $status
+        );
+        
+        // 投稿ステータスを更新
+        $result = wp_update_post($update_data);
+        
+        if ($result) {
+            error_log('NewsCrawler: 投稿ステータスを ' . $status . ' に更新しました (ID: ' . $post_id . ')');
+        } else {
+            error_log('NewsCrawler: 投稿ステータスの更新に失敗しました (ID: ' . $post_id . ')');
+        }
+    }
+}
+
 // YouTube API クラス
 class YouTubeCrawler {
     private $api_key;
@@ -773,10 +805,11 @@ class YouTubeCrawler {
             $post_content .= '<!-- /wp:group -->';
         }
         
+        // XPoster連携のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => $status,
+            'post_status'   => 'draft', // 最初は下書きとして作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
@@ -792,6 +825,13 @@ class YouTubeCrawler {
         update_post_meta($post_id, '_youtube_summary', true);
         update_post_meta($post_id, '_youtube_videos_count', count($videos));
         update_post_meta($post_id, '_youtube_crawled_date', current_time('mysql'));
+        
+        // XPoster連携用のメタデータを追加
+        update_post_meta($post_id, '_news_crawler_created', true);
+        update_post_meta($post_id, '_news_crawler_creation_method', 'youtube');
+        update_post_meta($post_id, '_news_crawler_intended_status', $status);
+        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
+        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -824,6 +864,11 @@ class YouTubeCrawler {
         
         // X（Twitter）自動シェア（投稿成功後）
         $this->maybe_share_to_twitter($post_id, $post_title);
+        
+        // XPoster連携のため、投稿ステータス変更を遅延実行
+        if ($status !== 'draft') {
+            $this->schedule_post_status_update($post_id, $status);
+        }
         
         return $post_id;
     }
@@ -1970,10 +2015,11 @@ class NewsCrawler {
             $post_content .= '<!-- /wp:quote -->';
         }
         
+        // XPoster連携のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => $status,
+            'post_status'   => 'draft', // 最初は下書きとして作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => array($cat_id)
@@ -1992,6 +2038,13 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_summary', true);
         update_post_meta($post_id, '_news_articles_count', count($articles));
         update_post_meta($post_id, '_news_crawled_date', current_time('mysql'));
+        
+        // XPoster連携用のメタデータを追加
+        update_post_meta($post_id, '_news_crawler_created', true);
+        update_post_meta($post_id, '_news_crawler_creation_method', 'auto');
+        update_post_meta($post_id, '_news_crawler_intended_status', $status);
+        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
+        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -2101,10 +2154,11 @@ class NewsCrawler {
             $post_content .= '<!-- /wp:quote -->';
         }
         
+        // XPoster連携のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => $status,
+            'post_status'   => 'draft', // 最初は下書きとして作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
@@ -2123,6 +2177,13 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_summary', true);
         update_post_meta($post_id, '_news_articles_count', count($articles));
         update_post_meta($post_id, '_news_crawled_date', current_time('mysql'));
+        
+        // XPoster連携用のメタデータを追加
+        update_post_meta($post_id, '_news_crawler_created', true);
+        update_post_meta($post_id, '_news_crawler_creation_method', 'auto_categories');
+        update_post_meta($post_id, '_news_crawler_intended_status', $status);
+        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
+        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
         
         foreach ($articles as $index => $article) {
             update_post_meta($post_id, '_news_article_' . $index . '_title', $article['title']);
@@ -2145,6 +2206,11 @@ class NewsCrawler {
         
         // X（Twitter）自動シェア（投稿成功後）
         $this->maybe_share_to_twitter($post_id, $post_title);
+        
+        // XPoster連携のため、投稿ステータス変更を遅延実行
+        if ($status !== 'draft') {
+            $this->schedule_post_status_update($post_id, $status);
+        }
         
         return $post_id;
     }
@@ -2932,6 +2998,16 @@ class NewsCrawler {
         }
         
         return $data;
+    }
+    
+    /**
+     * XPoster連携のための投稿ステータス変更を遅延実行
+     */
+    private function schedule_post_status_update($post_id, $target_status) {
+        // XPosterが新規投稿を認識するまで3秒待ってからステータスを変更
+        wp_schedule_single_event(time() + 3, 'news_crawler_update_post_status', array($post_id, $target_status));
+        
+        error_log('NewsCrawler: 投稿ステータス変更を遅延実行でスケジュール (ID: ' . $post_id . ', 対象ステータス: ' . $target_status . ')');
     }
 }
 
