@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.9.3
+Stable tag: 1.9.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -24,8 +24,11 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 
 * YouTube APIのクォータ制限対応
 
-**新機能（v1.9.3）:**
-* YouTube APIのクォータ制限対応
+**新機能（v1.9.4）:**
+* OGP管理機能を追加
+* アイキャッチ画像の更新時にOGPマネージャーに通知する処理を実装
+* 投稿設定のサブメニュー名を変更
+* Cronスケジュールリセット機能を追加
 
 == Installation ==
 
@@ -56,6 +59,12 @@ v1.9.0から、APIクォータの使用状況を監視し、制限に達した�
 
 == Changelog ==
 
+= 1.9.4 =
+* OGP管理機能を追加
+* アイキャッチ画像の更新時にOGPマネージャーに通知する処理を実装
+* 投稿設定のサブメニュー名を変更
+* Cronスケジュールリセット機能を追加
+
 = 1.9.3 =
 * YouTube APIのクォータ制限対応
 * その他のバグ修正とパフォーマンス向上
@@ -74,6 +83,9 @@ v1.9.0から、APIクォータの使用状況を監視し、制限に達した�
 * 管理画面の基本構造を追加
 
 == Upgrade Notice ==
+
+= 1.9.4 =
+OGP管理機能が追加された重要なアップデートです。アイキャッチ画像の更新時にOGPマネージャーに通知する処理が実装され、より効率的なOGP管理が可能になります。既存の設定は保持されます。
 
 = 1.9.3 =
 YouTube APIクォータ制限対応が追加された重要なアップデートです。既存の設定は保持されます。
