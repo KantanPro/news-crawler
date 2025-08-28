@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.9.0
+Stable tag: 1.9.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -24,9 +24,9 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * X（旧Twitter）への自動投稿
 * YouTube APIのクォータ制限対応
 
-**新機能（v1.9.0）:**
-* X（旧Twitter）への自動投稿機能を追加
-* YouTube APIのクォータ制限に対応した改善
+**新機能（v1.9.3）:**
+* X自動投稿改善
+* YouTube APIのクォータ制限対応
 
 == Installation ==
 
@@ -57,9 +57,9 @@ v1.9.0から、APIクォータの使用状況を監視し、制限に達した�
 
 == Changelog ==
 
-= 1.9.0 =
-* X（旧Twitter）への自動投稿機能を追加
-* YouTube APIのクォータ制限対応を改善
+= 1.9.3 =
+* X自動投稿改善
+* YouTube APIのクォータ制限対応
 * その他のバグ修正とパフォーマンス向上
 
 = 1.8.0 =
@@ -77,5 +77,5 @@ v1.9.0から、APIクォータの使用状況を監視し、制限に達した�
 
 == Upgrade Notice ==
 
-= 1.9.0 =
-X自動投稿機能とYouTube APIクォータ制限対応が追加された重要なアップデートです。既存の設定は保持されます。
+= 1.9.3 =
+X自動投稿改善とYouTube APIクォータ制限対応が追加された重要なアップデートです。既存の設定は保持されます。
