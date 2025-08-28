@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.8.0
+ * Version: 1.9.0
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
