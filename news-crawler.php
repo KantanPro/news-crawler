@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.7.4
+ * Version: 1.8.0
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -23,7 +23,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php'
 require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-twitter-sharer.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-sns-auto-publisher.php';
 
 // プラグイン初期化
 function news_crawler_init() {
@@ -73,10 +73,12 @@ function news_crawler_init() {
         new NewsCrawlerPostEditorSummary();
     }
     
-    // X（Twitter）自動シェアクラスを初期化
-    if (class_exists('NewsCrawlerTwitterSharer')) {
-        new NewsCrawlerTwitterSharer();
+    // SNS自動投稿クラスを初期化
+    if (class_exists('NewsCrawlerSNSAutoPublisher')) {
+        new NewsCrawlerSNSAutoPublisher();
     }
+    
+
 }
 add_action('plugins_loaded', 'news_crawler_init');
 

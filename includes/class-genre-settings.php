@@ -54,6 +54,16 @@ class NewsCrawlerGenreSettings {
             array($this, 'main_admin_page')
         );
         
+        // SNSシェアサブメニュー
+        add_submenu_page(
+            'news-crawler-main',
+            'SNSシェア',
+            'SNSシェア',
+            'manage_options',
+            'news-crawler-sns',
+            array($this, 'sns_settings_page')
+        );
+        
         // 基本設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
@@ -164,45 +174,7 @@ class NewsCrawlerGenreSettings {
             'summary_generation_settings'
         );
         
-        // X（Twitter）自動シェア設定セクション
-        add_settings_section(
-            'twitter_sharer_settings',
-            'X（Twitter）自動シェア設定',
-            array($this, 'twitter_sharer_section_callback'),
-            'news-crawler-basic'
-        );
-        
-        add_settings_field(
-            'twitter_enabled',
-            '自動シェアを有効にする',
-            array($this, 'twitter_enabled_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_bearer_token',
-            'Bearer Token',
-            array($this, 'twitter_bearer_token_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_key',
-            'API Key',
-            array($this, 'twitter_api_key_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_secret',
-            'API Secret',
-            array($this, 'twitter_api_secret_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
+        // X（Twitter）自動シェア設定セクションは廃止
         
         // 重複チェック設定セクション
         add_settings_section(
@@ -228,37 +200,7 @@ class NewsCrawlerGenreSettings {
             'duplicate_check_settings'
         );
         
-        add_settings_field(
-            'twitter_access_token',
-            'Access Token',
-            array($this, 'twitter_access_token_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_access_token_secret',
-            'Access Token Secret',
-            array($this, 'twitter_access_token_secret_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_message_template',
-            '投稿メッセージテンプレート',
-            array($this, 'twitter_message_template_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
-        
-        add_settings_field(
-            'twitter_include_link',
-            '記事リンクを含める',
-            array($this, 'twitter_include_link_callback'),
-            'news-crawler-basic',
-            'twitter_sharer_settings'
-        );
+
         
         add_settings_field(
             'twitter_hashtags',
@@ -281,10 +223,7 @@ class NewsCrawlerGenreSettings {
         echo '<p>投稿作成時のAI要約自動生成に関する設定です。OpenAI APIキーが設定されている必要があります。</p>';
     }
     
-    public function twitter_sharer_section_callback() {
-        echo '<p>自動投稿が成功した後にX（旧ツイッター）に自動でシェアする設定です。</p>';
-        echo '<p><strong>注意：</strong>X（Twitter）APIの利用には開発者アカウントの申請が必要です。</p>';
-    }
+
     
     public function youtube_api_key_callback() {
         $options = get_option('news_crawler_basic_settings', array());
@@ -351,71 +290,7 @@ class NewsCrawlerGenreSettings {
         echo '<p class="description">要約生成に使用するOpenAIモデルを選択してください。</p>';
     }
     
-    // X（Twitter）自動シェア設定のコールバック関数
-    public function twitter_enabled_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $enabled = isset($options['twitter_enabled']) ? $options['twitter_enabled'] : false;
-        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_enabled]" value="1" ' . checked(1, $enabled, false) . ' />';
-        echo '<label for="news_crawler_basic_settings[twitter_enabled]">X（Twitter）への自動シェアを有効にする</label>';
-        echo '<p class="description">自動投稿が成功した後にX（Twitter）に自動でシェアします。</p>';
-    }
-    
-    public function twitter_bearer_token_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $bearer_token = isset($options['twitter_bearer_token']) ? $options['twitter_bearer_token'] : '';
-        echo '<input type="password" name="news_crawler_basic_settings[twitter_bearer_token]" value="' . esc_attr($bearer_token) . '" size="50" />';
-        echo '<p class="description">Twitter API v2のBearer Tokenを入力してください</p>';
-    }
-    
-    public function twitter_api_key_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $api_key = isset($options['twitter_api_key']) ? $options['twitter_api_key'] : '';
-        echo '<input type="password" name="news_crawler_basic_settings[twitter_api_key]" value="' . esc_attr($api_key) . '" size="50" />';
-        echo '<p class="description">Twitter API Keyを入力してください</p>';
-    }
-    
-    public function twitter_api_secret_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $api_secret = isset($options['twitter_api_secret']) ? $options['twitter_api_secret'] : '';
-        echo '<input type="password" name="news_crawler_basic_settings[twitter_api_secret]" value="' . esc_attr($api_secret) . '" size="50" />';
-        echo '<p class="description">Twitter API Secretを入力してください</p>';
-    }
-    
-    public function twitter_access_token_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $access_token = isset($options['twitter_access_token']) ? $options['twitter_access_token'] : '';
-        echo '<input type="password" name="news_crawler_basic_settings[twitter_access_token]" value="' . esc_attr($access_token) . '" size="50" />';
-        echo '<p class="description">Twitter Access Tokenを入力してください</p>';
-    }
-    
-    public function twitter_access_token_secret_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $access_token_secret = isset($options['twitter_access_token_secret']) ? $options['twitter_access_token_secret'] : '';
-        echo '<input type="password" name="news_crawler_basic_settings[twitter_access_token_secret]" value="' . esc_attr($access_token_secret) . '" size="50" />';
-        echo '<p class="description">Twitter Access Token Secretを入力してください</p>';
-    }
-    
-    public function twitter_message_template_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $template = isset($options['twitter_message_template']) ? $options['twitter_message_template'] : '{title}';
-        echo '<textarea name="news_crawler_basic_settings[twitter_message_template]" rows="3" cols="50" class="large-text">' . esc_textarea($template) . '</textarea>';
-        echo '<p class="description">投稿メッセージのテンプレートを設定してください。使用可能な変数：{title}, {excerpt}, {category}</p>';
-    }
-    
-    public function twitter_include_link_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $include_link = isset($options['twitter_include_link']) ? $options['twitter_include_link'] : true;
-        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_include_link]" value="1" ' . checked(1, $include_link, false) . ' />';
-        echo '<label for="news_crawler_basic_settings[twitter_include_link]">投稿メッセージに記事のリンクを含める</label>';
-        echo '<p class="description">チェックすると、投稿メッセージに記事のURLが自動で追加されます。</p>';
-    }
-    
-    public function twitter_hashtags_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        $hashtags = isset($options['twitter_hashtags']) ? $options['twitter_hashtags'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_hashtags]" value="' . esc_attr($hashtags) . '" size="50" />';
-        echo '<p class="description">ハッシュタグをスペース区切りで入力してください（例：#ニュース #自動投稿）</p>';
-    }
+    // X（Twitter）自動シェア設定セクションは廃止
     
     public function duplicate_check_section_callback() {
         echo '<p>重複チェックの厳しさと期間を設定できます。より厳しい設定にすると重複を防げますが、誤ってスキップされる可能性も高くなります。</p>';
@@ -545,42 +420,7 @@ class NewsCrawlerGenreSettings {
             $sanitized['text_scale'] = intval($input['text_scale']);
         }
         
-        // X（Twitter）設定の処理
-        if (isset($input['twitter_enabled'])) {
-            $sanitized['twitter_enabled'] = (bool) $input['twitter_enabled'];
-        }
-        
-        if (isset($input['twitter_bearer_token'])) {
-            $sanitized['twitter_bearer_token'] = sanitize_text_field($input['twitter_bearer_token']);
-        }
-        
-        if (isset($input['twitter_api_key'])) {
-            $sanitized['twitter_api_key'] = sanitize_text_field($input['twitter_api_key']);
-        }
-        
-        if (isset($input['twitter_api_secret'])) {
-            $sanitized['twitter_api_secret'] = sanitize_text_field($input['twitter_api_secret']);
-        }
-        
-        if (isset($input['twitter_access_token'])) {
-            $sanitized['twitter_access_token'] = sanitize_text_field($input['twitter_access_token']);
-        }
-        
-        if (isset($input['twitter_access_token_secret'])) {
-            $sanitized['twitter_access_token_secret'] = sanitize_text_field($input['twitter_access_token_secret']);
-        }
-        
-        if (isset($input['twitter_message_template'])) {
-            $sanitized['twitter_message_template'] = sanitize_textarea_field($input['twitter_message_template']);
-        }
-        
-        if (isset($input['twitter_include_link'])) {
-            $sanitized['twitter_include_link'] = (bool) $input['twitter_include_link'];
-        }
-        
-        if (isset($input['twitter_hashtags'])) {
-            $sanitized['twitter_hashtags'] = sanitize_text_field($input['twitter_hashtags']);
-        }
+        // X（Twitter）自動シェア設定セクションは廃止
         
         // 重複チェック設定の処理
         if (isset($input['duplicate_check_strictness'])) {
@@ -656,6 +496,110 @@ class NewsCrawlerGenreSettings {
         <?php
     }
     
+    /**
+     * SNS設定ページ
+     */
+    public function sns_settings_page() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
+        // SNS自動投稿クラスの設定項目を登録
+        if (class_exists('NewsCrawlerSNSAutoPublisher')) {
+            $sns_publisher = new NewsCrawlerSNSAutoPublisher();
+            
+            // 設定項目を登録
+            $sns_publisher->admin_init();
+            
+            ?>
+            <div class="wrap">
+                <h1>SNSシェア</h1>
+                
+                <form method="post" action="options.php">
+                    <?php
+                    settings_fields('news_crawler_sns_settings');
+                    do_settings_sections('news-crawler-sns');
+                    submit_button('設定を保存');
+                    ?>
+                </form>
+                
+                <hr>
+                
+                <h2>接続テスト</h2>
+                <p>設定した認証情報でX（Twitter）APIへの接続をテストできます。</p>
+                <button type="button" id="test-sns-connection" class="button button-secondary">接続をテスト</button>
+                <div id="test-result"></div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    // 接続テスト
+                    $('#test-sns-connection').on('click', function() {
+                        var button = $(this);
+                        var resultDiv = $('#test-result');
+                        
+                        button.prop('disabled', true).text('テスト中...');
+                        resultDiv.html('<p>接続をテスト中...</p>');
+                        
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'test_sns_connection',
+                                nonce: '<?php echo wp_create_nonce('test_sns_connection'); ?>'
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    resultDiv.html('<p style="color: green;">✓ 接続成功: ' + response.data.message + '</p>');
+                                } else {
+                                    resultDiv.html('<p style="color: red;">✗ 接続失敗: ' + response.data.message + '</p>');
+                                }
+                            },
+                            error: function() {
+                                resultDiv.html('<p style="color: red;">✗ リクエストエラーが発生しました</p>');
+                            },
+                            complete: function() {
+                                button.prop('disabled', false).text('接続をテスト');
+                            }
+                        });
+                    });
+                    
+                    // メッセージプレビュー
+                    $('#preview-message').on('click', function() {
+                        var template = $('#x_message_template').val();
+                        var previewDiv = $('#message-preview');
+                        
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'preview_sns_message',
+                                template: template,
+                                nonce: '<?php echo wp_create_nonce('preview_sns_message'); ?>'
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    previewDiv.html('<strong>プレビュー:</strong><br>' + response.data.message);
+                                    previewDiv.show();
+                                } else {
+                                    previewDiv.html('<p style="color: red;">プレビューの生成に失敗しました</p>');
+                                    previewDiv.show();
+                                }
+                            },
+                            error: function() {
+                                previewDiv.html('<p style="color: red;">プレビューの生成でエラーが発生しました</p>');
+                                previewDiv.show();
+                            }
+                        });
+                    });
+                });
+                </script>
+            </div>
+            <?php
+        } else {
+            echo '<div class="wrap"><h1>SNSシェア</h1><p>SNS自動投稿機能が利用できません。</p></div>';
+        }
+    }
+    
     public function basic_settings_page() {
         ?>
         <div class="wrap">
@@ -675,108 +619,7 @@ class NewsCrawlerGenreSettings {
                 ?>
             </form>
             
-            <hr>
-            
-            <h2>X（Twitter）接続テスト</h2>
-            <p>設定したX（Twitter）API認証情報で接続をテストできます。</p>
-            
-            <div class="card">
-                <p>
-                    <button type="button" id="test-twitter-connection" class="button button-secondary">X（Twitter）接続をテスト</button>
-                    <span id="twitter-test-status" style="margin-left: 10px;"></span>
-                </p>
-                
-                <div id="twitter-test-result" style="display: none; margin-top: 20px; padding: 15px; background: #f7f7f7; border: 1px solid #ccc; border-radius: 4px;">
-                    <h4>テスト結果：</h4>
-                    <div id="twitter-test-content"></div>
-                </div>
-                
-                <details style="margin-top: 20px;">
-                    <summary style="cursor: pointer; color: #0073aa;">デバッグ情報を表示</summary>
-                    <div id="twitter-debug-info" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
-                        <p>デバッグ情報がここに表示されます...</p>
-                    </div>
-                </details>
-            </div>
-            
-            <script>
-            jQuery(document).ready(function($) {
-                $('#test-twitter-connection').click(function() {
-                    var button = $(this);
-                    var statusSpan = $('#twitter-test-status');
-                    var resultDiv = $('#twitter-test-result');
-                    var resultContent = $('#twitter-test-content');
-                    
-                    button.prop('disabled', true);
-                    statusSpan.html('接続テスト中...');
-                    resultDiv.hide();
-                    
-                    // デバッグ情報をクリア
-                    $('#twitter-debug-info').html('<p>接続テストを開始...</p>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        dataType: 'json',
-                        data: {
-                            action: 'test_twitter_connection',
-                            nonce: '<?php echo wp_create_nonce('twitter_connection_test_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            console.log('Twitter connection test response:', response);
-                            
-                            // デバッグ情報を更新
-                            var debugInfo = '<p><strong>レスポンス受信:</strong></p>';
-                            debugInfo += '<p>Success: ' + response.success + '</p>';
-                            debugInfo += '<p>Data: ' + JSON.stringify(response.data, null, 2) + '</p>';
-                            $('#twitter-debug-info').html(debugInfo);
-                            
-                            if (response.success) {
-                                resultContent.html('<p style="color: green;">✓ ' + response.data.message + '</p>');
-                                resultDiv.show();
-                                statusSpan.html('✅ 接続成功');
-                            } else {
-                                var errorMessage = '不明なエラー';
-                                if (response.data && response.data.message) {
-                                    errorMessage = response.data.message;
-                                } else if (response.data) {
-                                    errorMessage = response.data;
-                                }
-                                resultContent.html('<p style="color: red;">✗ ' + errorMessage + '</p>');
-                                resultDiv.show();
-                                statusSpan.html('❌ 接続失敗');
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            console.log('Twitter connection test error:', {xhr: xhr, status: status, error: error});
-                            
-                            // デバッグ情報を更新
-                            var debugInfo = '<p><strong>エラー発生:</strong></p>';
-                            debugInfo += '<p>Status: ' + status + '</p>';
-                            debugInfo += '<p>Error: ' + error + '</p>';
-                            if (xhr.responseJSON) {
-                                debugInfo += '<p>Response JSON: ' + JSON.stringify(xhr.responseJSON, null, 2) + '</p>';
-                            }
-                            if (xhr.responseText) {
-                                debugInfo += '<p>Response Text: ' + xhr.responseText + '</p>';
-                            }
-                            $('#twitter-debug-info').html(debugInfo);
-                            
-                            var errorMessage = '通信エラーが発生しました';
-                            if (xhr.responseJSON && xhr.responseJSON.data) {
-                                errorMessage = xhr.responseJSON.data;
-                            }
-                            resultContent.html('<p style="color: red;">✗ ' + errorMessage + '</p>');
-                            resultDiv.show();
-                            statusSpan.html('❌ 通信エラー');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false);
-                        }
-                    });
-                });
-            });
-            </script>
+
         </div>
         <?php
     }
