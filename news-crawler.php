@@ -3113,11 +3113,23 @@ class NewsCrawler {
         }
         $category_text = implode('、', $category_names);
         
+        // OGP設定を取得
+        $ogp_settings = get_option('news_crawler_ogp_settings', array());
+        $include_description = isset($ogp_settings['twitter_include_description']) ? $ogp_settings['twitter_include_description'] : true;
+        $description_length = isset($ogp_settings['twitter_description_length']) ? $ogp_settings['twitter_description_length'] : 100;
+        
         // 抜粋を取得（HTMLタグを除去）
         $post = get_post($post_id);
-        $excerpt = wp_strip_all_tags($post->post_excerpt);
-        if (empty($excerpt)) {
-            $excerpt = wp_strip_all_tags(wp_trim_words($post->post_content, 50, ''));
+        $excerpt = '';
+        if ($include_description) {
+            $excerpt = wp_strip_all_tags($post->post_excerpt);
+            if (empty($excerpt)) {
+                $excerpt = wp_strip_all_tags(wp_trim_words($post->post_content, $description_length / 10, ''));
+            }
+            // 指定された長さに制限
+            if (mb_strlen($excerpt) > $description_length) {
+                $excerpt = mb_substr($excerpt, 0, $description_length) . '...';
+            }
         }
         
         // 変数を置換

@@ -73,6 +73,22 @@ class NewsCrawlerOGPSettings {
             'news-crawler-ogp-settings',
             'ogp_basic_settings'
         );
+        
+        add_settings_field(
+            'twitter_description_length',
+            'X投稿時の説明文の長さ',
+            array($this, 'twitter_description_length_callback'),
+            'news-crawler-ogp-settings',
+            'ogp_basic_settings'
+        );
+        
+        add_settings_field(
+            'twitter_include_description',
+            'X投稿に説明文を含める',
+            array($this, 'twitter_include_description_callback'),
+            'news-crawler-ogp-settings',
+            'ogp_basic_settings'
+        );
     }
     
     /**
@@ -151,6 +167,28 @@ class NewsCrawlerOGPSettings {
     }
     
     /**
+     * X投稿時の説明文の長さフィールド
+     */
+    public function twitter_description_length_callback() {
+        $settings = get_option($this->option_name, array());
+        $description_length = isset($settings['twitter_description_length']) ? $settings['twitter_description_length'] : 100;
+        
+        echo '<input type="number" name="' . $this->option_name . '[twitter_description_length]" value="' . esc_attr($description_length) . '" min="50" max="200" size="10" /> 文字';
+        echo '<p class="description">X投稿に含める説明文の最大文字数を設定します（50-200文字）。</p>';
+    }
+    
+    /**
+     * X投稿に説明文を含めるフィールド
+     */
+    public function twitter_include_description_callback() {
+        $settings = get_option($this->option_name, array());
+        $include_description = isset($settings['twitter_include_description']) ? $settings['twitter_include_description'] : true;
+        
+        echo '<label><input type="checkbox" name="' . $this->option_name . '[twitter_include_description]" value="1" ' . checked(1, $include_description, false) . ' /> X投稿に記事の説明文を含める</label>';
+        echo '<p class="description">X投稿時に記事の抜粋や説明文を含めるかどうかを設定します。</p>';
+    }
+    
+    /**
      * 設定のサニタイズ
      */
     public function sanitize_settings($input) {
@@ -166,6 +204,13 @@ class NewsCrawlerOGPSettings {
         
         $sanitized['enable_ogp'] = isset($input['enable_ogp']) ? true : false;
         $sanitized['enable_twitter_card'] = isset($input['enable_twitter_card']) ? true : false;
+        
+        if (isset($input['twitter_description_length'])) {
+            $length = intval($input['twitter_description_length']);
+            $sanitized['twitter_description_length'] = max(50, min(200, $length));
+        }
+        
+        $sanitized['twitter_include_description'] = isset($input['twitter_include_description']) ? true : false;
         
         return $sanitized;
     }
@@ -200,6 +245,7 @@ class NewsCrawlerOGPSettings {
                     <li><strong>Twitter Card対応</strong>: Twitterでの表示を最適化</li>
                     <li><strong>カテゴリー・タグ情報</strong>: 投稿の分類情報をOGPに含める</li>
                     <li><strong>著者情報</strong>: 投稿者の情報をOGPに含める</li>
+                    <li><strong>X投稿時の説明文制御</strong>: X投稿に含める説明文の長さと内容を制御</li>
                 </ul>
                 
                 <h3>設定のポイント</h3>
@@ -207,6 +253,8 @@ class NewsCrawlerOGPSettings {
                     <li>デフォルトOGP画像は、アイキャッチ画像がない場合に使用されます</li>
                     <li>Twitterアカウントを設定すると、Twitter Cardにサイト情報が表示されます</li>
                     <li>OGPとTwitter Cardは個別に有効/無効を設定できます</li>
+                    <li>X投稿時の説明文の長さは50-200文字の範囲で設定できます</li>
+                    <li>説明文を含めない設定にすると、タイトルのみの投稿になります</li>
                 </ul>
             </div>
         </div>
