@@ -55,7 +55,15 @@ class NewsCrawlerGenreSettings {
             array($this, 'main_admin_page')
         );
         
-
+        // OGP設定サブメニュー
+        add_submenu_page(
+            'news-crawler-main',
+            'OGP設定',
+            'OGP設定',
+            'manage_options',
+            'news-crawler-ogp-settings',
+            array($this, 'ogp_settings_page')
+        );
         
         // 基本設定サブメニュー
         add_submenu_page(
@@ -539,12 +547,18 @@ class NewsCrawlerGenreSettings {
                 submit_button();
                 ?>
             </form>
-            
-
-            
-
         </div>
         <?php
+    }
+    
+    public function ogp_settings_page() {
+        // OGP設定クラスのインスタンスを作成してページを表示
+        if (class_exists('NewsCrawlerOGPSettings')) {
+            $ogp_settings = new NewsCrawlerOGPSettings();
+            $ogp_settings->admin_page();
+        } else {
+            echo '<div class="wrap"><h1>News Crawler - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
+        }
     }
     
     public function main_admin_page() {

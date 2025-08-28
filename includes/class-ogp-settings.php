@@ -14,36 +14,19 @@ class NewsCrawlerOGPSettings {
     private $option_name = 'news_crawler_ogp_settings';
     
     public function __construct() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // メニュー登録はNews Crawlerメインメニューから行われるため、
+        // ここではadmin_initのみ実行
         add_action('admin_init', array($this, 'admin_init'));
     }
     
     /**
      * 管理メニューに追加
+     * News Crawlerメニューのサブメニューとして登録されるため、
+     * このメソッドは呼び出されません
      */
     public function add_admin_menu() {
-        // News Crawlerの設定メニューが存在する場合はサブメニューとして追加
-        if (menu_page_url('news-crawler-settings', false)) {
-            add_submenu_page(
-                'news-crawler-settings',
-                'OGP設定',
-                'OGP設定',
-                'manage_options',
-                'news-crawler-ogp-settings',
-                array($this, 'admin_page')
-            );
-        } else {
-            // 親メニューが存在しない場合は独立したメニューとして追加
-            add_menu_page(
-                'OGP設定',
-                'OGP設定',
-                'manage_options',
-                'news-crawler-ogp-settings',
-                array($this, 'admin_page'),
-                'dashicons-share',
-                30
-            );
-        }
+        // このメソッドは使用されません
+        // OGP設定はNews Crawlerメニューのサブメニューとして登録されます
     }
     
     /**
