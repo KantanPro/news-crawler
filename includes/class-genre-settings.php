@@ -216,8 +216,6 @@ class NewsCrawlerGenreSettings {
         echo '<p>投稿作成時のAI要約自動生成に関する設定です。OpenAI APIキーが設定されている必要があります。</p>';
     }
     
-
-    
     public function youtube_api_key_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $api_key = isset($options['youtube_api_key']) ? $options['youtube_api_key'] : '';
@@ -2429,7 +2427,6 @@ class NewsCrawlerGenreSettings {
      */
     public function render_auto_posting_reports() {
         // 個別ジャンルレポートは非表示
-        echo '<p>個別ジャンルレポートは非表示になっています。</p>';
         return;
     }
     
