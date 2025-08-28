@@ -45,9 +45,9 @@ class NewsCrawlerFeaturedImageGenerator {
             case 'unsplash':
                 $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
                 break;
-            case 'template':
             default:
-                $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                // デフォルトはAI画像生成を使用
+                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 break;
         }
         
@@ -70,30 +70,24 @@ class NewsCrawlerFeaturedImageGenerator {
         // 基本設定から値を取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         
-        // 画像サイズ設定（基本設定を優先）
-        $width = isset($basic_settings['template_width']) ? intval($basic_settings['template_width']) : 
-                 (isset($settings['template_width']) ? intval($settings['template_width']) : 1200);
-        $height = isset($basic_settings['template_height']) ? intval($basic_settings['template_height']) : 
-                  (isset($settings['template_height']) ? intval($settings['template_height']) : 630);
+        // 画像サイズ設定（デフォルト値を使用）
+        $width = 1200;
+        $height = 630;
         
         error_log('Featured Image Generator - Template: Image size: ' . $width . 'x' . $height);
         
         // 画像を作成
         $image = imagecreatetruecolor($width, $height);
         
-        // 背景色設定（グラデーション）- 基本設定を優先
-        $bg_color1 = isset($basic_settings['bg_color1']) ? $basic_settings['bg_color1'] : 
-                    (isset($settings['bg_color1']) ? $settings['bg_color1'] : '#4F46E5');
-        $bg_color2 = isset($basic_settings['bg_color2']) ? $basic_settings['bg_color2'] : 
-                    (isset($settings['bg_color2']) ? $settings['bg_color2'] : '#7C3AED');
+        // 背景色設定（グラデーション）- デフォルト値を使用
+        $bg_color1 = '#4F46E5';
+        $bg_color2 = '#7C3AED';
         
         $this->create_gradient_background($image, $width, $height, $bg_color1, $bg_color2);
         
-        // テキスト設定 - 基本設定を優先
-        $text_color = isset($basic_settings['text_color']) ? $basic_settings['text_color'] : 
-                     (isset($settings['text_color']) ? $settings['text_color'] : '#FFFFFF');
-        $font_size = isset($basic_settings['font_size']) ? intval($basic_settings['font_size']) : 
-                    (isset($settings['font_size']) ? intval($settings['font_size']) : 48);
+        // テキスト設定 - デフォルト値を使用
+        $text_color = '#FFFFFF';
+        $font_size = 48;
         
         // 日本語タイトルを生成（キーワード + ニュースまとめ + 日付）
         $display_title = $this->create_japanese_title($title, $keywords);
@@ -404,9 +398,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * 日本語TTFフォントでテキスト描画
      */
     private function draw_japanese_text_with_ttf($image, $text, $font_size, $color, $width, $height, $font_path) {
-        // 基本設定から拡大倍率を取得
-        $basic_settings = get_option('news_crawler_basic_settings', array());
-        $scale_factor = isset($basic_settings['text_scale']) ? intval($basic_settings['text_scale']) : 3;
+        // 拡大倍率をデフォルト値で設定
+        $scale_factor = 3;
         
         // フォントサイズを調整（日本語用に大きめに）
         $adjusted_font_size = max($font_size, 36) * ($scale_factor / 3);
@@ -518,10 +511,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $font_size = 5; // 内蔵フォントサイズ（1-5）
         
         // 設定から拡大倍率を取得（基本設定を優先）
-        $basic_settings = get_option('news_crawler_basic_settings', array());
-        $featured_settings = get_option($this->option_name, array());
-        $scale_factor = isset($basic_settings['text_scale']) ? intval($basic_settings['text_scale']) : 
-                       (isset($featured_settings['text_scale']) ? intval($featured_settings['text_scale']) : 4);
+        $scale_factor = 4;
         
         // テキストが日本語を含む場合はローマ字に変換
         if (preg_match('/[^\x00-\x7F]/', $text)) {
@@ -893,9 +883,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * 日本語テキストのフォールバック描画（フォントがない場合）
      */
     private function draw_japanese_text_fallback($image, $text, $color, $width, $height) {
-        // 基本設定から拡大倍率を取得
-        $basic_settings = get_option('news_crawler_basic_settings', array());
-        $scale_factor = isset($basic_settings['text_scale']) ? intval($basic_settings['text_scale']) : 4;
+        // 拡大倍率をデフォルト値で設定
+        $scale_factor = 4;
         
         // 日本語を読みやすい形式に変換
         $display_text = $this->format_japanese_for_display($text);
@@ -1565,14 +1554,7 @@ class NewsCrawlerFeaturedImageGenerator {
     public function sanitize_settings($input) {
         $sanitized = array();
         
-        // テンプレート設定
-        $sanitized['template_width'] = isset($input['template_width']) ? intval($input['template_width']) : 1200;
-        $sanitized['template_height'] = isset($input['template_height']) ? intval($input['template_height']) : 630;
-        $sanitized['bg_color1'] = isset($input['bg_color1']) ? sanitize_hex_color($input['bg_color1']) : '#4F46E5';
-        $sanitized['bg_color2'] = isset($input['bg_color2']) ? sanitize_hex_color($input['bg_color2']) : '#7C3AED';
-        $sanitized['text_color'] = isset($input['text_color']) ? sanitize_hex_color($input['text_color']) : '#FFFFFF';
-        $sanitized['font_size'] = isset($input['font_size']) ? intval($input['font_size']) : 48;
-        $sanitized['text_scale'] = isset($input['text_scale']) ? intval($input['text_scale']) : 3;
+
         
         // AI設定
 
@@ -1599,7 +1581,6 @@ class NewsCrawlerFeaturedImageGenerator {
                     <th scope="row">生成方法</th>
                     <td>
                         <select name="featured_image_method" id="featured_image_method">
-                            <option value="template">テンプレート生成</option>
                             <option value="ai">AI画像生成 (OpenAI DALL-E)</option>
                             <option value="unsplash">Unsplash画像取得</option>
                         </select>
@@ -1607,50 +1588,7 @@ class NewsCrawlerFeaturedImageGenerator {
                 </tr>
             </table>
             
-            <!-- テンプレート設定 -->
-            <div id="template-settings" class="method-settings">
-                <h4>テンプレート設定</h4>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">画像サイズ</th>
-                        <td>
-                            <input type="number" name="<?php echo $this->option_name; ?>[template_width]" value="<?php echo esc_attr($settings['template_width'] ?? 1200); ?>" min="400" max="2000" /> × 
-                            <input type="number" name="<?php echo $this->option_name; ?>[template_height]" value="<?php echo esc_attr($settings['template_height'] ?? 630); ?>" min="200" max="1200" /> px
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">背景色1</th>
-                        <td><input type="color" name="<?php echo $this->option_name; ?>[bg_color1]" value="<?php echo esc_attr($settings['bg_color1'] ?? '#4F46E5'); ?>" /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row">背景色2</th>
-                        <td><input type="color" name="<?php echo $this->option_name; ?>[bg_color2]" value="<?php echo esc_attr($settings['bg_color2'] ?? '#7C3AED'); ?>" /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row">テキスト色</th>
-                        <td><input type="color" name="<?php echo $this->option_name; ?>[text_color]" value="<?php echo esc_attr($settings['text_color'] ?? '#FFFFFF'); ?>" /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row">フォントサイズ</th>
-                        <td>
-                            <input type="number" name="<?php echo $this->option_name; ?>[font_size]" value="<?php echo esc_attr($settings['font_size'] ?? 48); ?>" min="24" max="120" /> px
-                            <p class="description">TTFフォント使用時のサイズ。内蔵フォント使用時は自動調整されます。</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">文字拡大倍率</th>
-                        <td>
-                            <select name="<?php echo $this->option_name; ?>[text_scale]">
-                                <option value="2" <?php selected($settings['text_scale'] ?? 3, 2); ?>>2倍</option>
-                                <option value="3" <?php selected($settings['text_scale'] ?? 3, 3); ?>>3倍（推奨）</option>
-                                <option value="4" <?php selected($settings['text_scale'] ?? 3, 4); ?>>4倍</option>
-                                <option value="5" <?php selected($settings['text_scale'] ?? 3, 5); ?>>5倍</option>
-                            </select>
-                            <p class="description">内蔵フォント使用時の文字拡大倍率</p>
-                        </td>
-                    </tr>
-                </table>
-            </div>
+
             
             <!-- AI設定 -->
             <div id="ai-settings" class="method-settings" style="display: none;">

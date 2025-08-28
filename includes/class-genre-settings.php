@@ -134,14 +134,7 @@ class NewsCrawlerGenreSettings {
             'featured_image_settings'
         );
         
-        // テンプレート設定フィールド
-        add_settings_field(
-            'template_settings',
-            'テンプレート設定',
-            array($this, 'template_settings_callback'),
-            'news-crawler-basic',
-            'featured_image_settings'
-        );
+
         
         // 要約生成設定セクション
         add_settings_section(
@@ -414,7 +407,6 @@ class NewsCrawlerGenreSettings {
         $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
         
         $methods = array(
-            'template' => 'テンプレート生成（軽量・高速）',
             'ai' => 'AI生成（OpenAI DALL-E）',
             'unsplash' => 'Unsplash画像取得'
         );
@@ -451,9 +443,9 @@ class NewsCrawlerGenreSettings {
         }
         
         if (isset($input['featured_image_method'])) {
-            $allowed_methods = array('template', 'ai', 'unsplash');
+            $allowed_methods = array('ai', 'unsplash');
             $method = sanitize_text_field($input['featured_image_method']);
-            $sanitized['featured_image_method'] = in_array($method, $allowed_methods) ? $method : 'template';
+            $sanitized['featured_image_method'] = in_array($method, $allowed_methods) ? $method : 'ai';
         }
         
         if (isset($input['auto_summary_generation'])) {
@@ -470,34 +462,7 @@ class NewsCrawlerGenreSettings {
             $sanitized['summary_to_excerpt'] = (bool) $input['summary_to_excerpt'];
         }
         
-        // テンプレート設定の処理
-        if (isset($input['template_width'])) {
-            $sanitized['template_width'] = intval($input['template_width']);
-        }
-        
-        if (isset($input['template_height'])) {
-            $sanitized['template_height'] = intval($input['template_height']);
-        }
-        
-        if (isset($input['bg_color1'])) {
-            $sanitized['bg_color1'] = sanitize_hex_color($input['bg_color1']);
-        }
-        
-        if (isset($input['bg_color2'])) {
-            $sanitized['bg_color2'] = sanitize_hex_color($input['bg_color2']);
-        }
-        
-        if (isset($input['text_color'])) {
-            $sanitized['text_color'] = sanitize_hex_color($input['text_color']);
-        }
-        
-        if (isset($input['font_size'])) {
-            $sanitized['font_size'] = intval($input['font_size']);
-        }
-        
-        if (isset($input['text_scale'])) {
-            $sanitized['text_scale'] = intval($input['text_scale']);
-        }
+
         
         // X（Twitter）自動シェア設定の処理
         if (isset($input['twitter_enabled'])) {
@@ -552,63 +517,7 @@ class NewsCrawlerGenreSettings {
         return $sanitized;
     }
     
-    public function template_settings_callback() {
-        $options = get_option('news_crawler_basic_settings', array());
-        ?>
-        <div class="template-settings">
-            <table class="form-table">
-                <tr>
-                    <th scope="row">画像サイズ</th>
-                    <td>
-                        <input type="number" name="news_crawler_basic_settings[template_width]" value="<?php echo esc_attr($options['template_width'] ?? 1200); ?>" min="400" max="2000" style="width: 80px;" /> × 
-                        <input type="number" name="news_crawler_basic_settings[template_height]" value="<?php echo esc_attr($options['template_height'] ?? 630); ?>" min="200" max="1200" style="width: 80px;" /> px
-                        <p class="description">アイキャッチ画像のサイズを指定してください。</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">背景色1</th>
-                    <td>
-                        <input type="color" name="news_crawler_basic_settings[bg_color1]" value="<?php echo esc_attr($options['bg_color1'] ?? '#4F46E5'); ?>" />
-                        <p class="description">グラデーション背景の開始色</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">背景色2</th>
-                    <td>
-                        <input type="color" name="news_crawler_basic_settings[bg_color2]" value="<?php echo esc_attr($options['bg_color2'] ?? '#7C3AED'); ?>" />
-                        <p class="description">グラデーション背景の終了色</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">テキスト色</th>
-                    <td>
-                        <input type="color" name="news_crawler_basic_settings[text_color]" value="<?php echo esc_attr($options['text_color'] ?? '#FFFFFF'); ?>" />
-                        <p class="description">タイトルテキストの色</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">フォントサイズ</th>
-                    <td>
-                        <input type="number" name="news_crawler_basic_settings[font_size]" value="<?php echo esc_attr($options['font_size'] ?? 48); ?>" min="24" max="120" style="width: 80px;" /> px
-                        <p class="description">TTFフォント使用時のサイズ。内蔵フォント使用時は自動調整されます。</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">文字拡大倍率</th>
-                    <td>
-                        <select name="news_crawler_basic_settings[text_scale]">
-                            <option value="2" <?php selected($options['text_scale'] ?? 3, 2); ?>>2倍</option>
-                            <option value="3" <?php selected($options['text_scale'] ?? 3, 3); ?>>3倍（推奨）</option>
-                            <option value="4" <?php selected($options['text_scale'] ?? 3, 4); ?>>4倍</option>
-                            <option value="5" <?php selected($options['text_scale'] ?? 3, 5); ?>>5倍</option>
-                        </select>
-                        <p class="description">内蔵フォント使用時の文字拡大倍率。文字が小さい場合は4倍または5倍を選択してください。</p>
-                    </td>
-                </tr>
-            </table>
-        </div>
-        <?php
-    }
+
     
 
     
@@ -769,7 +678,6 @@ class NewsCrawlerGenreSettings {
                                     </label>
                                     <div id="featured-image-settings" style="margin-top: 10px; display: none;">
                                         <select id="featured-image-method" name="featured_image_method">
-                                            <option value="template">テンプレート生成</option>
                                             <option value="ai" selected>AI画像生成 (OpenAI DALL-E)</option>
                                             <option value="unsplash">Unsplash画像取得</option>
                                         </select>
@@ -1274,7 +1182,7 @@ class NewsCrawlerGenreSettings {
                         jQuery('#post-categories').val(setting.post_categories ? setting.post_categories.join('\n') : 'blog');
                         jQuery('#post-status').val(setting.post_status || 'draft');
                         jQuery('#auto-featured-image').prop('checked', setting.auto_featured_image == 1).trigger('change');
-                        jQuery('#featured-image-method').val(setting.featured_image_method || 'template');
+                        jQuery('#featured-image-method').val(setting.featured_image_method || 'ai');
                         jQuery('#auto-posting').prop('checked', setting.auto_posting == 1).trigger('change');
                         jQuery('#posting-frequency').val(setting.posting_frequency || 'daily').trigger('change');
                         jQuery('#custom-frequency-days').val(setting.custom_frequency_days || 7);
