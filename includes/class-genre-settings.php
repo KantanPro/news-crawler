@@ -290,7 +290,75 @@ class NewsCrawlerGenreSettings {
         echo '<p class="description">要約生成に使用するOpenAIモデルを選択してください。</p>';
     }
     
-    // X（Twitter）自動シェア設定セクションは廃止
+    // X（Twitter）自動シェア設定セクション
+    public function twitter_section_callback() {
+        echo '<p>X（旧Twitter）への自動投稿に関する設定です。投稿作成後に自動的にXにシェアされます。</p>';
+    }
+    
+    public function twitter_enabled_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $enabled = isset($options['twitter_enabled']) ? $options['twitter_enabled'] : false;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_enabled]" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[twitter_enabled]">X（Twitter）への自動シェアを有効にする</label>';
+        echo '<p class="description">投稿作成後に自動的にXにシェアされます。</p>';
+    }
+    
+    public function twitter_bearer_token_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $bearer_token = isset($options['twitter_bearer_token']) ? $options['twitter_bearer_token'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[twitter_bearer_token]" value="' . esc_attr($bearer_token) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したBearer Tokenを入力してください。</p>';
+    }
+    
+    public function twitter_api_key_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($options['twitter_api_key']) ? $options['twitter_api_key'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[twitter_api_key]" value="' . esc_attr($api_key) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAPI Key（Consumer Key）を入力してください。</p>';
+    }
+    
+    public function twitter_api_secret_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $api_secret = isset($options['twitter_api_secret']) ? $options['twitter_api_secret'] : '';
+        echo '<input type="password" name="news_crawler_basic_settings[twitter_api_secret]" value="' . esc_attr($api_secret) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAPI Secret（Consumer Secret）を入力してください。</p>';
+    }
+    
+    public function twitter_access_token_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $access_token = isset($options['twitter_access_token']) ? $options['twitter_access_token'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[twitter_access_token]" value="' . esc_attr($access_token) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAccess Tokenを入力してください。</p>';
+    }
+    
+    public function twitter_access_token_secret_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $access_token_secret = isset($options['twitter_api_secret']) ? $options['twitter_api_secret'] : '';
+        echo '<input type="password" name="news_crawler_basic_settings[twitter_access_token_secret]" value="' . esc_attr($access_token_secret) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
+    }
+    
+    public function twitter_message_template_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $template = isset($options['twitter_message_template']) ? $options['twitter_message_template'] : '{title}';
+        echo '<input type="text" name="news_crawler_basic_settings[twitter_message_template]" value="' . esc_attr($template) . '" size="50" />';
+        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。{title}で投稿タイトルを挿入できます。</p>';
+    }
+    
+    public function twitter_include_link_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $include_link = isset($options['twitter_include_link']) ? $options['twitter_include_link'] : true;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_include_link]" value="1" ' . checked(1, $include_link, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[twitter_include_link]">投稿へのリンクを含める</label>';
+        echo '<p class="description">X投稿に投稿へのリンクを含めます。</p>';
+    }
+    
+    public function twitter_hashtags_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $hashtags = isset($options['twitter_hashtags']) ? $options['twitter_hashtags'] : '';
+        echo '<input type="text" name="news_crawler_basic_settings[twitter_hashtags]" value="' . esc_attr($hashtags) . '" size="50" />';
+        echo '<p class="description">X投稿に含めるハッシュタグをスペース区切りで入力してください（例：ニュース テクノロジー）。</p>';
+    }
     
     public function duplicate_check_section_callback() {
         echo '<p>重複チェックの厳しさと期間を設定できます。より厳しい設定にすると重複を防げますが、誤ってスキップされる可能性も高くなります。</p>';
@@ -420,7 +488,42 @@ class NewsCrawlerGenreSettings {
             $sanitized['text_scale'] = intval($input['text_scale']);
         }
         
-        // X（Twitter）自動シェア設定セクションは廃止
+        // X（Twitter）自動シェア設定の処理
+        if (isset($input['twitter_enabled'])) {
+            $sanitized['twitter_enabled'] = (bool) $input['twitter_enabled'];
+        }
+        
+        if (isset($input['twitter_bearer_token'])) {
+            $sanitized['twitter_bearer_token'] = sanitize_text_field($input['twitter_bearer_token']);
+        }
+        
+        if (isset($input['twitter_api_key'])) {
+            $sanitized['twitter_api_key'] = sanitize_text_field($input['twitter_api_key']);
+        }
+        
+        if (isset($input['twitter_api_secret'])) {
+            $sanitized['twitter_api_secret'] = sanitize_text_field($input['twitter_api_secret']);
+        }
+        
+        if (isset($input['twitter_access_token'])) {
+            $sanitized['twitter_access_token'] = sanitize_text_field($input['twitter_access_token']);
+        }
+        
+        if (isset($input['twitter_access_token_secret'])) {
+            $sanitized['twitter_access_token_secret'] = sanitize_text_field($input['twitter_access_token_secret']);
+        }
+        
+        if (isset($input['twitter_message_template'])) {
+            $sanitized['twitter_message_template'] = sanitize_text_field($input['twitter_message_template']);
+        }
+        
+        if (isset($input['twitter_include_link'])) {
+            $sanitized['twitter_include_link'] = (bool) $input['twitter_include_link'];
+        }
+        
+        if (isset($input['twitter_hashtags'])) {
+            $sanitized['twitter_hashtags'] = sanitize_text_field($input['twitter_hashtags']);
+        }
         
         // 重複チェック設定の処理
         if (isset($input['duplicate_check_strictness'])) {
@@ -618,6 +721,8 @@ class NewsCrawlerGenreSettings {
                 submit_button();
                 ?>
             </form>
+            
+
             
 
         </div>

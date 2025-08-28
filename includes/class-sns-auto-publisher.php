@@ -109,6 +109,30 @@ class NewsCrawlerSNSAutoPublisher {
             'news-crawler-sns',
             'sns_publisher_main'
         );
+        
+        add_settings_field(
+            'x_bearer_token',
+            'Bearer Token：',
+            array($this, 'x_bearer_token_field_callback'),
+            'news-crawler-sns',
+            'sns_publisher_main'
+        );
+        
+        add_settings_field(
+            'x_api_key',
+            'API Key（Consumer Key）：',
+            array($this, 'x_api_key_field_callback'),
+            'news-crawler-sns',
+            'sns_publisher_main'
+        );
+        
+        add_settings_field(
+            'x_api_secret',
+            'API Secret（Consumer Secret）：',
+            array($this, 'x_api_secret_field_callback'),
+            'news-crawler-sns',
+            'sns_publisher_main'
+        );
     }
     
     /**
@@ -298,6 +322,9 @@ class NewsCrawlerSNSAutoPublisher {
         $sanitized['x_hashtags'] = sanitize_text_field($input['x_hashtags']);
         $sanitized['x_access_token'] = sanitize_text_field($input['x_access_token']);
         $sanitized['x_access_token_secret'] = sanitize_text_field($input['x_access_token_secret']);
+        $sanitized['x_bearer_token'] = sanitize_text_field($input['x_bearer_token']);
+        $sanitized['x_api_key'] = sanitize_text_field($input['x_api_key']);
+        $sanitized['x_api_secret'] = sanitize_text_field($input['x_api_secret']);
         
         return $sanitized;
     }
@@ -774,5 +801,41 @@ class NewsCrawlerSNSAutoPublisher {
         );
         
         wp_send_json_success(array('message' => $message));
+    }
+    
+    /**
+     * X Bearer Tokenフィールドのコールバック
+     */
+    public function x_bearer_token_field_callback() {
+        $options = get_option($this->option_name, array());
+        $bearer_token = isset($options['x_bearer_token']) ? $options['x_bearer_token'] : '';
+        ?>
+        <input type="password" id="x_bearer_token" name="<?php echo $this->option_name; ?>[x_bearer_token]" value="<?php echo esc_attr($bearer_token); ?>" class="regular-text" />
+        <p class="description">X（Twitter）APIのBearer Tokenを入力してください</p>
+        <?php
+    }
+    
+    /**
+     * X API Keyフィールドのコールバック
+     */
+    public function x_api_key_field_callback() {
+        $options = get_option($this->option_name, array());
+        $api_key = isset($options['x_api_key']) ? $options['x_api_key'] : '';
+        ?>
+        <input type="password" id="x_api_key" name="<?php echo $this->option_name; ?>[x_api_key]" value="<?php echo esc_attr($api_key); ?>" class="regular-text" />
+        <p class="description">X（Twitter）APIのAPI Key（Consumer Key）を入力してください</p>
+        <?php
+    }
+    
+    /**
+     * X API Secretフィールドのコールバック
+     */
+    public function x_api_secret_field_callback() {
+        $options = get_option($this->option_name, array());
+        $api_secret = isset($options['x_api_secret']) ? $options['x_api_secret'] : '';
+        ?>
+        <input type="password" id="x_api_secret" name="<?php echo $this->option_name; ?>[x_api_secret]" value="<?php echo esc_attr($api_secret); ?>" class="regular-text" />
+        <p class="description">X（Twitter）APIのAPI Secret（Consumer Secret）を入力してください</p>
+        <?php
     }
 }
