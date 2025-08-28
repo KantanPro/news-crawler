@@ -2,8 +2,8 @@
 /**
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
- * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。XPosterとの完全連携により、自動投稿された記事が確実にSNSにシェアされます。
- * Version: 1.9.9
+ * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。XPosterに依存しない独立したプラグインとして動作します。
+ * Version: 1.9.10
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -91,10 +91,10 @@ function news_crawler_init() {
 }
 add_action('plugins_loaded', 'news_crawler_init');
 
-// XPoster連携のための投稿ステータス変更フック
+// News Crawler用の処理のための投稿ステータス変更フック
 add_action('news_crawler_update_post_status', 'news_crawler_do_update_post_status', 10, 2);
 
-// XPosterと同じ投稿監視フックを追加
+// News Crawler独自の投稿監視フックを追加
 if (function_exists('wp_after_insert_post')) {
     // WordPress 5.6以降用
     add_action('wp_after_insert_post', 'news_crawler_save_post', 10, 2);
@@ -108,8 +108,8 @@ if (function_exists('wp_after_insert_post')) {
 // 未来の投稿が公開される際のフック
 add_action('future_to_publish', 'news_crawler_future_to_publish', 16);
 
-// XPoster用メタデータを確実に設定するためのフック
-add_action('news_crawler_ensure_xposter_meta', 'news_crawler_ensure_xposter_meta', 10, 1);
+// News Crawler用メタデータを確実に設定するためのフック
+add_action('news_crawler_ensure_meta', 'news_crawler_ensure_meta', 10, 1);
 
 // 投稿作成直後のXPoster用メタデータ設定を強化
 add_action('wp_insert_post', 'news_crawler_enhance_xposter_meta', 10, 3);
@@ -145,7 +145,7 @@ function news_crawler_do_update_post_status($post_id, $status) {
 
 /**
  * News Crawler用の投稿保存処理
- * XPosterと同じ動作を実装
+ * 投稿作成後のメタデータ設定を管理
  */
 function news_crawler_save_post($post_id, $post) {
     if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
@@ -155,17 +155,16 @@ function news_crawler_save_post($post_id, $post) {
     // News Crawlerで作成された投稿かチェック
     $is_news_crawler_post = get_post_meta($post_id, '_news_crawler_created', true);
     if ($is_news_crawler_post) {
-        // XPoster用のメタデータを設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_news_crawler_xposter_ready', true);
+        // News Crawler用のメタデータを設定
+        update_post_meta($post_id, '_news_crawler_ready', true);
         
-        error_log('NewsCrawler: XPoster用メタデータを設定しました (ID: ' . $post_id . ')');
+        error_log('NewsCrawler: 投稿用メタデータを設定しました (ID: ' . $post_id . ')');
     }
 }
 
 /**
  * News Crawler用の投稿更新処理
- * XPosterと同じ動作を実装
+ * 投稿公開時の処理を管理
  */
 function news_crawler_do_post_update($post_id, $post = null, $updated = null, $post_before = null) {
     if ((empty($_POST) && !news_crawler_auto_post_allowed($post_id)) || 
@@ -182,14 +181,14 @@ function news_crawler_do_post_update($post_id, $post = null, $updated = null, $p
         return $post_id;
     }
     
-    // News Crawlerで作成された投稿の場合、XPosterとの連携を強化
+    // News Crawlerで作成された投稿の場合、メタデータを更新
     $is_news_crawler_post = get_post_meta($post_id, '_news_crawler_created', true);
     if ($is_news_crawler_post) {
-        // XPoster用のメタデータを再設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_news_crawler_xposter_ready', true);
+        // News Crawler用のメタデータを更新
+        update_post_meta($post_id, '_news_crawler_published', true);
+        update_post_meta($post_id, '_news_crawler_publish_date', current_time('mysql'));
         
-        error_log('NewsCrawler: 公開時にXPoster用メタデータを再設定しました (ID: ' . $post_id . ')');
+        error_log('NewsCrawler: 公開時にメタデータを更新しました (ID: ' . $post_id . ')');
     }
     
     return $post_id;
@@ -204,13 +203,13 @@ function news_crawler_future_to_publish($post) {
         return;
     }
     
-    // News Crawlerで作成された投稿の場合、XPosterとの連携を強化
+    // News Crawlerで作成された投稿の場合、メタデータを更新
     $is_news_crawler_post = get_post_meta($post_id, '_news_crawler_created', true);
     if ($is_news_crawler_post) {
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_news_crawler_xposter_ready', true);
+        update_post_meta($post_id, '_news_crawler_published', true);
+        update_post_meta($post_id, '_news_crawler_publish_date', current_time('mysql'));
         
-        error_log('NewsCrawler: 未来投稿公開時にXPoster用メタデータを設定しました (ID: ' . $post_id . ')');
+        error_log('NewsCrawler: 未来投稿公開時にメタデータを更新しました (ID: ' . $post_id . ')');
     }
 }
 
@@ -242,17 +241,13 @@ function news_crawler_in_post_type($post_id) {
  * 許可されている投稿タイプの配列を取得
  */
 function news_crawler_allowed_post_types($post_type = false) {
-    $post_type_settings = get_option('wpt_post_types', array());
-    
-    if (empty($post_type_settings)) {
-        // XPosterの設定がない場合、デフォルトでpostタイプを許可
-        $post_type_settings = array(
-            'post' => array(
-                'post-published-update' => '1',
-                'post-edited-update' => '1'
-            )
-        );
-    }
+    // News Crawler独自の設定を使用
+    $post_type_settings = get_option('news_crawler_post_types', array(
+        'post' => array(
+            'post-published-update' => '1',
+            'post-edited-update' => '1'
+        )
+    ));
     
     $post_types = array_keys($post_type_settings);
     
@@ -284,43 +279,39 @@ function news_crawler_enhance_xposter_meta($post_id, $post, $update) {
     $is_news_crawler_post = get_post_meta($post_id, '_news_crawler_created', true);
     if ($is_news_crawler_post) {
         // XPoster用のメタデータを確実に設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes');
-        update_post_meta($post_id, '_news_crawler_xposter_ready', true);
+        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
+        update_post_meta($post_id, '_news_crawler_twitter', 'yes');
+        update_post_meta($post_id, '_news_crawler_template_x', 'yes');
+        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes');
+        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes');
+        update_post_meta($post_id, '_news_crawler_ready', true);
         
         error_log('NewsCrawler: 投稿作成直後にXPoster用メタデータを強化設定しました (ID: ' . $post_id . ')');
     }
 }
 
 /**
- * XPoster用メタデータを確実に設定
+ * News Crawler用メタデータを確実に設定
  */
-function news_crawler_ensure_xposter_meta($post_id) {
+function news_crawler_ensure_meta($post_id) {
     if (!$post_id) {
         return;
     }
     
     // 投稿が存在するかチェック
     $post = get_post($post_id);
-    if (!$post) {
+    if (!$post_id) {
         return;
     }
     
     // News Crawlerで作成された投稿かチェック
     $is_news_crawler_post = get_post_meta($post_id, '_news_crawler_created', true);
     if ($is_news_crawler_post) {
-        // XPoster用のメタデータを再設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes');
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes');
-        update_post_meta($post_id, '_news_crawler_xposter_ready', true);
+        // News Crawler用のメタデータを再設定
+        update_post_meta($post_id, '_news_crawler_ready', true);
+        update_post_meta($post_id, '_news_crawler_last_meta_update', current_time('mysql'));
         
-        error_log('NewsCrawler: XPoster用メタデータを確実に設定しました (ID: ' . $post_id . ')');
+        error_log('NewsCrawler: メタデータを確実に設定しました (ID: ' . $post_id . ')');
     }
 }
 
@@ -1006,7 +997,7 @@ class YouTubeCrawler {
             $post_content .= '<!-- /wp:group -->';
         }
         
-        // XPoster連携のため、最初に下書きとして投稿を作成
+        // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
@@ -1032,14 +1023,14 @@ class YouTubeCrawler {
         update_post_meta($post_id, '_news_crawler_creation_method', 'youtube');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
+        update_post_meta($post_id, '_news_crawler_ready', false);
         
-        // XPoster用のメタデータを直接設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes'); // カスタムツイート用
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes'); // X用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes'); // Mastodon用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes'); // Bluesky用テンプレート
+        // News Crawler用のメタデータを設定
+        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
+        update_post_meta($post_id, '_news_crawler_twitter', 'yes'); // カスタムツイート用
+        update_post_meta($post_id, '_news_crawler_template_x', 'yes'); // X用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes'); // Mastodon用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes'); // Bluesky用テンプレート
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -1073,7 +1064,7 @@ class YouTubeCrawler {
         // X（Twitter）自動シェア（投稿成功後）
         $this->maybe_share_to_twitter($post_id, $post_title);
         
-        // XPoster連携のため、投稿ステータス変更を遅延実行
+        // News Crawler用の処理のため、投稿ステータス変更を遅延実行
         if ($status !== 'draft') {
             $this->schedule_post_status_update($post_id, $status);
         }
@@ -2223,7 +2214,7 @@ class NewsCrawler {
             $post_content .= '<!-- /wp:quote -->';
         }
         
-        // XPoster連携のため、最初に下書きとして投稿を作成
+        // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
@@ -2252,14 +2243,14 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_crawler_creation_method', 'auto');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
+        update_post_meta($post_id, '_news_crawler_ready', false);
         
-        // XPoster用のメタデータを直接設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes'); // カスタムツイート用
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes'); // X用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes'); // Mastodon用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes'); // Bluesky用テンプレート
+        // News Crawler用のメタデータを設定
+        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
+        update_post_meta($post_id, '_news_crawler_twitter', 'yes'); // カスタムツイート用
+        update_post_meta($post_id, '_news_crawler_template_x', 'yes'); // X用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes'); // Mastodon用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes'); // Bluesky用テンプレート
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -2369,7 +2360,7 @@ class NewsCrawler {
             $post_content .= '<!-- /wp:quote -->';
         }
         
-        // XPoster連携のため、最初に下書きとして投稿を作成
+        // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
@@ -2398,14 +2389,14 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_crawler_creation_method', 'auto_categories');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
+        update_post_meta($post_id, '_news_crawler_ready', false);
         
-        // XPoster用のメタデータを直接設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes'); // カスタムツイート用
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes'); // X用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes'); // Mastodon用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes'); // Bluesky用テンプレート
+        // News Crawler用のメタデータを設定
+        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
+        update_post_meta($post_id, '_news_crawler_twitter', 'yes'); // カスタムツイート用
+        update_post_meta($post_id, '_news_crawler_template_x', 'yes'); // X用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes'); // Mastodon用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes'); // Bluesky用テンプレート
         
         foreach ($articles as $index => $article) {
             update_post_meta($post_id, '_news_article_' . $index . '_title', $article['title']);
@@ -2429,7 +2420,7 @@ class NewsCrawler {
         // X（Twitter）自動シェア（投稿成功後）
         $this->maybe_share_to_twitter($post_id, $post_title);
         
-        // XPoster連携のため、投稿ステータス変更を遅延実行
+        // News Crawler用の処理のため、投稿ステータス変更を遅延実行
         if ($status !== 'draft') {
             $this->schedule_post_status_update($post_id, $status);
         }
@@ -3223,14 +3214,14 @@ class NewsCrawler {
     }
     
     /**
-     * XPoster連携のための投稿ステータス変更を遅延実行
+     * News Crawler用の処理のための投稿ステータス変更を遅延実行
      */
     private function schedule_post_status_update($post_id, $target_status) {
         // XPosterが新規投稿を認識するまで10秒待ってからステータスを変更（時間を延長）
         wp_schedule_single_event(time() + 10, 'news_crawler_update_post_status', array($post_id, $target_status));
         
-        // 追加でXPoster用のメタデータを再設定
-        wp_schedule_single_event(time() + 3, 'news_crawler_ensure_xposter_meta', array($post_id));
+        // 追加でNews Crawler用のメタデータを再設定
+        wp_schedule_single_event(time() + 3, 'news_crawler_ensure_meta', array($post_id));
         
         error_log('NewsCrawler: 投稿ステータス変更を遅延実行でスケジュール (ID: ' . $post_id . ', 対象ステータス: ' . $target_status . ')');
     }

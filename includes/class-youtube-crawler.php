@@ -618,7 +618,7 @@ class NewsCrawlerYouTubeCrawler {
             }
         }
         
-        // XPoster連携のため、最初に下書きとして投稿を作成
+        // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
@@ -644,14 +644,14 @@ class NewsCrawlerYouTubeCrawler {
         update_post_meta($post_id, '_news_crawler_creation_method', 'youtube_standalone');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_xposter_ready', false);
+        update_post_meta($post_id, '_news_crawler_ready', false);
         
-        // XPoster用のメタデータを直接設定
-        update_post_meta($post_id, '_wpt_post_this', 'yes');
-        update_post_meta($post_id, '_jd_twitter', 'yes'); // カスタムツイート用
-        update_post_meta($post_id, '_wpt_post_template_x', 'yes'); // X用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_mastodon', 'yes'); // Mastodon用テンプレート
-        update_post_meta($post_id, '_wpt_post_template_bluesky', 'yes'); // Bluesky用テンプレート
+        // News Crawler用のメタデータを設定
+        update_post_meta($post_id, '_news_crawler_post_this', 'yes');
+        update_post_meta($post_id, '_news_crawler_twitter', 'yes'); // カスタムツイート用
+        update_post_meta($post_id, '_news_crawler_template_x', 'yes'); // X用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_mastodon', 'yes'); // Mastodon用テンプレート
+        update_post_meta($post_id, '_news_crawler_template_bluesky', 'yes'); // Bluesky用テンプレート
         
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -683,7 +683,7 @@ class NewsCrawlerYouTubeCrawler {
         // X（Twitter）自動シェア（投稿成功後）
         $this->maybe_share_to_twitter($post_id, $post_title);
         
-        // XPoster連携のため、投稿ステータス変更を遅延実行
+        // News Crawler用の処理のため、投稿ステータス変更を遅延実行
         if ($status !== 'draft') {
             $this->schedule_post_status_update($post_id, $status);
         }
@@ -1129,14 +1129,14 @@ class NewsCrawlerYouTubeCrawler {
     }
     
     /**
-     * XPoster連携のための投稿ステータス変更を遅延実行
+     * News Crawler用の処理のための投稿ステータス変更を遅延実行
      */
     private function schedule_post_status_update($post_id, $target_status) {
         // XPosterが新規投稿を認識するまで5秒待ってからステータスを変更（時間を延長）
         wp_schedule_single_event(time() + 10, 'news_crawler_update_post_status', array($post_id, $target_status));
         
-        // 追加でXPoster用のメタデータを再設定
-        wp_schedule_single_event(time() + 2, 'news_crawler_ensure_xposter_meta', array($post_id));
+        // 追加でNews Crawler用のメタデータを再設定
+        wp_schedule_single_event(time() + 2, 'news_crawler_ensure_meta', array($post_id));
         
         error_log('YouTubeCrawler: 投稿ステータス変更を遅延実行でスケジュール (ID: ' . $post_id . ', 対象ステータス: ' . $target_status . ')');
     }
