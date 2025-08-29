@@ -2711,10 +2711,18 @@ class NewsCrawler {
 
             $article_date = date('Y-m-d H:i:s', strtotime((string)($item->pubDate ?? $item->published ?? $dc->date ?? 'now')));
             
+            // デバッグ情報を記録
+            error_log('News Crawler: RSS記事解析 - タイトル: ' . (string)($item->title ?? ''));
+            error_log('News Crawler: RSS記事解析 - 元の日時データ: pubDate=' . (string)($item->pubDate ?? 'なし') . ', published=' . (string)($item->published ?? 'なし') . ', dc:date=' . (string)($dc->date ?? 'なし'));
+            error_log('News Crawler: RSS記事解析 - 変換後の日時: ' . $article_date);
+            
             // 期間制限をチェック
             if (!$this->is_article_within_age_limit($article_date)) {
+                error_log('News Crawler: RSS記事解析 - 期間制限により古い記事をスキップ: ' . (string)($item->title ?? ''));
                 continue; // 古い記事はスキップ
             }
+            
+            error_log('News Crawler: RSS記事解析 - 期間制限内の記事を許可: ' . (string)($item->title ?? ''));
 
             $article = array(
                 'title' => (string)($item->title ?? ''),
@@ -2949,22 +2957,33 @@ class NewsCrawler {
         // 基本設定から期間制限設定を取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         
+        // デバッグ情報を記録
+        error_log('News Crawler: 期間制限チェック開始 - 記事日時: ' . $article_date);
+        error_log('News Crawler: 基本設定: ' . print_r($basic_settings, true));
+        
         // 期間制限が無効の場合は常にtrue
         if (!isset($basic_settings['enable_content_age_limit']) || !$basic_settings['enable_content_age_limit']) {
+            error_log('News Crawler: 期間制限が無効 - 制限なしで記事を許可');
             return true;
         }
         
         // 制限月数を取得（デフォルト12ヶ月）
         $limit_months = isset($basic_settings['content_age_limit_months']) ? intval($basic_settings['content_age_limit_months']) : 12;
+        error_log('News Crawler: 制限月数: ' . $limit_months . 'ヶ月');
         
         // 制限日時を計算
         $limit_date = date('Y-m-d H:i:s', strtotime("-{$limit_months} months"));
+        error_log('News Crawler: 制限日時: ' . $limit_date);
         
         // 記事の日時を取得
         $article_datetime = date('Y-m-d H:i:s', strtotime($article_date));
+        error_log('News Crawler: 記事日時（変換後）: ' . $article_datetime);
         
         // 記事の日時が制限日時より新しい場合はtrue
-        return $article_datetime >= $limit_date;
+        $is_within_limit = $article_datetime >= $limit_date;
+        error_log('News Crawler: 期間制限チェック結果: ' . ($is_within_limit ? '制限内（許可）' : '制限外（スキップ）'));
+        
+        return $is_within_limit;
     }
     
     private function build_absolute_url($base_url, $relative_url) {

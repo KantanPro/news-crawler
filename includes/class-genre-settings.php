@@ -27,6 +27,7 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_reset_cron_schedule', array($this, 'reset_cron_schedule'));
+        add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
         
         // 自動投稿のスケジュール処理
         add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));

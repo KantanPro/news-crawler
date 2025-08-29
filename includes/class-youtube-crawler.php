@@ -791,22 +791,33 @@ class NewsCrawlerYouTubeCrawler {
         // 基本設定から期間制限設定を取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         
+        // デバッグ情報を記録
+        error_log('YouTube Crawler: 期間制限チェック開始 - 動画公開日時: ' . $published_at);
+        error_log('YouTube Crawler: 基本設定: ' . print_r($basic_settings, true));
+        
         // 期間制限が無効の場合は常にtrue
         if (!isset($basic_settings['enable_content_age_limit']) || !$basic_settings['enable_content_age_limit']) {
+            error_log('YouTube Crawler: 期間制限が無効 - 制限なしで動画を許可');
             return true;
         }
         
         // 制限月数を取得（デフォルト12ヶ月）
         $limit_months = isset($basic_settings['content_age_limit_months']) ? intval($basic_settings['content_age_limit_months']) : 12;
+        error_log('YouTube Crawler: 制限月数: ' . $limit_months . 'ヶ月');
         
         // 制限日時を計算
         $limit_date = date('Y-m-d H:i:s', strtotime("-{$limit_months} months"));
+        error_log('YouTube Crawler: 制限日時: ' . $limit_date);
         
         // 動画の公開日時を取得
         $video_date = date('Y-m-d H:i:s', strtotime($published_at));
+        error_log('YouTube Crawler: 動画日時（変換後）: ' . $video_date);
         
         // 動画の公開日が制限日時より新しい場合はtrue
-        return $video_date >= $limit_date;
+        $is_within_limit = $video_date >= $limit_date;
+        error_log('YouTube Crawler: 期間制限チェック結果: ' . ($is_within_limit ? '制限内（許可）' : '制限外（スキップ）'));
+        
+        return $is_within_limit;
     }
     
     private function fetch_channel_videos($channel_id, $max_results = 20) {
