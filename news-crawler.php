@@ -1410,7 +1410,7 @@ class NewsCrawler {
         
         add_settings_field(
             'max_articles',
-            '最大記事数',
+            '一度に引用する記事数',
             array($this, 'max_articles_callback'),
             'news-crawler',
             'news_crawler_main',
@@ -1460,9 +1460,9 @@ class NewsCrawler {
     
     public function max_articles_callback() {
         $options = get_option($this->option_name, array());
-        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 10;
+        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 1;
         echo '<input type="number" id="max_articles" name="' . $this->option_name . '[max_articles]" value="' . esc_attr($max_articles) . '" min="1" max="50" />';
-        echo '<p class="description">キーワードにマッチした記事の最大取得数（1-50件）</p>';
+        echo '<p class="description">一度に引用する記事の数（1-50件）</p>';
     }
     
     public function keywords_callback() {
@@ -1810,7 +1810,7 @@ class NewsCrawler {
         $options = get_option($this->option_name);
         if (!$options) {
             $default_options = array(
-                'max_articles' => 10,
+                'max_articles' => 1,
                 'keywords' => array('AI', 'テクノロジー', 'ビジネス', 'ニュース'),
                 'news_sources' => array(),
                 'post_category' => 'blog',
@@ -1842,7 +1842,7 @@ class NewsCrawler {
         $options = get_option($this->option_name, array());
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 10;
+        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 1;
         $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'blog';
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
         
