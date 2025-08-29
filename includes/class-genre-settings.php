@@ -847,7 +847,7 @@ class NewsCrawlerGenreSettings {
                 
                 <!-- ジャンル設定リスト -->
                 <div class="card" style="max-width: none; margin-top: 20px;">
-                    <h2>保存済みジャンル設定</h2>
+                    <h2>保存済み投稿設定</h2>
                     <div id="genre-settings-list">
                         <?php $this->render_genre_settings_list($genre_settings); ?>
                     </div>
