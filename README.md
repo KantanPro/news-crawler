@@ -4,6 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.0.0)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -12,10 +13,11 @@ Automatically fetch articles from specified news sources and add them as posts t
 - **📰 News Source Crawling**: Automatically fetch articles from RSS feeds and news websites
 - **🎥 YouTube Integration**: Crawl YouTube channels and create video embed posts
 - **🤖 AI-Powered Content**: Generate summaries and featured images using OpenAI
-- **🔒 Secure**: Enterprise-grade security with encrypted API key storage
-- **🌐 Multilingual**: Full internationalization support (English/Japanese)
+- **🔒 Enterprise Security**: Advanced security features with encrypted API key storage and comprehensive access controls
+- **🌐 Full Internationalization**: Complete multilingual support (English/Japanese) with localization files
 - **⚡ Performance Optimized**: Lightweight and fast with minimal resource usage
 - **📊 Analytics**: Built-in statistics and monitoring
+- **🛡️ Production Ready**: Comprehensive testing and security validation for enterprise deployment
 
 ## 📋 Requirements
 
@@ -98,6 +100,10 @@ The plugin requires API keys for full functionality:
 ## 🔒 Security Features
 
 - **🔐 Encrypted Storage**: API keys are encrypted using AES-256-CBC
+- **🛡️ Access Control**: Comprehensive permission checks and nonce validation
+- **🔒 Input Sanitization**: All user inputs are properly sanitized and validated
+- **🚫 XSS Protection**: Built-in protection against cross-site scripting attacks
+- **🔐 CSRF Protection**: Cross-site request forgery protection with nonce tokens
 - **🛡️ CSRF Protection**: Complete protection against cross-site request forgery
 - **✅ Input Validation**: All inputs are sanitized and validated
 - **👤 Permission Checks**: Proper capability verification for all actions
@@ -161,7 +167,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.0.0**: Major security and performance improvements
+- **v2.0.0** (2025-08-29): Production-ready release with enhanced security and internationalization
+  - Enterprise-grade security features with comprehensive access controls
+  - Complete multilingual support (English/Japanese)
+  - Enhanced performance and stability improvements
+  - Production deployment ready with comprehensive testing
 - **v1.9.17**: Enhanced news source sorting and debug information
 - **v1.9.16**: Automatic cron setup and improved reliability
 
