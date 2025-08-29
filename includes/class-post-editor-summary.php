@@ -29,7 +29,7 @@ class NewsCrawlerPostEditorSummary {
         // 投稿タイプがpostの場合のみ追加
         add_meta_box(
             'news_crawler_summary',
-            'News Crawler - AI要約生成',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - AI要約生成',
             array($this, 'render_summary_meta_box'),
             'post',
             'side',

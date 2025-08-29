@@ -37,7 +37,7 @@ class NewsCrawlerGenreSettings {
     public function add_admin_menu() {
         // メインメニュー
         add_menu_page(
-            'News Crawler',
+            'News Crawler ' . NEWS_CRAWLER_VERSION,
             'News Crawler',
             'manage_options',
             'news-crawler-main',
@@ -49,31 +49,31 @@ class NewsCrawlerGenreSettings {
         // 投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            '投稿設定',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - 投稿設定',
             '投稿設定',
             'manage_options',
             'news-crawler-main',
             array($this, 'main_admin_page')
         );
         
-        // OGP設定サブメニュー
-        add_submenu_page(
-            'news-crawler-main',
-            'OGP設定',
-            'OGP設定',
-            'manage_options',
-            'news-crawler-ogp-settings',
-            array($this, 'ogp_settings_page')
-        );
-        
         // 基本設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            '基本設定',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - 基本設定',
             '基本設定',
             'manage_options',
             'news-crawler-basic',
             array($this, 'basic_settings_page')
+        );
+        
+        // OGP設定サブメニュー
+        add_submenu_page(
+            'news-crawler-main',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - OGP設定',
+            'OGP設定',
+            'manage_options',
+            'news-crawler-ogp-settings',
+            array($this, 'ogp_settings_page')
         );
     }
     
@@ -621,7 +621,7 @@ class NewsCrawlerGenreSettings {
     public function basic_settings_page() {
         ?>
         <div class="wrap">
-            <h1>News Crawler - 基本設定</h1>
+            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - 基本設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -646,7 +646,7 @@ class NewsCrawlerGenreSettings {
             $ogp_settings = new NewsCrawlerOGPSettings();
             $ogp_settings->admin_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
         }
     }
     
@@ -654,7 +654,7 @@ class NewsCrawlerGenreSettings {
         $genre_settings = $this->get_genre_settings();
         ?>
         <div class="wrap">
-            <h1>News Crawler - 投稿設定</h1>
+            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - 投稿設定</h1>
             
             <!-- デバッグ情報表示エリア -->
             <div id="debug-info" style="margin-bottom: 20px; display: none;">

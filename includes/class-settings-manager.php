@@ -27,7 +27,7 @@ class NewsCrawlerSettingsManager {
     public function add_admin_menu() {
         // メインメニュー
         add_menu_page(
-            'News Crawler 設定',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' 設定',
             'News Crawler',
             'manage_options',
             'news-crawler-settings',
@@ -39,7 +39,7 @@ class NewsCrawlerSettingsManager {
         // 基本設定サブメニュー
         add_submenu_page(
             'news-crawler-settings',
-            '基本設定',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - 基本設定',
             '基本設定',
             'manage_options',
             'news-crawler-settings',
@@ -164,7 +164,7 @@ class NewsCrawlerSettingsManager {
     public function settings_page() {
         ?>
         <div class="wrap">
-            <h1>News Crawler 基本設定</h1>
+            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> 基本設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">

@@ -249,7 +249,7 @@ class NewsCrawlerSEOTitleGenerator {
         // 投稿タイプがpostの場合のみ追加
         add_meta_box(
             'news_crawler_seo_title',
-            'News Crawler - SEOタイトル生成',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - SEOタイトル生成',
             array($this, 'render_seo_title_meta_box'),
             'post',
             'side',
