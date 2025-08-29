@@ -1870,11 +1870,15 @@ class NewsCrawler {
             return 'ニュースソースが設定されていません。';
         }
         
+        // ニュースソースを最新の記事を優先するように並び替え
+        $sources = $this->prioritize_news_sources($sources);
+        $debug_info = array();
+        $debug_info[] = 'ニュースソース優先順位: ' . implode(' → ', $sources);
+        
         $matched_articles = array();
         $errors = array();
         $duplicates_skipped = 0;
         $low_quality_skipped = 0;
-        $debug_info = array();
         
         foreach ($sources as $source) {
             try {
@@ -1979,6 +1983,118 @@ class NewsCrawler {
         return $result;
     }
     
+    /**
+     * ニュースソースを最新の記事を優先するように並び替える
+     * 最新の判断ができない場合はランダムに選択
+     * 
+     * @param array $sources ニュースソースの配列
+     * @return array 優先順位で並び替えられたニュースソースの配列
+     */
+    private function prioritize_news_sources($sources) {
+        if (empty($sources) || count($sources) <= 1) {
+            return $sources;
+        }
+        
+        $source_timestamps = array();
+        $sources_with_timestamps = array();
+        $sources_without_timestamps = array();
+        
+        // 各ニュースソースから最新の記事の日時を取得
+        foreach ($sources as $source) {
+            try {
+                $content = $this->fetch_content($source);
+                if ($content) {
+                    $latest_timestamp = $this->get_latest_article_timestamp($content, $source);
+                    if ($latest_timestamp) {
+                        $source_timestamps[$source] = $latest_timestamp;
+                        $sources_with_timestamps[] = $source;
+                    } else {
+                        $sources_without_timestamps[] = $source;
+                    }
+                } else {
+                    $sources_without_timestamps[] = $source;
+                }
+            } catch (Exception $e) {
+                // エラーが発生した場合はタイムスタンプなしとして扱う
+                $sources_without_timestamps[] = $source;
+            }
+        }
+        
+        // タイムスタンプがあるソースを最新順に並び替え
+        if (!empty($sources_with_timestamps)) {
+            arsort($source_timestamps);
+            $prioritized_sources = array_keys($source_timestamps);
+            error_log('News Crawler: タイムスタンプありのソースを最新順に並び替え: ' . implode(' → ', $prioritized_sources));
+        } else {
+            $prioritized_sources = array();
+            error_log('News Crawler: タイムスタンプありのソースがありません');
+        }
+        
+        // タイムスタンプがないソースをランダムに並び替え
+        if (!empty($sources_without_timestamps)) {
+            shuffle($sources_without_timestamps);
+            $prioritized_sources = array_merge($prioritized_sources, $sources_without_timestamps);
+            error_log('News Crawler: タイムスタンプなしのソースをランダムに並び替え: ' . implode(' → ', $sources_without_timestamps));
+        }
+        
+        error_log('News Crawler: 最終的なニュースソース優先順位: ' . implode(' → ', $prioritized_sources));
+        return $prioritized_sources;
+    }
+    
+    /**
+     * コンテンツから最新の記事のタイムスタンプを取得
+     * 
+     * @param mixed $content 取得したコンテンツ
+     * @param string $source ニュースソースのURL
+     * @return int|null 最新の記事のタイムスタンプ（取得できない場合はnull）
+     */
+    private function get_latest_article_timestamp($content, $source) {
+        $latest_timestamp = null;
+        
+        if (is_array($content)) {
+            // RSSフィードの場合
+            foreach ($content as $article) {
+                if (isset($article['pubDate'])) {
+                    $timestamp = strtotime($article['pubDate']);
+                    if ($timestamp && (!$latest_timestamp || $timestamp > $latest_timestamp)) {
+                        $latest_timestamp = $timestamp;
+                    }
+                }
+            }
+            if ($latest_timestamp) {
+                error_log('News Crawler: RSSフィードから最新タイムスタンプ取得: ' . $source . ' → ' . date('Y-m-d H:i:s', $latest_timestamp));
+            }
+        } else {
+            // HTMLページの場合
+            $articles = $this->parse_content($content, $source);
+            if ($articles && is_array($articles)) {
+                foreach ($articles as $article) {
+                    if (isset($article['pubDate'])) {
+                        $timestamp = strtotime($article['pubDate']);
+                        if ($timestamp && (!$latest_timestamp || $timestamp > $latest_timestamp)) {
+                            $latest_timestamp = $timestamp;
+                        }
+                    }
+                }
+            } elseif ($articles && isset($articles['pubDate'])) {
+                // 単一記事の場合
+                $timestamp = strtotime($articles['pubDate']);
+                if ($timestamp) {
+                    $latest_timestamp = $timestamp;
+                }
+            }
+            if ($latest_timestamp) {
+                error_log('News Crawler: HTMLページから最新タイムスタンプ取得: ' . $source . ' → ' . date('Y-m-d H:i:s', $latest_timestamp));
+            }
+        }
+        
+        if (!$latest_timestamp) {
+            error_log('News Crawler: タイムスタンプ取得失敗: ' . $source);
+        }
+        
+        return $latest_timestamp;
+    }
+    
     public function crawl_news_with_options($options) {
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
@@ -1990,11 +2106,18 @@ class NewsCrawler {
             return 'ニュースソースが設定されていません。';
         }
         
+        // ニュースソースを最新の記事を優先するように並び替え
+        $sources = $this->prioritize_news_sources($sources);
+        $debug_info[] = 'ニュースソース優先順位: ' . implode(' → ', $sources);
+        $debug_info[] = '優先順位の詳細:';
+        foreach ($sources as $index => $source) {
+            $debug_info[] = '  ' . ($index + 1) . '. ' . $source;
+        }
+        
         $matched_articles = array();
         $errors = array();
         $duplicates_skipped = 0;
         $low_quality_skipped = 0;
-        $debug_info = array();
         
         foreach ($sources as $source) {
             try {
@@ -2844,13 +2967,15 @@ class NewsCrawler {
                     
                     $excerpt = implode(' ', array_slice($paragraphs, 0, 2));
                     
-                    $time_query = $xpath->query('.//time[@datetime]|.//span[@class*="date"]', $node);
+                    $time_query = $xpath->query('.//time[@datetime]|.//span[@class*="date"]|.//span[@class*="time"]|.//div[@class*="date"]|.//div[@class*="time"]|.//meta[@property="article:published_time"]', $node);
                     $article_date = '';
                     if ($time_query && $time_query->length > 0) {
                         $time_node = $time_query->item(0);
                         if ($time_node) {
                             if ($time_node->hasAttribute('datetime')) {
                                 $article_date = date('Y-m-d H:i:s', strtotime($time_node->getAttribute('datetime')));
+                            } elseif ($time_node->hasAttribute('content')) {
+                                $article_date = date('Y-m-d H:i:s', strtotime($time_node->getAttribute('content')));
                             } else {
                                 $article_date = date('Y-m-d H:i:s', strtotime($time_node->nodeValue));
                             }
@@ -2868,6 +2993,7 @@ class NewsCrawler {
                         'excerpt' => $excerpt,
                         'news_content' => implode("\n\n", $paragraphs),
                         'article_date' => $article_date,
+                        'pubDate' => $article_date, // 日時優先順位のためpubDateフィールドも追加
                         'source' => $source,
                     );
                     
@@ -2906,11 +3032,17 @@ class NewsCrawler {
             $excerpt = implode(' ', array_slice($paragraphs, 0, 2));
             
             $article_date = '';
-            $time_query = $xpath->query('//time[@datetime]');
+            $time_query = $xpath->query('//time[@datetime]|//span[@class*="date"]|//span[@class*="time"]|//div[@class*="date"]|//div[@class*="time"]|//meta[@property="article:published_time"]');
             if ($time_query && $time_query->length > 0) {
                 $time_node = $time_query->item(0);
                 if ($time_node) {
-                    $article_date = $time_node->getAttribute('datetime');
+                    if ($time_node->hasAttribute('datetime')) {
+                        $article_date = $time_node->getAttribute('datetime');
+                    } elseif ($time_node->hasAttribute('content')) {
+                        $article_date = $time_node->getAttribute('content');
+                    } else {
+                        $article_date = $time_node->nodeValue;
+                    }
                 }
             }
 
@@ -2923,6 +3055,7 @@ class NewsCrawler {
                     'excerpt' => $excerpt,
                     'news_content' => implode("\n\n", $paragraphs),
                     'article_date' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '',
+                    'pubDate' => $article_date ? date('Y-m-d H:i:s', strtotime($article_date)) : '', // 日時優先順位のためpubDateフィールドも追加
                     'source' => $source,
                 );
             }
