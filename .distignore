@@ -1,0 +1,58 @@
+# Distribution ignore file for News Crawler Plugin
+# Files and directories to exclude from distribution packages
+
+# Development files
+.git/
+.github/
+.gitignore
+.distignore
+composer.json
+composer.lock
+package.json
+package-lock.json
+webpack.config.js
+gulpfile.js
+
+# Documentation (development)
+DISTRIBUTION_CHECKLIST.md
+IMPROVEMENT_REPORT.md
+
+# Tests
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+error_log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Node modules
+node_modules/
+
+# Build artifacts
+build/
+dist/
+
+# Backup files
+*.bak
+*.backup
+
+# Cache files
+.cache/
+*.cache

@@ -1,0 +1,129 @@
+# Japanese Translation for News Crawler Plugin
+# Copyright (C) 2025 KantanPro
+# This file is distributed under the MIT License.
+msgid ""
+msgstr ""
+"Project-Id-Version: News Crawler 2.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/KantanPro/news-crawler/issues\n"
+"POT-Creation-Date: 2025-08-29 12:00+0000\n"
+"PO-Revision-Date: 2025-08-29 12:00+0000\n"
+"Last-Translator: KantanPro\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# Plugin Information
+msgid "News Crawler"
+msgstr "ニュースクローラー"
+
+msgid "Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality."
+msgstr "指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。"
+
+# Settings
+msgid "News Crawler Settings"
+msgstr "ニュースクローラー設定"
+
+msgid "Basic News Crawling Settings"
+msgstr "ニュースクロール基本設定"
+
+msgid "Number of articles to quote at once"
+msgstr "一度に引用する記事数"
+
+msgid "Keyword Settings"
+msgstr "キーワード設定"
+
+msgid "News Sources"
+msgstr "ニュースソース"
+
+msgid "Post Category"
+msgstr "投稿カテゴリー"
+
+msgid "API Settings"
+msgstr "API設定"
+
+msgid "YouTube API Key"
+msgstr "YouTube APIキー"
+
+msgid "OpenAI API Key"
+msgstr "OpenAI APIキー"
+
+# Security Messages
+msgid "Security check failed. Please try again."
+msgstr "セキュリティチェックに失敗しました。もう一度お試しください。"
+
+msgid "You do not have sufficient permissions to access this page."
+msgstr "このページにアクセスする権限がありません。"
+
+# Success Messages
+msgid "Settings saved successfully."
+msgstr "設定を保存しました。"
+
+msgid "API connection test successful."
+msgstr "API接続テストが成功しました。"
+
+msgid "Posts created successfully."
+msgstr "投稿を作成しました。"
+
+# Error Messages
+msgid "An error occurred. Please check the error log."
+msgstr "エラーが発生しました。エラーログを確認してください。"
+
+msgid "API key is required."
+msgstr "APIキーが必要です。"
+
+msgid "Invalid API key format."
+msgstr "APIキーの形式が無効です。"
+
+msgid "Failed to connect to API."
+msgstr "APIへの接続に失敗しました。"
+
+# Buttons and Actions
+msgid "Save Settings"
+msgstr "設定を保存"
+
+msgid "Test Connection"
+msgstr "接続テスト"
+
+msgid "Create Posts"
+msgstr "投稿を作成"
+
+msgid "Reset Settings"
+msgstr "設定をリセット"
+
+# Descriptions
+msgid "Enter your YouTube Data API v3 key."
+msgstr "YouTube Data API v3のキーを入力してください。"
+
+msgid "Enter your OpenAI API key for AI-powered features."
+msgstr "AI機能用のOpenAI APIキーを入力してください。"
+
+msgid "Enter one URL per line. You can specify RSS feeds or news site URLs."
+msgstr "1行に1URLを入力してください。RSSフィードまたはニュースサイトのURLを指定できます。"
+
+msgid "Enter one keyword per line."
+msgstr "1行に1キーワードを入力してください。"
+
+# Statistics
+msgid "Total Posts"
+msgstr "総投稿数"
+
+msgid "Posts This Month"
+msgstr "今月の投稿数"
+
+msgid "Duplicates Skipped"
+msgstr "重複スキップ数"
+
+msgid "Last Run"
+msgstr "最後の実行"
+
+# Plural forms
+msgid "1 article"
+msgid_plural "%d articles"
+msgstr[0] "%d件の記事"
+
+msgid "1 video"
+msgid_plural "%d videos"
+msgstr[0] "%d件の動画"

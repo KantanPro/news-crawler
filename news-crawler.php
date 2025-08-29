@@ -2,12 +2,18 @@
 /**
  * Plugin Name: News Crawler
  * Plugin URI: https://github.com/KantanPro/news-crawler
- * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 1.9.17
+ * Description: Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality.
+ * Version: 2.0.0
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
+ * License URI: https://opensource.org/licenses/MIT
  * Text Domain: news-crawler
+ * Domain Path: /languages
+ * Requires at least: 5.0
+ * Tested up to: 6.4
+ * Requires PHP: 7.4
+ * Network: false
  */
 
 // 直接アクセスを防ぐ
@@ -15,21 +21,35 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// プラグイン定数の定義
+define('NEWS_CRAWLER_VERSION', '2.0.0');
+define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
+
 // 必要なクラスファイルをインクルード
-require_once plugin_dir_path(__FILE__) . 'includes/class-genre-settings.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-youtube-crawler.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-featured-image-generator.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-generator.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-eyecatch-admin.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-manager.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-settings.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-seo-title-generator.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-i18n.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-security-manager.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-settings-manager.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-genre-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-youtube-crawler.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-featured-image-generator.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-eyecatch-generator.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-eyecatch-admin.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-openai-summarizer.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-post-editor-summary.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 
 
 // プラグイン初期化
 function news_crawler_init() {
+    // 国際化の初期化
+    NewsCrawlerI18n::init();
+    
+    // セキュリティマネージャーの初期化
+    NewsCrawlerSecurityManager::get_instance();
     // ジャンル設定管理クラスを初期化
     if (class_exists('NewsCrawlerGenreSettings')) {
         new NewsCrawlerGenreSettings();
