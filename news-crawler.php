@@ -97,6 +97,26 @@ function news_crawler_init() {
 }
 add_action('plugins_loaded', 'news_crawler_init');
 
+// 自動投稿のcron設定を確実に実行するための追加フック
+add_action('init', 'news_crawler_ensure_cron_setup');
+add_action('wp_loaded', 'news_crawler_ensure_cron_setup');
+
+function news_crawler_ensure_cron_setup() {
+    // 自動投稿のcronが設定されているかチェック
+    $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
+    
+    // cronが設定されていない場合は設定を実行
+    if (!$next_cron) {
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            $genre_settings = new NewsCrawlerGenreSettings();
+            if (method_exists($genre_settings, 'setup_auto_posting_cron')) {
+                $genre_settings->setup_auto_posting_cron();
+                error_log('NewsCrawler: 自動投稿のcron設定を実行しました');
+            }
+        }
+    }
+}
+
 // News Crawler用の処理のための投稿ステータス変更フック
 add_action('news_crawler_update_post_status', 'news_crawler_do_update_post_status', 10, 2);
 
