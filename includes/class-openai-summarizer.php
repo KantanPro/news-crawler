@@ -336,36 +336,47 @@ class NewsCrawlerOpenAISummarizer {
     private function append_summary_to_post($content, $summary, $conclusion) {
         error_log('NewsCrawlerOpenAISummarizer: 要約「' . $summary . '」とまとめ「' . $conclusion . '」で投稿への要約追加が呼び出されました');
         
-        // 要約とまとめのHTMLブロックを作成
-        $summary_html = "\n\n";
-        $summary_html .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"40px","bottom":"40px"}}}} -->';
-        $summary_html .= '<div class="wp-block-group" style="margin-top:40px;margin-bottom:40px">';
+        // 要約の段落のみを最初のH2タグの上に挿入
+        $summary_paragraph = '<!-- wp:paragraph -->';
+        $summary_paragraph .= '<p>' . esc_html($summary) . '</p>';
+        $summary_paragraph .= '<!-- /wp:paragraph -->';
         
-        // 要約セクション
-        $summary_html .= '<!-- wp:heading {"level":2} -->';
-        $summary_html .= '<h2>この記事の要約</h2>';
-        $summary_html .= '<!-- /wp:heading -->';
+        // 最初のH2タグを探して、その前に要約を挿入
+        $first_h2_pos = strpos($content, '<!-- wp:heading {"level":2} -->');
         
-        $summary_html .= '<!-- wp:paragraph -->';
-        $summary_html .= '<p>' . esc_html($summary) . '</p>';
-        $summary_html .= '<!-- /wp:paragraph -->';
+        if ($first_h2_pos !== false) {
+            // 最初のH2タグの前に要約を挿入
+            $before_h2 = substr($content, 0, $first_h2_pos);
+            $after_h2 = substr($content, $first_h2_pos);
+            
+            $content = $before_h2 . $summary_paragraph . "\n\n" . $after_h2;
+            error_log('NewsCrawlerOpenAISummarizer: 要約を最初のH2タグの上に挿入しました');
+        } else {
+            // H2タグが見つからない場合は、従来通り末尾に追加
+            error_log('NewsCrawlerOpenAISummarizer: H2タグが見つからないため、要約を末尾に追加します');
+            $content .= "\n\n" . $summary_paragraph;
+        }
         
-        // まとめセクション
-        $summary_html .= '<!-- wp:heading {"level":2} -->';
-        $summary_html .= '<h2>まとめ</h2>';
-        $summary_html .= '<!-- /wp:heading -->';
+        // まとめセクションのみを末尾に追加
+        $conclusion_html = "\n\n";
+        $conclusion_html .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"40px","bottom":"40px"}}}} -->';
+        $conclusion_html .= '<div class="wp-block-group" style="margin-top:40px;margin-bottom:40px">';
         
-        $summary_html .= '<!-- wp:paragraph -->';
-        $summary_html .= '<p>' . esc_html($conclusion) . '</p>';
-        $summary_html .= '<!-- /wp:paragraph -->';
+        $conclusion_html .= '<!-- wp:heading {"level":2} -->';
+        $conclusion_html .= '<h2>まとめ</h2>';
+        $conclusion_html .= '<!-- /wp:heading -->';
         
-        $summary_html .= '</div>';
-        $summary_html .= '<!-- /wp:group -->';
+        $conclusion_html .= '<!-- wp:paragraph -->';
+        $conclusion_html .= '<p>' . esc_html($conclusion) . '</p>';
+        $conclusion_html .= '<!-- /wp:paragraph -->';
         
-        error_log('NewsCrawlerOpenAISummarizer: 要約HTMLが生成されました: ' . $summary_html);
+        $conclusion_html .= '</div>';
+        $conclusion_html .= '<!-- /wp:group -->';
         
-        // 投稿内容の末尾に追加
-        $result = $content . $summary_html;
+        error_log('NewsCrawlerOpenAISummarizer: まとめHTMLが生成されました: ' . $conclusion_html);
+        
+        // まとめを投稿内容の末尾に追加
+        $result = $content . $conclusion_html;
         error_log('NewsCrawlerOpenAISummarizer: 最終コンテンツの長さ: ' . strlen($result) . '文字');
         
         return $result;
