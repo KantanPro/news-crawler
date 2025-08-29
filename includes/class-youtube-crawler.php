@@ -552,7 +552,20 @@ class NewsCrawlerYouTubeCrawler {
         $embed_type = isset($options['embed_type']) ? $options['embed_type'] : 'responsive';
         
         $keyword_text = implode('、', array_slice($keywords, 0, 3));
+        
+        // ジャンル名を取得してタイトルの先頭に追加
+        $genre_name = '';
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['genre_name'])) {
+            $genre_name = $current_genre_setting['genre_name'];
+        }
+        
         $post_title = $keyword_text . '：YouTube動画まとめ – ' . date_i18n('Y年n月j日');
+        
+        // ジャンル名がある場合は先頭に追加
+        if (!empty($genre_name)) {
+            $post_title = '【' . $genre_name . '】' . $post_title;
+        }
         
         $post_content = '';
         
