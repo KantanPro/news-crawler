@@ -1810,7 +1810,7 @@ class NewsCrawler {
         $options = get_option($this->option_name);
         if (!$options) {
             $default_options = array(
-                'max_articles' => 10,
+                'articles_per_post' => 1,
                 'keywords' => array('AI', 'テクノロジー', 'ビジネス', 'ニュース'),
                 'news_sources' => array(),
                 'post_category' => 'blog',
@@ -1842,7 +1842,7 @@ class NewsCrawler {
         $options = get_option($this->option_name, array());
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 10;
+        $articles_per_post = isset($options['articles_per_post']) && !empty($options['articles_per_post']) ? $options['articles_per_post'] : 1;
         $category = isset($options['post_category']) && !empty($options['post_category']) ? $options['post_category'] : 'blog';
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
         
@@ -1936,11 +1936,11 @@ class NewsCrawler {
             $valid_articles[] = $article;
         }
         
-        $valid_articles = array_slice($valid_articles, 0, $max_articles);
-        
         $posts_created = 0;
         if (!empty($valid_articles)) {
-            $post_id = $this->create_summary_post($valid_articles, $category, $status);
+            // 一度に引用する記事数を制限
+            $articles_for_post = array_slice($valid_articles, 0, $articles_per_post);
+            $post_id = $this->create_summary_post($articles_for_post, $category, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
             }
@@ -1962,7 +1962,7 @@ class NewsCrawler {
     public function crawl_news_with_options($options) {
         $sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 10;
+        $articles_per_post = isset($options['articles_per_post']) && !empty($options['articles_per_post']) ? $options['articles_per_post'] : 1;
         $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
         
@@ -2056,12 +2056,12 @@ class NewsCrawler {
             $valid_articles[] = $article;
         }
         
-        $valid_articles = array_slice($valid_articles, 0, $max_articles);
-        
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_articles)) {
-            $post_id = $this->create_summary_post_with_categories($valid_articles, $categories, $status);
+            // 一度に引用する記事数を制限
+            $articles_for_post = array_slice($valid_articles, 0, $articles_per_post);
+            $post_id = $this->create_summary_post_with_categories($articles_for_post, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
                 $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;

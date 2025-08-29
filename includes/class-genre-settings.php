@@ -679,16 +679,15 @@ class NewsCrawlerGenreSettings {
                                     <p class="description">設定を識別するためのジャンル名を入力してください。</p>
                                 </td>
                             </tr>
-                            <tr>
-                                <th scope="row">コンテンツタイプ</th>
-                                <td>
-                                    <select id="content-type" name="content_type" required>
-                                        <option value="">選択してください</option>
-                                        <option value="news">ニュース記事</option>
-                                        <option value="youtube">YouTube動画</option>
-                                    </select>
-                                </td>
-                            </tr>
+                                                            <tr>
+                                    <th scope="row">コンテンツタイプ</th>
+                                    <td>
+                                        <select id="content-type" name="content_type" required>
+                                            <option value="news" selected>ニュース記事</option>
+                                            <option value="youtube">YouTube動画</option>
+                                        </select>
+                                    </td>
+                                </tr>
                             <tr>
                                 <th scope="row">キーワード</th>
                                 <td>
@@ -710,10 +709,10 @@ class NewsCrawlerGenreSettings {
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th scope="row">最大記事数</th>
+                                    <th scope="row">一度に引用する記事数</th>
                                     <td>
-                                        <input type="number" id="max-articles" name="max_articles" value="10" min="1" max="50">
-                                        <p class="description">取得する記事の最大数（1-50件）</p>
+                                        <input type="number" id="articles-per-post" name="articles_per_post" value="1" min="1" max="20">
+                                        <p class="description">1つの投稿に引用として含める記事数（1-20件）</p>
                                     </td>
                                 </tr>
                             </table>
@@ -1040,6 +1039,9 @@ class NewsCrawlerGenreSettings {
             // 初期表示時にアイキャッチ設定を表示
             $('#featured-image-settings').show();
             
+            // 初期表示時にニュース設定を表示（新規作成時のデフォルト）
+            $('#news-settings').show();
+            
             // フォーム送信
             $('#genre-settings-form').submit(function(e) {
                 e.preventDefault();
@@ -1056,7 +1058,7 @@ class NewsCrawlerGenreSettings {
                     content_type: $('#content-type').val(),
                     keywords: $('#keywords').val(),
                     news_sources: $('#news-sources').val(),
-                    max_articles: $('#max-articles').val(),
+                    articles_per_post: $('#articles-per-post').val(),
                     youtube_channels: $('#youtube-channels').val(),
                     max_videos: $('#max-videos').val(),
                     embed_type: $('#embed-type').val(),
@@ -1107,7 +1109,10 @@ class NewsCrawlerGenreSettings {
                 $('#genre-settings-form')[0].reset();
                 $('#genre-id').val('');
                 $('#cancel-edit').hide();
-                $('#news-settings, #youtube-settings').hide();
+                
+                // 新規作成時のデフォルト表示に戻す
+                $('#news-settings').show();
+                $('#youtube-settings').hide();
                 
                 // 開始実行日時を現在時刻にリセット
                 var now = new Date();
@@ -1277,7 +1282,7 @@ class NewsCrawlerGenreSettings {
                         jQuery('#content-type').val(setting.content_type).trigger('change');
                         jQuery('#keywords').val(setting.keywords.join('\n'));
                         jQuery('#news-sources').val(setting.news_sources ? setting.news_sources.join('\n') : '');
-                        jQuery('#max-articles').val(setting.max_articles || 10);
+                        jQuery('#articles-per-post').val(setting.articles_per_post || 1);
                         jQuery('#youtube-channels').val(setting.youtube_channels ? setting.youtube_channels.join('\n') : '');
                         jQuery('#max-videos').val(setting.max_videos || 5);
                         jQuery('#embed-type').val(setting.embed_type || 'responsive');
@@ -1637,7 +1642,7 @@ class NewsCrawlerGenreSettings {
         
         if ($content_type === 'news') {
             $setting['news_sources'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['news_sources']))));
-            $setting['max_articles'] = intval($_POST['max_articles']);
+            $setting['articles_per_post'] = intval($_POST['articles_per_post']);
         } elseif ($content_type === 'youtube') {
             $setting['youtube_channels'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['youtube_channels']))));
             $setting['max_videos'] = intval($_POST['max_videos']);
@@ -1806,7 +1811,7 @@ class NewsCrawlerGenreSettings {
         try {
             // 設定を一時的に適用
             $temp_options = array(
-                'max_articles' => isset($setting['max_articles']) ? intval($setting['max_articles']) : 10,
+                'articles_per_post' => isset($setting['articles_per_post']) ? intval($setting['articles_per_post']) : 1,
                 'keywords' => isset($setting['keywords']) && is_array($setting['keywords']) ? $setting['keywords'] : array(),
                 'news_sources' => isset($setting['news_sources']) && is_array($setting['news_sources']) ? $setting['news_sources'] : array(),
                 'post_categories' => isset($setting['post_categories']) && is_array($setting['post_categories']) ? $setting['post_categories'] : array('blog'),
@@ -1825,7 +1830,7 @@ class NewsCrawlerGenreSettings {
             // デバッグ情報
             $debug_info = array();
             $debug_info[] = '設定内容:';
-            $debug_info[] = '  - 最大記事数: ' . $temp_options['max_articles'];
+            $debug_info[] = '  - 一度に引用する記事数: ' . $temp_options['articles_per_post'];
             $debug_info[] = '  - キーワード: ' . implode(', ', $temp_options['keywords']);
             $debug_info[] = '  - ニュースソース: ' . implode(', ', $temp_options['news_sources']);
             $debug_info[] = '  - 投稿カテゴリー: ' . implode(', ', $temp_options['post_categories']);
@@ -2305,7 +2310,7 @@ class NewsCrawlerGenreSettings {
      */
     private function execute_news_crawling_with_limit($setting, $max_posts) {
         // 投稿数制限を適用してクロール実行
-        $setting['max_articles'] = min($setting['max_articles'] ?? 10, $max_posts);
+        $setting['articles_per_post'] = $setting['articles_per_post'] ?? 1;
         return $this->execute_news_crawling($setting);
     }
     
