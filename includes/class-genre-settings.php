@@ -176,6 +176,14 @@ class NewsCrawlerGenreSettings {
             'summary_generation_settings'
         );
         
+        add_settings_field(
+            'auto_seo_title_generation',
+            'SEOタイトル自動生成',
+            array($this, 'auto_seo_title_generation_callback'),
+            'news-crawler-basic',
+            'summary_generation_settings'
+        );
+        
         // X（Twitter）自動シェア設定セクションは廃止
         
         // 重複チェック設定セクション
@@ -294,6 +302,14 @@ class NewsCrawlerGenreSettings {
         echo '<input type="checkbox" name="news_crawler_basic_settings[auto_summary_generation]" value="1" ' . checked(1, $enabled, false) . ' />';
         echo '<label for="news_crawler_basic_settings[auto_summary_generation]">投稿作成時に自動でAI要約とまとめを生成する</label>';
         echo '<p class="description">OpenAI APIキーが設定されている必要があります。</p>';
+    }
+    
+    public function auto_seo_title_generation_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $enabled = isset($options['auto_seo_title_generation']) ? $options['auto_seo_title_generation'] : false;
+        echo '<input type="checkbox" name="news_crawler_basic_settings[auto_seo_title_generation]" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="news_crawler_basic_settings[auto_seo_title_generation]">投稿作成時に自動でSEO最適化タイトルを生成する</label>';
+        echo '<p class="description">OpenAI APIキーが設定されている必要があります。News Crawlerで設定されたジャンル名が【】で囲まれてタイトルの先頭に追加されます。</p>';
     }
     
     public function summary_generation_model_callback() {
@@ -525,6 +541,10 @@ class NewsCrawlerGenreSettings {
         
         if (isset($input['summary_to_excerpt'])) {
             $sanitized['summary_to_excerpt'] = (bool) $input['summary_to_excerpt'];
+        }
+        
+        if (isset($input['auto_seo_title_generation'])) {
+            $sanitized['auto_seo_title_generation'] = (bool) $input['auto_seo_title_generation'];
         }
         
 

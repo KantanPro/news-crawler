@@ -25,6 +25,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-openai-summarizer.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-post-editor-summary.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-manager.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-ogp-settings.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-seo-title-generator.php';
 
 
 // プラグイン初期化
@@ -73,6 +74,11 @@ function news_crawler_init() {
     // 投稿編集画面の要約生成クラスを初期化
     if (class_exists('NewsCrawlerPostEditorSummary')) {
         new NewsCrawlerPostEditorSummary();
+    }
+    
+    // SEOタイトル生成クラスを初期化
+    if (class_exists('NewsCrawlerSEOTitleGenerator')) {
+        new NewsCrawlerSEOTitleGenerator();
     }
     
     // OGP管理クラスを初期化
