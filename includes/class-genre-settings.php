@@ -860,7 +860,7 @@ class NewsCrawlerGenreSettings {
                     <!-- テスト実行とスケジュール確認 -->
                     <div style="margin-bottom: 20px; padding: 15px; background: #f0f6fc; border: 1px solid #0073aa; border-radius: 4px;">
                         <h3 style="margin-top: 0;">テスト実行とスケジュール確認</h3>
-                        <p>自動投稿の動作をテストしたり、スケジュール状況を確認できます。</p>
+                        <p>自動投稿の動作をテストしたり、スケジュール状況を確認できます。現在の保存済み投稿設定で設定されたスケジュールで投稿作成可能数も表示されます。テスト実行では実際にニュースソースに記事があるかどうかも確認します。</p>
                         
                         <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
                         <button type="button" id="check-schedule" class="button button-secondary">スケジュール状況を確認</button>
@@ -1485,17 +1485,20 @@ class NewsCrawlerGenreSettings {
         echo '<table class="genre-settings-table">';
         echo '<thead>';
         echo '<tr>';
+        echo '<th>ID</th>';
         echo '<th>ジャンル名</th>';
         echo '<th>タイプ</th>';
         echo '<th>キーワード</th>';
         echo '<th>カテゴリー</th>';
         echo '<th>アイキャッチ</th>';
         echo '<th>自動投稿</th>';
+        echo '<th>公開設定</th>';
         echo '<th>操作</th>';
         echo '</tr>';
         echo '</thead>';
         echo '<tbody>';
         
+        $display_id = 1; // 表示用の連番
         foreach ($genre_settings as $id => $setting) {
             $keywords_display = implode(', ', array_slice($setting['keywords'], 0, 3));
             if (count($setting['keywords']) > 3) {
@@ -1521,6 +1524,8 @@ class NewsCrawlerGenreSettings {
             $content_type_label = $setting['content_type'] === 'news' ? 'ニュース' : 'YouTube';
             
             echo '<tr>';
+            // IDカラムを追加（連番を表示）
+            echo '<td><strong>' . esc_html($display_id) . '</strong></td>';
             // アイキャッチ設定の表示
             $featured_image_status = '';
             if (isset($setting['auto_featured_image']) && $setting['auto_featured_image']) {
@@ -1569,6 +1574,18 @@ class NewsCrawlerGenreSettings {
             }
             
             echo '<td>' . esc_html($auto_posting_status) . '</td>';
+            
+            // 公開設定の表示
+            $post_status = isset($setting['post_status']) ? $setting['post_status'] : 'draft';
+            $status_labels = array(
+                'draft' => '下書き',
+                'publish' => '公開',
+                'private' => '非公開',
+                'pending' => '承認待ち'
+            );
+            $post_status_display = isset($status_labels[$post_status]) ? $status_labels[$post_status] : '下書き';
+            echo '<td>' . esc_html($post_status_display) . '</td>';
+            
             echo '<td class="action-buttons">';
             echo '<button type="button" class="button" onclick="editGenreSetting(\'' . esc_js($id) . '\')">編集</button>';
             echo '<button type="button" class="button" onclick="duplicateGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">複製</button>';
@@ -1576,6 +1593,8 @@ class NewsCrawlerGenreSettings {
             echo '<button type="button" class="button button-link-delete" onclick="deleteGenreSetting(\'' . esc_js($id) . '\', \'' . esc_js($setting['genre_name']) . '\')">削除</button>';
             echo '</td>';
             echo '</tr>';
+            
+            $display_id++; // 連番をインクリメント
         }
         
         echo '</tbody>';
@@ -2720,6 +2739,9 @@ class NewsCrawlerGenreSettings {
         $genre_settings = $this->get_genre_settings();
         $auto_posting_enabled = 0;
         $test_results = array();
+        $total_possible_posts = 0;
+        $total_available_articles = 0;
+        $display_id = 1; // 表示用の連番
         
         foreach ($genre_settings as $genre_id => $setting) {
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
@@ -2727,7 +2749,7 @@ class NewsCrawlerGenreSettings {
                 
                 // 実行前チェック
                 $check_result = $this->pre_execution_check($setting);
-                $test_results[] = "ジャンル: " . $setting['genre_name'];
+                $test_results[] = "ID: " . $display_id . " - ジャンル: " . $setting['genre_name'];
                 $test_results[] = "  実行可能: " . ($check_result['can_execute'] ? 'はい' : 'いいえ');
                 if (!$check_result['can_execute']) {
                     $test_results[] = "  理由: " . $check_result['reason'];
@@ -2746,7 +2768,22 @@ class NewsCrawlerGenreSettings {
                 $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
                 $test_results[] = "  投稿頻度: " . $frequency_text;
                 
+                // 投稿作成可能数を表示
+                $max_posts_per_execution = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+                $total_possible_posts += $max_posts_per_execution;
+                $test_results[] = "  設定上の投稿作成可能数: " . $max_posts_per_execution . " 件";
+                
+                // 実際のニュースソースから記事を取得してテスト
+                $available_articles = $this->test_news_source_availability($setting);
+                $total_available_articles += $available_articles;
+                $test_results[] = "  実際に取得可能な記事数: " . $available_articles . " 件";
+                
+                // 実際の投稿作成可能数を計算
+                $actual_possible_posts = min($max_posts_per_execution, $available_articles);
+                $test_results[] = "  実際の投稿作成可能数: " . $actual_possible_posts . " 件";
+                
                 $test_results[] = "";
+                $display_id++; // 連番をインクリメント
             }
         }
         
@@ -2757,10 +2794,17 @@ class NewsCrawlerGenreSettings {
         $result = "自動投稿が有効なジャンル設定: {$auto_posting_enabled}件\n\n";
         $result .= implode("\n", $test_results);
         
+        $result .= "\n=== 投稿作成可能数サマリー ===\n";
+        $result .= "設定上の総投稿作成可能数: " . $total_possible_posts . " 件\n";
+        $result .= "実際に取得可能な総記事数: " . $total_available_articles . " 件\n";
+        $result .= "実際の総投稿作成可能数: " . min($total_possible_posts, $total_available_articles) . " 件\n";
+        $result .= "（設定値と実際の記事数の少ない方）\n";
+        
         $result .= "\n=== テスト結果の説明 ===\n";
         $result .= "・「実行可能: はい」の場合、設定されたスケジュールに従って自動投稿が実行されます\n";
         $result .= "・「実行可能: いいえ」の場合、設定に問題があるため修正が必要です\n";
         $result .= "・次回実行予定は、ジャンル別設定の開始実行日時と投稿頻度に基づいて計算されます\n";
+        $result .= "・実際の投稿作成可能数は、設定値と実際に取得可能な記事数の少ない方になります\n";
         $result .= "\n=== 注意事項 ===\n";
         $result .= "・cronの次回実行予定が過去の日時になっている場合は、プラグインの再有効化が必要です";
         
@@ -2785,6 +2829,8 @@ class NewsCrawlerGenreSettings {
         
         $genre_settings = $this->get_genre_settings();
         $auto_posting_count = 0;
+        $total_possible_posts = 0;
+        $display_id = 1; // 表示用の連番
         
         foreach ($genre_settings as $genre_id => $setting) {
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
@@ -2794,9 +2840,14 @@ class NewsCrawlerGenreSettings {
                 $next_execution = $this->calculate_next_execution_time_for_display($setting);
                 $status = $next_execution <= $current_time ? '実行可能' : '待機中';
                 
-                $result .= "ジャンル: " . $setting['genre_name'] . "\n";
+                // 投稿作成可能数を計算
+                $max_posts_per_execution = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+                $total_possible_posts += $max_posts_per_execution;
+                
+                $result .= "ID: " . $display_id . " - ジャンル: " . $setting['genre_name'] . "\n";
                 $result .= "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . "\n";
                 $result .= "  状況: " . $status . "\n";
+                $result .= "  投稿作成可能数: " . $max_posts_per_execution . " 件\n";
                 
                 // スケジュール詳細を表示
                 if (!empty($setting['start_execution_time'])) {
@@ -2807,11 +2858,17 @@ class NewsCrawlerGenreSettings {
                 $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
                 $result .= "  投稿頻度: " . $frequency_text . "\n";
                 $result .= "\n";
+                $display_id++; // 連番をインクリメント
             }
         }
         
         if ($auto_posting_count === 0) {
             $result .= "自動投稿が有効なジャンル設定がありません。";
+        } else {
+            $result .= "=== 投稿作成可能数サマリー ===\n";
+            $result .= "有効なジャンル数: " . $auto_posting_count . " ジャンル\n";
+            $result .= "総投稿作成可能数: " . $total_possible_posts . " 件\n";
+            $result .= "（各ジャンルの設定された「1回の実行で作成する投稿数」の合計）\n";
         }
         
         wp_send_json_success($result);
@@ -3025,5 +3082,185 @@ class NewsCrawlerGenreSettings {
             default:
                 return $now + (24 * 60 * 60);
         }
+    }
+    
+    /**
+     * ニュースソースの可用性をテストして、実際に取得可能な記事数を返す
+     */
+    private function test_news_source_availability($setting) {
+        $content_type = $setting['content_type'] ?? 'news';
+        $available_articles = 0;
+        
+        try {
+            if ($content_type === 'youtube') {
+                // YouTubeチャンネルのテスト
+                $available_articles = $this->test_youtube_source_availability($setting);
+            } else {
+                // ニュースソースのテスト
+                $available_articles = $this->test_news_source_availability_news($setting);
+            }
+        } catch (Exception $e) {
+            error_log('News source availability test error: ' . $e->getMessage());
+            $available_articles = 0;
+        }
+        
+        return $available_articles;
+    }
+    
+    /**
+     * YouTubeソースの可用性をテスト
+     */
+    private function test_youtube_source_availability($setting) {
+        $youtube_channels = $setting['youtube_channels'] ?? array();
+        $keywords = $setting['keywords'] ?? array();
+        
+        if (empty($youtube_channels) || empty($keywords)) {
+            return 0;
+        }
+        
+        // YouTube APIキーを取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $youtube_api_key = $basic_settings['youtube_api_key'] ?? '';
+        
+        if (empty($youtube_api_key)) {
+            return 0;
+        }
+        
+        // 最初のチャンネルとキーワードでテスト実行
+        $channel_id = $youtube_channels[0];
+        $keyword = $keywords[0];
+        
+        $api_url = 'https://www.googleapis.com/youtube/v3/search';
+        $params = array(
+            'key' => $youtube_api_key,
+            'channelId' => $channel_id,
+            'q' => $keyword,
+            'part' => 'snippet',
+            'order' => 'date',
+            'maxResults' => 5,
+            'type' => 'video',
+            'publishedAfter' => date('c', strtotime('-7 days')) // 過去7日間
+        );
+        
+        $url = add_query_arg($params, $api_url);
+        
+        $response = wp_remote_get($url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'httpversion' => '1.1',
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
+        
+        if (is_wp_error($response)) {
+            return 0;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['items'])) {
+            return 0;
+        }
+        
+        return count($data['items']);
+    }
+    
+    /**
+     * ニュースソースの可用性をテスト
+     */
+    private function test_news_source_availability_news($setting) {
+        $news_sources = $setting['news_sources'] ?? array();
+        $keywords = $setting['keywords'] ?? array();
+        
+        if (empty($news_sources) || empty($keywords)) {
+            return 0;
+        }
+        
+        // 最初のニュースソースでテスト実行
+        $news_source = $news_sources[0];
+        $keyword = $keywords[0];
+        
+        // RSSフィードの場合はSimplePieを使用
+        if (filter_var($news_source, FILTER_VALIDATE_URL) && $this->is_rss_feed($news_source)) {
+            return $this->test_rss_feed_availability($news_source, $keyword);
+        }
+        
+        // 通常のWebサイトの場合はHTMLパース
+        return $this->test_webpage_availability($news_source, $keyword);
+    }
+    
+    /**
+     * RSSフィードかどうかを判定
+     */
+    private function is_rss_feed($url) {
+        $response = wp_remote_get($url, array(
+            'timeout' => 10,
+            'sslverify' => false
+        ));
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        return strpos($body, '<rss') !== false || strpos($body, '<feed') !== false;
+    }
+    
+    /**
+     * RSSフィードの可用性をテスト
+     */
+    private function test_rss_feed_availability($url, $keyword) {
+        if (!class_exists('SimplePie')) {
+            require_once(ABSPATH . WPINC . '/class-simplepie.php');
+        }
+        
+        $feed = new SimplePie();
+        $feed->set_feed_url($url);
+        $feed->set_cache_location(WP_CONTENT_DIR . '/cache');
+        $feed->set_cache_duration(300); // 5分
+        $feed->init();
+        
+        if ($feed->error()) {
+            return 0;
+        }
+        
+        $items = $feed->get_items();
+        $matching_items = 0;
+        
+        foreach ($items as $item) {
+            $title = $item->get_title();
+            $content = $item->get_content();
+            
+            if (stripos($title, $keyword) !== false || stripos($content, $keyword) !== false) {
+                $matching_items++;
+            }
+        }
+        
+        return $matching_items;
+    }
+    
+    /**
+     * Webページの可用性をテスト
+     */
+    private function test_webpage_availability($url, $keyword) {
+        $response = wp_remote_get($url, array(
+            'timeout' => 15,
+            'sslverify' => false,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        ));
+        
+        if (is_wp_error($response)) {
+            return 0;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        
+        // キーワードマッチングのテスト（簡易版）
+        $matching_count = 0;
+        if (stripos($body, $keyword) !== false) {
+            $matching_count = 1; // 最低1件は存在することを示す
+        }
+        
+        return $matching_count;
     }
 }
