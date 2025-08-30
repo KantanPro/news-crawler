@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.0.2)
+[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.0.3)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,10 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.0.3** (2025-08-30): Enhanced Cron schedule debugging and individual genre auto-posting
+  - Added Cron schedule debugging functionality for genre settings with enhanced next execution display
+  - Implemented dynamic registration of individual genre auto-posting schedules
+  - Further improved management interface operability and stability
 - **v2.0.2** (2025-08-30): Enhanced genre settings and improved UI
   - Enhanced test execution functionality for genre settings with post creation count display
   - Implemented new method to test news source availability
