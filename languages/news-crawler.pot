@@ -1,0 +1,130 @@
+# News Crawler Plugin Translation Template
+# Copyright (C) 2025 KantanPro
+# This file is distributed under the MIT License.
+msgid ""
+msgstr ""
+"Project-Id-Version: News Crawler 2.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/KantanPro/news-crawler/issues\n"
+"POT-Creation-Date: 2025-08-29 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Plugin Information
+msgid "News Crawler"
+msgstr ""
+
+msgid "Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality."
+msgstr ""
+
+# Settings
+msgid "News Crawler Settings"
+msgstr ""
+
+msgid "Basic News Crawling Settings"
+msgstr ""
+
+msgid "Number of articles to quote at once"
+msgstr ""
+
+msgid "Keyword Settings"
+msgstr ""
+
+msgid "News Sources"
+msgstr ""
+
+msgid "Post Category"
+msgstr ""
+
+msgid "API Settings"
+msgstr ""
+
+msgid "YouTube API Key"
+msgstr ""
+
+msgid "OpenAI API Key"
+msgstr ""
+
+# Security Messages
+msgid "Security check failed. Please try again."
+msgstr ""
+
+msgid "You do not have sufficient permissions to access this page."
+msgstr ""
+
+# Success Messages
+msgid "Settings saved successfully."
+msgstr ""
+
+msgid "API connection test successful."
+msgstr ""
+
+msgid "Posts created successfully."
+msgstr ""
+
+# Error Messages
+msgid "An error occurred. Please check the error log."
+msgstr ""
+
+msgid "API key is required."
+msgstr ""
+
+msgid "Invalid API key format."
+msgstr ""
+
+msgid "Failed to connect to API."
+msgstr ""
+
+# Buttons and Actions
+msgid "Save Settings"
+msgstr ""
+
+msgid "Test Connection"
+msgstr ""
+
+msgid "Create Posts"
+msgstr ""
+
+msgid "Reset Settings"
+msgstr ""
+
+# Descriptions
+msgid "Enter your YouTube Data API v3 key."
+msgstr ""
+
+msgid "Enter your OpenAI API key for AI-powered features."
+msgstr ""
+
+msgid "Enter one URL per line. You can specify RSS feeds or news site URLs."
+msgstr ""
+
+msgid "Enter one keyword per line."
+msgstr ""
+
+# Statistics
+msgid "Total Posts"
+msgstr ""
+
+msgid "Posts This Month"
+msgstr ""
+
+msgid "Duplicates Skipped"
+msgstr ""
+
+msgid "Last Run"
+msgstr ""
+
+# Plural forms
+msgid "1 article"
+msgid_plural "%d articles"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "1 video"
+msgid_plural "%d videos"
+msgstr[0] ""
+msgstr[1] ""

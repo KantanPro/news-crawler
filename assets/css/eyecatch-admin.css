@@ -1,0 +1,189 @@
+/**
+ * アイキャッチ画像生成管理画面用CSS
+ * 
+ * @package NewsCrawler
+ * @since 1.3.0
+ */
+
+.eyecatch-generator-form {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.eyecatch-generator-form h2 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.eyecatch-generator-form .form-table th {
+    width: 150px;
+    padding: 15px 10px 15px 0;
+}
+
+.eyecatch-generator-form .form-table td {
+    padding: 15px 10px;
+}
+
+.eyecatch-generator-form input[type="text"],
+.eyecatch-generator-form input[type="date"] {
+    width: 100%;
+    max-width: 400px;
+}
+
+.eyecatch-generator-form .description {
+    margin: 5px 0 0 0;
+    color: #666;
+    font-style: italic;
+}
+
+.eyecatch-generator-form .submit {
+    margin: 20px 0 0 0;
+    padding: 0;
+}
+
+/* プレビューエリア */
+#eyecatch-preview {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+#eyecatch-preview h2 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.eyecatch-image-wrapper {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.eyecatch-image-wrapper img {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+}
+
+.eyecatch-info {
+    text-align: left;
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #0073aa;
+}
+
+.eyecatch-info p {
+    margin: 5px 0;
+}
+
+.eyecatch-info a {
+    color: #0073aa;
+    text-decoration: none;
+}
+
+.eyecatch-info a:hover {
+    text-decoration: underline;
+}
+
+#eyecatch-actions {
+    text-align: center;
+}
+
+#eyecatch-actions .button {
+    margin: 0 10px;
+}
+
+/* ローディングエリア */
+#eyecatch-loading {
+    background: #fff;
+    padding: 40px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#eyecatch-loading .spinner {
+    float: none;
+    margin: 0 auto 15px;
+}
+
+#eyecatch-loading p {
+    margin: 0;
+    font-size: 16px;
+    color: #666;
+}
+
+/* エラーエリア */
+#eyecatch-error {
+    margin-bottom: 20px;
+}
+
+#eyecatch-error .notice {
+    margin: 0;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 782px) {
+    .eyecatch-generator-form .form-table th {
+        width: auto;
+        display: block;
+        padding: 10px 0 5px 0;
+    }
+    
+    .eyecatch-generator-form .form-table td {
+        display: block;
+        padding: 0 0 15px 0;
+    }
+    
+    .eyecatch-generator-form input[type="text"],
+    .eyecatch-generator-form input[type="date"] {
+        max-width: 100%;
+    }
+    
+    #eyecatch-actions .button {
+        display: block;
+        margin: 10px auto;
+        width: 200px;
+    }
+}
+
+/* アニメーション */
+.eyecatch-image-wrapper img {
+    transition: transform 0.3s ease;
+}
+
+.eyecatch-image-wrapper img:hover {
+    transform: scale(1.02);
+}
+
+/* ボタンのホバー効果 */
+.button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.2s ease;
+}
+
+/* 成功メッセージのスタイル */
+.notice-success {
+    border-left-color: #46b450;
+}
+
+.notice-success p {
+    color: #46b450;
+}
+
+/* エラーメッセージのスタイル */
+.notice-error {
+    border-left-color: #dc3232;
+}
+
+.notice-error p {
+    color: #dc3232;
+}
