@@ -1,20 +1,19 @@
 <?php
 /**
  * Plugin Name: News Crawler
- * Plugin URI: https://github.com/KantanPro/news-crawler
- * Description: Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality.
+ * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
  * Version: 2.0.6
  * Author: KantanPro
- * Author URI: https://github.com/KantanPro
- * License: MIT
- * License URI: https://opensource.org/licenses/MIT
+ * Author URI: https://kantanpro.com
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: news-crawler
  * Domain Path: /languages
  * Requires at least: 5.0
- * Tested up to: 6.4
+ * Tested up to: 6.9.1
  * Requires PHP: 7.4
- * Network: false
- */
+ * Update URI: https://github.com/KantanPro/news-crawler.git
+ **/
 
 // 直接アクセスを防ぐ
 if (!defined('ABSPATH')) {
