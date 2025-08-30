@@ -28,10 +28,14 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_reset_cron_schedule', array($this, 'reset_cron_schedule'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
+        add_action('wp_ajax_debug_cron_schedule', array($this, 'debug_cron_schedule'));
         
         // 自動投稿のスケジュール処理
         add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
         add_action('wp_loaded', array($this, 'setup_auto_posting_cron'));
+        
+        // 個別ジャンルの自動投稿フックを動的に登録
+        add_action('init', array($this, 'register_genre_hooks'));
     }
     
     public function add_admin_menu() {
@@ -864,6 +868,7 @@ class NewsCrawlerGenreSettings {
                         
                         <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
                         <button type="button" id="check-schedule" class="button button-secondary">スケジュール状況を確認</button>
+                        <button type="button" id="debug-cron-schedule" class="button button-secondary">Cronデバッグ情報</button>
                         <button type="button" id="reset-cron" class="button button-secondary">Cronスケジュールをリセット</button>
                         <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
                         
@@ -979,40 +984,52 @@ class NewsCrawlerGenreSettings {
                 updateNextExecutionTime();
             });
             
-            // 次回実行予定時刻を更新
+            // 次回実行予定時刻を更新（投稿頻度を考慮）
             function updateNextExecutionTime() {
                 var frequency = $('#posting-frequency').val();
                 var customDays = $('#custom-frequency-days').val();
                 var startTime = $('#start-execution-time').val();
-                var now = new Date();
-                var nextExecution = new Date();
                 
-                // 開始実行日時が設定されている場合は、その日時から計算
-                if (startTime) {
-                    var startDate = new Date(startTime);
-                    // 開始日時が過去の場合は現在時刻から計算
-                    if (startDate <= now) {
-                        startDate = now;
-                    }
-                    nextExecution = new Date(startDate);
-                } else {
-                    // 開始日時が設定されていない場合は現在時刻から計算
-                    nextExecution = new Date(now);
+                if (!startTime) {
+                    $('#next-execution-time').text('未設定');
+                    return;
                 }
                 
-                switch (frequency) {
-                    case 'daily':
-                        nextExecution.setDate(nextExecution.getDate() + 1);
-                        break;
-                    case 'weekly':
-                        nextExecution.setDate(nextExecution.getDate() + 7);
-                        break;
-                    case 'monthly':
-                        nextExecution.setMonth(nextExecution.getMonth() + 1);
-                        break;
-                    case 'custom':
-                        nextExecution.setDate(nextExecution.getDate() + parseInt(customDays));
-                        break;
+                var startDate = new Date(startTime);
+                var now = new Date();
+                var nextExecution = new Date(startDate);
+                
+                // 開始日時が未来の場合は、その日時が次回実行予定
+                if (startDate > now) {
+                    nextExecution = new Date(startDate);
+                } else {
+                    // 開始日時が過去の場合は、投稿頻度に基づいて次回実行予定を計算
+                    var intervalMs = 0;
+                    switch (frequency) {
+                        case 'daily':
+                            intervalMs = 24 * 60 * 60 * 1000; // 24時間
+                            break;
+                        case 'weekly':
+                            intervalMs = 7 * 24 * 60 * 60 * 1000; // 7日
+                            break;
+                        case 'monthly':
+                            intervalMs = 30 * 24 * 60 * 60 * 1000; // 30日
+                            break;
+                        case 'custom':
+                            intervalMs = parseInt(customDays || 1) * 24 * 60 * 60 * 1000;
+                            break;
+                        default:
+                            intervalMs = 24 * 60 * 60 * 1000;
+                    }
+                    
+                    // 開始時刻から現在時刻までの経過時間を計算
+                    var elapsed = now.getTime() - startDate.getTime();
+                    
+                    // 次回実行までの回数を計算
+                    var cycles = Math.ceil(elapsed / intervalMs);
+                    
+                    // 次回実行時刻を計算
+                    nextExecution = new Date(startDate.getTime() + (cycles * intervalMs));
                 }
                 
                 var timeString = nextExecution.getFullYear() + '年' + 
@@ -1070,7 +1087,8 @@ class NewsCrawlerGenreSettings {
                     posting_frequency: $('#posting-frequency').val(),
                     custom_frequency_days: $('#custom-frequency-days').val(),
                     max_posts_per_execution: $('#max-posts-per-execution').val(),
-                    start_execution_time: $('#start-execution-time').val()
+                    start_execution_time: $('#start-execution-time').val(),
+                    next_execution_display: $('#next-execution-time').text().trim().replace(/\n/g, ' ')
                 };
                 
                 // デバッグ情報をコンソールに出力
@@ -1186,6 +1204,39 @@ class NewsCrawlerGenreSettings {
                     },
                     complete: function() {
                         button.prop('disabled', false).text('スケジュール状況を確認');
+                    }
+                });
+            });
+            
+            // Cronデバッグ情報
+            $('#debug-cron-schedule').click(function() {
+                var button = $(this);
+                var resultDiv = $('#test-result');
+                var resultContent = $('#test-result-content');
+                
+                button.prop('disabled', true).text('デバッグ中...');
+                resultDiv.show();
+                resultContent.html('Cronデバッグ情報を取得中...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'debug_cron_schedule',
+                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultContent.html('🔍 Cronデバッグ情報\n\n' + response.data);
+                        } else {
+                            resultContent.html('❌ デバッグ情報取得失敗\n\n' + response.data);
+                        }
+                    },
+                    error: function() {
+                        resultContent.html('❌ 通信エラーが発生しました');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('Cronデバッグ情報');
                     }
                 });
             });
@@ -1450,6 +1501,12 @@ class NewsCrawlerGenreSettings {
         .action-buttons .button {
             margin-right: 5px;
         }
+        .genre-settings-table th:nth-child(8),
+        .genre-settings-table td:nth-child(8) {
+            width: 120px;
+            text-align: center;
+            font-size: 12px;
+        }
         .genre-report {
             background: #f9f9f9;
             border-left: 4px solid #0073aa;
@@ -1492,6 +1549,7 @@ class NewsCrawlerGenreSettings {
         echo '<th>カテゴリー</th>';
         echo '<th>アイキャッチ</th>';
         echo '<th>自動投稿</th>';
+        echo '<th>次回実行予定</th>';
         echo '<th>公開設定</th>';
         echo '<th>操作</th>';
         echo '</tr>';
@@ -1558,22 +1616,86 @@ class NewsCrawlerGenreSettings {
                 );
                 $max_posts = isset($setting['max_posts_per_execution']) ? $setting['max_posts_per_execution'] : 3;
                 
-                // 開始実行日時の表示
-                $start_time_display = '';
-                if (!empty($setting['start_execution_time'])) {
+                // 実際の次回実行予定時刻を取得（次回実行予定カラムと同じロジックを使用）
+                $possible_hooks = array(
+                    'news_crawler_genre_auto_posting_' . $id,
+                    'news_crawler_auto_posting_' . $id,
+                    'genre_auto_posting_' . $id
+                );
+                
+                $actual_next_execution = false;
+                $found_hook = '';
+                
+                // 登録されているcronイベントから該当するものを探す
+                $cron_array = _get_cron_array();
+                foreach ($cron_array as $timestamp => $cron) {
+                    foreach ($cron as $hook => $events) {
+                        // ジャンルIDを含むフック名を探す
+                        if (strpos($hook, $id) !== false && strpos($hook, 'news_crawler') !== false) {
+                            $actual_next_execution = $timestamp;
+                            $found_hook = $hook;
+                            break 2;
+                        }
+                    }
+                }
+                
+                // 見つからない場合は従来の方法でチェック
+                if (!$actual_next_execution) {
+                    foreach ($possible_hooks as $hook_name) {
+                        $actual_next_execution = wp_next_scheduled($hook_name);
+                        if ($actual_next_execution) {
+                            $found_hook = $hook_name;
+                            break;
+                        }
+                    }
+                }
+                
+                // デバッグ情報
+                error_log('Auto Posting Status - Genre: ' . $setting['genre_name'] . ', ID: ' . $id);
+                error_log('Auto Posting Status - Found hook: ' . $found_hook);
+                error_log('Auto Posting Status - Next execution: ' . ($actual_next_execution ? date('Y-m-d H:i:s', $actual_next_execution) : 'false'));
+                
+                $next_time_display = '';
+                if ($actual_next_execution) {
+                    // WordPressタイムゾーンで表示
+                    $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $actual_next_execution), 'Y-m-d H:i:s');
+                    $next_time_display = '次回: ' . date('m/d H:i', strtotime($wp_time));
+                    // デバッグ用：画面にも表示
+                    $next_time_display .= '<br><small style="color: #666;">(' . date('H:i', strtotime($wp_time)) . ')</small>';
+                } elseif (!empty($setting['start_execution_time'])) {
                     $start_time = strtotime($setting['start_execution_time']);
-                    $start_time_display = '開始: ' . date('m/d H:i', $start_time);
+                    $next_time_display = '開始: ' . date('m/d H:i', $start_time);
+                    // デバッグ用：画面にも表示
+                    $next_time_display .= '<br><small style="color: #d63638;">(開始時刻)</small>';
+                } else {
+                    $next_time_display = '<small style="color: #d63638;">未設定</small>';
                 }
                 
                 $auto_posting_status = '有効 (' . $frequency_labels[$frequency] . ', ' . $max_posts . '件)';
-                if ($start_time_display) {
-                    $auto_posting_status .= ' ' . $start_time_display;
+                if ($next_time_display) {
+                    $auto_posting_status .= ' ' . $next_time_display;
                 }
             } else {
                 $auto_posting_status = '無効';
             }
             
-            echo '<td>' . esc_html($auto_posting_status) . '</td>';
+            echo '<td>' . $auto_posting_status . '</td>';
+            
+            // 次回実行予定の表示（設定側で入力された値を優先、なければ計算）
+            $next_execution_display = '';
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                if (!empty($setting['next_execution_display'])) {
+                    // 設定側で入力された次回実行予定の表示値をそのまま使用
+                    $next_execution_display = esc_html($setting['next_execution_display']);
+                } else {
+                    // 設定側で値が入力されていない場合は、未設定と表示
+                    $next_execution_display = '<span style="color: #d63638;">設定側で値を入力してください</span>';
+                }
+            } else {
+                $next_execution_display = '-';
+            }
+            
+            echo '<td>' . $next_execution_display . '</td>';
             
             // 公開設定の表示
             $post_status = isset($setting['post_status']) ? $setting['post_status'] : 'draft';
@@ -1635,6 +1757,14 @@ class NewsCrawlerGenreSettings {
         error_log('Genre Settings Save - Raw auto_posting from POST: ' . (isset($_POST['auto_posting']) ? $_POST['auto_posting'] : 'not set'));
         error_log('Genre Settings Save - Processed auto_posting value: ' . $auto_posting);
         
+        // next_execution_displayの値をクリーンアップ
+        $raw_next_execution = $_POST['next_execution_display'] ?? '';
+        $cleaned_next_execution = sanitize_text_field(trim(str_replace(["\n", "\r"], ' ', $raw_next_execution)));
+        
+        // デバッグ情報を記録
+        error_log('Genre Settings Save - Raw next_execution_display: "' . $raw_next_execution . '"');
+        error_log('Genre Settings Save - Cleaned next_execution_display: "' . $cleaned_next_execution . '"');
+        
         $setting = array(
             'genre_name' => $genre_name,
             'content_type' => $content_type,
@@ -1648,6 +1778,7 @@ class NewsCrawlerGenreSettings {
             'custom_frequency_days' => intval($_POST['custom_frequency_days'] ?? 7),
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
             'start_execution_time' => sanitize_text_field($_POST['start_execution_time'] ?? ''),
+            'next_execution_display' => $cleaned_next_execution,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
         );
@@ -1669,7 +1800,7 @@ class NewsCrawlerGenreSettings {
         
         if (empty($genre_id)) {
             // 新規作成
-            $genre_id = uniqid('genre_');
+            $genre_id = $this->generate_sequential_genre_id();
             $setting['created_at'] = current_time('mysql');
             error_log('Genre Settings Save - Creating new genre setting');
         } else {
@@ -1704,10 +1835,19 @@ class NewsCrawlerGenreSettings {
             // 自動投稿が有効な場合、次回実行時刻を設定
             error_log('Genre Settings Save - Auto posting enabled, setting next execution time');
             $this->update_next_execution_time($genre_id, $setting);
+            
+            // 個別スケジュールを設定
+            if (!empty($setting['start_execution_time'])) {
+                $this->schedule_genre_auto_posting($genre_id, $setting);
+            }
         } else {
             // 自動投稿が無効な場合、次回実行時刻とログをクリア
             error_log('Genre Settings Save - Auto posting disabled, clearing execution time and logs');
             delete_option('news_crawler_last_execution_' . $genre_id);
+            
+            // 個別スケジュールをクリア
+            $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+            wp_clear_scheduled_hook($hook_name);
             
             // 自動投稿関連のログから該当ジャンルのエントリを削除
             $this->cleanup_auto_posting_logs($genre_id);
@@ -1736,6 +1876,11 @@ class NewsCrawlerGenreSettings {
         
         // 自動投稿関連のデータをクリーンアップ
         delete_option('news_crawler_last_execution_' . $genre_id);
+        
+        // 個別スケジュールをクリア
+        $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+        wp_clear_scheduled_hook($hook_name);
+        
         $this->cleanup_auto_posting_logs($genre_id);
         
         wp_send_json_success('設定を削除しました');
@@ -2056,6 +2201,49 @@ class NewsCrawlerGenreSettings {
         return get_option($this->option_name, array());
     }
     
+    /**
+     * 連番のジャンルIDを生成
+     */
+    private function generate_sequential_genre_id() {
+        $genre_settings = $this->get_genre_settings();
+        $max_number = 0;
+        
+        // 既存のジャンルIDから最大の番号を取得
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (preg_match('/^genre_(\d+)$/', $genre_id, $matches)) {
+                $number = intval($matches[1]);
+                if ($number > $max_number) {
+                    $max_number = $number;
+                }
+            }
+        }
+        
+        return 'genre_' . ($max_number + 1);
+    }
+    
+    /**
+     * ジャンルIDを連番表示用に変換
+     */
+    private function get_display_genre_id($genre_id) {
+        // 既に連番形式の場合はそのまま返す
+        if (preg_match('/^genre_(\d+)$/', $genre_id, $matches)) {
+            return $matches[1];
+        }
+        
+        // ランダム文字列の場合は、ジャンル設定の順序に基づいて連番を割り当て
+        $genre_settings = $this->get_genre_settings();
+        $counter = 1;
+        
+        foreach ($genre_settings as $id => $setting) {
+            if ($id === $genre_id) {
+                return $counter;
+            }
+            $counter++;
+        }
+        
+        return $genre_id; // 見つからない場合は元のIDを返す
+    }
+    
     public function duplicate_genre_setting() {
         check_ajax_referer('genre_settings_nonce', 'nonce');
         
@@ -2074,7 +2262,7 @@ class NewsCrawlerGenreSettings {
         $original_setting = $genre_settings[$genre_id];
         
         // 新しいIDを生成
-        $new_genre_id = uniqid('genre_');
+        $new_genre_id = $this->generate_sequential_genre_id();
         
         // 複製用の設定を作成
         $duplicated_setting = $original_setting;
@@ -2115,7 +2303,17 @@ class NewsCrawlerGenreSettings {
         // 既存のスケジュールをクリア
         wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
         
-        // 現在時刻から確実に1時間後に開始するように設定
+        // ジャンル設定を取得
+        $genre_settings = $this->get_genre_settings();
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            // 自動投稿が有効で、開始実行日時が設定されている場合のみスケジュール
+            if (isset($setting['auto_posting']) && $setting['auto_posting'] && !empty($setting['start_execution_time'])) {
+                $this->schedule_genre_auto_posting($genre_id, $setting);
+            }
+        }
+        
+        // 全体的なチェック用のcronも設定（1時間ごと）
         $current_time = current_time('timestamp');
         $start_time = $current_time + (60 * 60); // 現在時刻から1時間後
         
@@ -2134,7 +2332,58 @@ class NewsCrawlerGenreSettings {
     }
     
     /**
-     * 自動投稿の実行処理
+     * ジャンル別フックを動的に登録
+     */
+    public function register_genre_hooks() {
+        $genre_settings = $this->get_genre_settings();
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+            add_action($hook_name, array($this, 'execute_genre_auto_posting'), 10, 1);
+        }
+    }
+    
+    /**
+     * 個別ジャンルの自動投稿スケジュール設定
+     */
+    private function schedule_genre_auto_posting($genre_id, $setting) {
+        $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+        
+        // 既存のスケジュールをクリア
+        wp_clear_scheduled_hook($hook_name);
+        
+        // 開始実行日時を取得
+        $datetime = $setting['start_execution_time'];
+        
+        // WordPressのローカルタイムゾーンでのタイムスタンプを取得
+        $local_timestamp = strtotime($datetime);
+        
+        // 現在時刻と比較（両方ともWordPressローカルタイム）
+        $current_time = current_time('timestamp');
+        
+        if ($local_timestamp > $current_time) {
+            // 未来の時刻の場合はそのまま使用
+            $timestamp = $local_timestamp;
+        } else {
+            // 過去の時刻の場合は次回実行時刻を計算
+            $timestamp = $this->calculate_next_execution_from_start_time($setting, $local_timestamp);
+        }
+        
+        // UTCタイムスタンプに変換してcronに登録
+        $utc_timestamp = get_gmt_from_date(date('Y-m-d H:i:s', $timestamp), 'U');
+        
+        // 単発イベントとしてスケジュール
+        $scheduled = wp_schedule_single_event($utc_timestamp, $hook_name, array($genre_id));
+        
+        if ($scheduled) {
+            error_log('Genre Auto Posting - Successfully scheduled for genre ' . $setting['genre_name'] . ' at: ' . date('Y-m-d H:i:s', $timestamp) . ' (Local) / ' . date('Y-m-d H:i:s', $utc_timestamp) . ' (UTC)');
+        } else {
+            error_log('Genre Auto Posting - Failed to schedule for genre ' . $setting['genre_name']);
+        }
+    }
+    
+    /**
+     * 自動投稿の実行処理（全体チェック用）
      */
     public function execute_auto_posting() {
         error_log('Auto Posting Execution - Starting...');
@@ -2149,7 +2398,8 @@ class NewsCrawlerGenreSettings {
         $skipped_count = 0;
         
         foreach ($genre_settings as $genre_id => $setting) {
-            error_log('Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            $display_id = $this->get_display_genre_id($genre_id);
+            error_log('Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
             
             // 自動投稿が無効または設定されていない場合はスキップ
             if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
@@ -2176,13 +2426,44 @@ class NewsCrawlerGenreSettings {
             $this->execute_auto_posting_for_genre($setting);
             $executed_count++;
             
-            // 次回実行時刻を更新（強制実行時は更新しない）
-            if (!$is_forced) {
-                $this->update_next_execution_time($genre_id, $setting);
-            }
+            // 次回実行時刻を更新
+            $this->update_next_execution_time($genre_id, $setting);
         }
         
         error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
+    }
+    
+    /**
+     * 個別ジャンルの自動投稿実行処理
+     */
+    public function execute_genre_auto_posting($genre_id) {
+        error_log('Genre Auto Posting - Starting for genre ID: ' . $genre_id);
+        
+        $genre_settings = $this->get_genre_settings();
+        
+        if (!isset($genre_settings[$genre_id])) {
+            error_log('Genre Auto Posting - Genre not found: ' . $genre_id);
+            return;
+        }
+        
+        $setting = $genre_settings[$genre_id];
+        
+        // 自動投稿が有効かチェック
+        if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
+            error_log('Genre Auto Posting - Auto posting disabled for genre: ' . $setting['genre_name']);
+            return;
+        }
+        
+        error_log('Genre Auto Posting - Executing for genre: ' . $setting['genre_name']);
+        
+        // 自動投稿を実行
+        $this->execute_auto_posting_for_genre($setting);
+        
+        // 次回実行時刻を更新して次のスケジュールを設定
+        $this->update_next_execution_time($genre_id, $setting);
+        $this->schedule_genre_auto_posting($genre_id, $setting);
+        
+        error_log('Genre Auto Posting - Completed for genre: ' . $setting['genre_name']);
     }
     
     /**
@@ -2192,7 +2473,8 @@ class NewsCrawlerGenreSettings {
         $genre_id = $setting['id'];
         $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
         
-        error_log('Execute Auto Posting for Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+        $display_id = $this->get_display_genre_id($genre_id);
+        error_log('Execute Auto Posting for Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
         
         try {
             // 実行前のチェック
@@ -2389,6 +2671,55 @@ class NewsCrawlerGenreSettings {
     }
     
     /**
+     * 開始時刻から次回実行時刻を計算
+     */
+    private function calculate_next_execution_from_start_time($setting, $start_time) {
+        $current_time = current_time('timestamp');
+        $frequency = $setting['posting_frequency'] ?? 'daily';
+        
+        // 頻度に応じた間隔を取得
+        $interval = $this->get_frequency_interval($frequency, $setting);
+        
+        // 開始時刻から現在時刻までの経過時間を計算
+        $elapsed = $current_time - $start_time;
+        
+        // 次回実行までの回数を計算
+        $cycles = ceil($elapsed / $interval);
+        
+        // 次回実行時刻を計算
+        return $start_time + ($cycles * $interval);
+    }
+    
+    /**
+     * 現在時刻から次回実行時刻を計算
+     */
+    private function calculate_next_execution_from_now($setting, $now) {
+        $frequency = $setting['posting_frequency'] ?? 'daily';
+        $interval = $this->get_frequency_interval($frequency, $setting);
+        
+        return $now + $interval;
+    }
+    
+    /**
+     * 頻度に応じた間隔（秒）を取得
+     */
+    private function get_frequency_interval($frequency, $setting) {
+        switch ($frequency) {
+            case 'daily':
+                return 24 * 60 * 60; // 24時間
+            case 'weekly':
+                return 7 * 24 * 60 * 60; // 7日
+            case 'monthly':
+                return 30 * 24 * 60 * 60; // 30日
+            case 'custom':
+                $days = $setting['custom_frequency_days'] ?? 7;
+                return $days * 24 * 60 * 60;
+            default:
+                return 24 * 60 * 60; // デフォルトは24時間
+        }
+    }
+    
+    /**
      * 表示用の次回実行時刻を計算（ジャンル別設定のスケジュールを正しく反映）
      */
     private function calculate_next_execution_time_for_display($setting) {
@@ -2434,7 +2765,6 @@ class NewsCrawlerGenreSettings {
      */
     private function update_next_execution_time($genre_id, $setting) {
         $now = current_time('timestamp');
-        $next_execution_time = $now;
         
         // 開始実行日時が設定されている場合
         if (!empty($setting['start_execution_time'])) {
@@ -2443,8 +2773,17 @@ class NewsCrawlerGenreSettings {
             // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
             if ($start_time > $now) {
                 $next_execution_time = $start_time;
+            } else {
+                // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
+                $next_execution_time = $this->calculate_next_execution_from_start_time($setting, $start_time);
             }
+        } else {
+            // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度分後
+            $next_execution_time = $this->calculate_next_execution_from_now($setting, $now);
         }
+        
+        // デバッグログ
+        error_log('Update Next Execution Time - Genre ID: ' . $genre_id . ', Next execution: ' . date('Y-m-d H:i:s', $next_execution_time));
         
         // 最後の実行時刻を更新
         update_option('news_crawler_last_execution_' . $genre_id, $next_execution_time);
@@ -2755,9 +3094,14 @@ class NewsCrawlerGenreSettings {
                     $test_results[] = "  理由: " . $check_result['reason'];
                 }
                 
-                // ジャンル別設定のスケジュールを正しく計算
-                $next_execution = $this->calculate_next_execution_time_for_display($setting);
-                $test_results[] = "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution);
+                // 設定側で入力された次回実行予定時刻を表示
+                if (!empty($setting['next_execution_display'])) {
+                    $test_results[] = "  次回実行予定: " . esc_html($setting['next_execution_display']);
+                } else {
+                    // 設定されていない場合は計算値を使用
+                    $next_execution = $this->calculate_next_execution_time_for_display($setting);
+                    $test_results[] = "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . " (計算値)";
+                }
                 
                 // スケジュール詳細を表示
                 if (!empty($setting['start_execution_time'])) {
@@ -2836,16 +3180,23 @@ class NewsCrawlerGenreSettings {
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
                 $auto_posting_count++;
                 
-                // ジャンル別設定のスケジュールを正しく計算
-                $next_execution = $this->calculate_next_execution_time_for_display($setting);
-                $status = $next_execution <= $current_time ? '実行可能' : '待機中';
+                // 設定側で入力された次回実行予定時刻を表示
+                if (!empty($setting['next_execution_display'])) {
+                    $next_execution_display = esc_html($setting['next_execution_display']);
+                    $status = '設定済み';
+                } else {
+                    // 設定されていない場合は計算値を使用
+                    $next_execution = $this->calculate_next_execution_time_for_display($setting);
+                    $next_execution_display = date('Y-m-d H:i:s', $next_execution) . " (計算値)";
+                    $status = $next_execution <= $current_time ? '実行可能' : '待機中';
+                }
                 
                 // 投稿作成可能数を計算
                 $max_posts_per_execution = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
                 $total_possible_posts += $max_posts_per_execution;
                 
                 $result .= "ID: " . $display_id . " - ジャンル: " . $setting['genre_name'] . "\n";
-                $result .= "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . "\n";
+                $result .= "  次回実行予定: " . $next_execution_display . "\n";
                 $result .= "  状況: " . $status . "\n";
                 $result .= "  投稿作成可能数: " . $max_posts_per_execution . " 件\n";
                 
@@ -2964,7 +3315,8 @@ class NewsCrawlerGenreSettings {
         $skipped_count = 0;
         
         foreach ($genre_settings as $genre_id => $setting) {
-            error_log('Force Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            $display_id = $this->get_display_genre_id($genre_id);
+            error_log('Force Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
             
             // 自動投稿が無効または設定されていない場合はスキップ
             if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
@@ -3025,64 +3377,9 @@ class NewsCrawlerGenreSettings {
         error_log('Force Auto Posting Execution - Restored correct schedule for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
     }
     
-    /**
-     * 開始時刻から次回実行時刻を計算
-     */
-    private function calculate_next_execution_from_start_time($setting, $start_time) {
-        $now = current_time('timestamp');
-        $frequency = $setting['posting_frequency'] ?? 'daily';
-        
-        // 開始時刻から現在時刻までの経過時間を計算
-        $elapsed_time = $now - $start_time;
-        
-        // 投稿頻度に基づいて次回実行時刻を計算
-        switch ($frequency) {
-            case 'daily':
-                $interval = 24 * 60 * 60; // 24時間
-                break;
-            case 'weekly':
-                $interval = 7 * 24 * 60 * 60; // 7日
-                break;
-            case 'monthly':
-                $interval = 30 * 24 * 60 * 60; // 30日
-                break;
-            case 'custom':
-                $days = $setting['custom_frequency_days'] ?? 7;
-                $interval = $days * 24 * 60 * 60;
-                break;
-            default:
-                $interval = 24 * 60 * 60;
-        }
-        
-        // 経過時間から次の実行時刻を計算
-        $next_execution = $start_time;
-        while ($next_execution <= $now) {
-            $next_execution += $interval;
-        }
-        
-        return $next_execution;
-    }
+
     
-    /**
-     * 現在時刻から次回実行時刻を計算
-     */
-    private function calculate_next_execution_from_now($setting, $now) {
-        $frequency = $setting['posting_frequency'] ?? 'daily';
-        
-        switch ($frequency) {
-            case 'daily':
-                return $now + (24 * 60 * 60); // 24時間後
-            case 'weekly':
-                return $now + (7 * 24 * 60 * 60); // 7日後
-            case 'monthly':
-                return $now + (30 * 24 * 60 * 60); // 30日後
-            case 'custom':
-                $days = $setting['custom_frequency_days'] ?? 7;
-                return $now + ($days * 24 * 60 * 60);
-            default:
-                return $now + (24 * 60 * 60);
-        }
-    }
+
     
     /**
      * ニュースソースの可用性をテストして、実際に取得可能な記事数を返す
@@ -3262,5 +3559,161 @@ class NewsCrawlerGenreSettings {
         }
         
         return $matching_count;
+    }
+    
+    /**
+     * Cronスケジュールのデバッグ情報を取得
+     */
+    public function debug_cron_schedule() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        
+        $debug_info = array();
+        
+        // 現在時刻
+        $current_time = current_time('timestamp');
+        $debug_info[] = '現在時刻: ' . date('Y-m-d H:i:s', $current_time);
+        $debug_info[] = 'WordPressタイムゾーン: ' . get_option('timezone_string', 'UTC');
+        $debug_info[] = '';
+        
+        // 全体的なcronスケジュール
+        $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
+        if ($next_cron) {
+            $debug_info[] = '全体チェック用cron: ' . date('Y-m-d H:i:s', $next_cron);
+        } else {
+            $debug_info[] = '全体チェック用cron: 未設定';
+        }
+        $debug_info[] = '';
+        
+        // ジャンル別スケジュール
+        $genre_settings = $this->get_genre_settings();
+        $debug_info[] = 'ジャンル別スケジュール:';
+        
+        $display_id = 1; // 表示用の連番（管理画面と同じ仕組み）
+        foreach ($genre_settings as $genre_id => $setting) {
+            $debug_info[] = '--- ' . $setting['genre_name'] . ' (ID: ' . $display_id . ') ---';
+            
+            if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
+                $debug_info[] = '  自動投稿: 無効';
+                $debug_info[] = '';
+                $display_id++; // 連番をインクリメント
+                continue;
+            }
+            
+            $debug_info[] = '  自動投稿: 有効';
+            $debug_info[] = '  開始実行日時: ' . ($setting['start_execution_time'] ?? '未設定');
+            $debug_info[] = '  投稿頻度: ' . ($setting['posting_frequency'] ?? 'daily');
+            
+            // 個別cronスケジュール
+            $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+            $next_execution = wp_next_scheduled($hook_name);
+            if ($next_execution) {
+                $debug_info[] = '  次回実行予定（UTC）: ' . date('Y-m-d H:i:s', $next_execution);
+                $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $next_execution), 'Y-m-d H:i:s');
+                $debug_info[] = '  次回実行予定（WP）: ' . $wp_time;
+                $time_diff = $next_execution - $current_time;
+                if ($time_diff > 0) {
+                    $hours = floor($time_diff / 3600);
+                    $minutes = floor(($time_diff % 3600) / 60);
+                    $debug_info[] = '  実行まで: ' . $hours . '時間' . $minutes . '分';
+                } else {
+                    $debug_info[] = '  実行まで: 過去の時刻（要確認）';
+                }
+            } else {
+                $debug_info[] = '  次回実行予定: 未設定';
+            }
+            
+            // 計算ロジックのデバッグ
+            if (!empty($setting['start_execution_time'])) {
+                $start_time = strtotime($setting['start_execution_time']);
+                $debug_info[] = '  開始時刻（タイムスタンプ）: ' . $start_time . ' (' . date('Y-m-d H:i:s', $start_time) . ')';
+                
+                if ($start_time <= $current_time) {
+                    $calculated_next = $this->calculate_next_execution_from_start_time($setting, $start_time);
+                    $debug_info[] = '  計算された次回実行: ' . date('Y-m-d H:i:s', $calculated_next);
+                    
+                    // JavaScript側の計算も再現
+                    $frequency = $setting['posting_frequency'] ?? 'daily';
+                    $interval = $this->get_frequency_interval($frequency, $setting);
+                    $elapsed = $current_time - $start_time;
+                    $cycles = ceil($elapsed / $interval);
+                    $js_calculated = $start_time + ($cycles * $interval);
+                    $debug_info[] = '  JS計算ロジック結果: ' . date('Y-m-d H:i:s', $js_calculated);
+                    $debug_info[] = '  間隔: ' . $interval . '秒, 経過: ' . $elapsed . '秒, サイクル: ' . $cycles;
+                }
+            }
+            
+            // 最後の実行時刻
+            $last_execution = get_option('news_crawler_last_execution_' . $genre_id, 0);
+            if ($last_execution) {
+                $debug_info[] = '  最後の実行: ' . date('Y-m-d H:i:s', $last_execution);
+            } else {
+                $debug_info[] = '  最後の実行: なし';
+            }
+            
+            $debug_info[] = '';
+            $display_id++; // 連番をインクリメント
+        }
+        
+        // 全てのcronイベントを確認
+        $debug_info[] = '登録済みcronイベント:';
+        $cron_array = _get_cron_array();
+        foreach ($cron_array as $timestamp => $cron) {
+            foreach ($cron as $hook => $events) {
+                if (strpos($hook, 'news_crawler') !== false) {
+                    $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $timestamp), 'Y-m-d H:i:s');
+                    $debug_info[] = '  ' . $hook . ': ' . $wp_time . ' (UTC: ' . date('Y-m-d H:i:s', $timestamp) . ')';
+                }
+            }
+        }
+        
+        wp_send_json_success(implode("\n", $debug_info));
+    }
+    
+    /**
+     * 期間制限機能のテスト
+     */
+    public function test_age_limit_function() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $enabled = $basic_settings['enable_content_age_limit'] ?? false;
+        $months = $basic_settings['content_age_limit_months'] ?? 12;
+        
+        $test_results = array();
+        $test_results[] = '期間制限機能テスト結果:';
+        $test_results[] = '有効/無効: ' . ($enabled ? '有効' : '無効');
+        $test_results[] = '制限期間: ' . $months . 'ヶ月';
+        $test_results[] = '';
+        
+        if ($enabled) {
+            $cutoff_date = strtotime('-' . $months . ' months');
+            $test_results[] = 'カットオフ日時: ' . date('Y-m-d H:i:s', $cutoff_date);
+            $test_results[] = '';
+            
+            // テスト用の日付をいくつか確認
+            $test_dates = array(
+                '2024-01-01 10:00:00',
+                '2024-06-01 10:00:00',
+                '2024-12-01 10:00:00',
+                date('Y-m-d H:i:s', strtotime('-1 month')),
+                date('Y-m-d H:i:s', strtotime('-6 months')),
+                date('Y-m-d H:i:s', strtotime('-1 year'))
+            );
+            
+            $test_results[] = 'テスト日付の判定結果:';
+            foreach ($test_dates as $test_date) {
+                $test_timestamp = strtotime($test_date);
+                $is_valid = $test_timestamp >= $cutoff_date;
+                $test_results[] = '  ' . $test_date . ': ' . ($is_valid ? '取得対象' : '除外対象');
+            }
+        } else {
+            $test_results[] = '期間制限が無効のため、すべてのコンテンツが取得対象です。';
+        }
+        
+        wp_send_json_success(implode("\n", $test_results));
     }
 }
