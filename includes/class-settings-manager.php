@@ -19,6 +19,7 @@ class NewsCrawlerSettingsManager {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_test_api_connection', array($this, 'test_api_connection'));
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
+        add_action('wp_ajax_check_for_updates', array($this, 'check_for_updates'));
     }
     
     /**
@@ -176,6 +177,7 @@ class NewsCrawlerSettingsManager {
                 <a href="#api-settings" class="nav-tab nav-tab-active" data-tab="api-settings">API設定</a>
                 <a href="#feature-settings" class="nav-tab" data-tab="feature-settings">機能設定</a>
                 <a href="#quality-settings" class="nav-tab" data-tab="quality-settings">品質管理</a>
+                <a href="#update-info" class="nav-tab" data-tab="update-info">更新情報</a>
                 <a href="#system-info" class="nav-tab" data-tab="system-info">システム情報</a>
             </div>
             
@@ -208,6 +210,11 @@ class NewsCrawlerSettingsManager {
                         $this->render_field('age_limit_days');
                         ?>
                     </table>
+                </div>
+                
+                <div id="update-info" class="tab-content">
+                    <h2>更新情報</h2>
+                    <?php $this->display_update_info(); ?>
                 </div>
                 
                 <div id="system-info" class="tab-content">
@@ -348,6 +355,35 @@ class NewsCrawlerSettingsManager {
                         }
                     });
                 }
+            });
+            
+            // 更新チェック
+            $('#check-updates').click(function() {
+                var button = $(this);
+                button.prop('disabled', true).text('チェック中...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'check_for_updates',
+                        nonce: '<?php echo wp_create_nonce('check_for_updates'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('更新チェックが完了しました。ページを再読み込みします。');
+                            location.reload();
+                        } else {
+                            alert('更新チェックに失敗しました: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('更新チェックに失敗しました。');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('今すぐチェック');
+                    }
+                });
             });
         });
         </script>
@@ -749,5 +785,78 @@ class NewsCrawlerSettingsManager {
         $settings = get_option('news_crawler_settings', array());
         $settings[$key] = $value;
         return update_option('news_crawler_settings', $settings);
+    }
+    
+    /**
+     * 更新情報を表示
+     */
+    public function display_update_info() {
+        $current_version = NEWS_CRAWLER_VERSION;
+        $latest_version = get_transient('news_crawler_latest_version');
+        
+        if (!$latest_version) {
+            echo '<div class="card">';
+            echo '<h3>更新チェック</h3>';
+            echo '<p>最新バージョンの確認中...</p>';
+            echo '<button type="button" id="check-updates" class="button">今すぐチェック</button>';
+            echo '</div>';
+            return;
+        }
+        
+        $needs_update = version_compare($current_version, $latest_version['version'], '<');
+        
+        echo '<div class="card">';
+        echo '<h3>バージョン情報</h3>';
+        echo '<table class="system-info-table">';
+        echo '<tr><th>現在のバージョン</th><td>' . esc_html($current_version) . '</td></tr>';
+        echo '<tr><th>最新バージョン</th><td>' . esc_html($latest_version['version']) . '</td></tr>';
+        echo '<tr><th>最終更新日</th><td>' . esc_html(date('Y-m-d H:i:s', strtotime($latest_version['published_at']))) . '</td></tr>';
+        echo '</table>';
+        
+        if ($needs_update) {
+            echo '<div class="notice notice-warning" style="margin: 15px 0;">';
+            echo '<p><strong>新しいバージョンが利用可能です！</strong></p>';
+            echo '<p><a href="' . admin_url('update-core.php') . '" class="button button-primary">今すぐ更新</a></p>';
+            echo '</div>';
+        } else {
+            echo '<div class="notice notice-success" style="margin: 15px 0;">';
+            echo '<p><strong>最新バージョンを使用しています。</strong></p>';
+            echo '</div>';
+        }
+        
+        if (!empty($latest_version['description'])) {
+            echo '<div class="card">';
+            echo '<h3>リリースノート</h3>';
+            echo '<div style="max-height: 300px; overflow-y: auto; padding: 15px; background: #f9f9f9; border-radius: 4px;">';
+            echo '<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">' . esc_html($latest_version['description']) . '</pre>';
+            echo '</div>';
+            echo '</div>';
+        }
+        
+        echo '<div class="card">';
+        echo '<h3>更新チェック</h3>';
+        echo '<p>最新バージョンの確認を行います。</p>';
+        echo '<button type="button" id="check-updates" class="button">今すぐチェック</button>';
+        echo '</div>';
+    }
+    
+    /**
+     * 更新チェックAJAX
+     */
+    public function check_for_updates() {
+        if (!wp_verify_nonce($_POST['nonce'], 'check_for_updates')) {
+            wp_die('Security check failed');
+        }
+        
+        // キャッシュをクリア
+        delete_transient('news_crawler_latest_version');
+        
+        // 更新チェックを実行
+        if (class_exists('NewsCrawlerUpdater')) {
+            $updater = new NewsCrawlerUpdater();
+            $updater->check_for_updates(get_site_transient('update_plugins'));
+        }
+        
+        wp_send_json_success('更新チェックが完了しました。');
     }
 }

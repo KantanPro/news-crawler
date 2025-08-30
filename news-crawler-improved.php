@@ -3,7 +3,7 @@
  * Plugin Name: News Crawler (Improved)
  * Plugin URI: https://github.com/KantanPro/news-crawler
  * Description: 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
- * Version: 2.0.0
+ * Version: 2.0.4
  * Author: KantanPro
  * Author URI: https://github.com/KantanPro
  * License: MIT
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '2.0.3');
+define('NEWS_CRAWLER_VERSION', '2.0.4');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -32,6 +32,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-post-editor-summary.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 
 /**
  * メインプラグインクラス
@@ -126,6 +127,11 @@ class NewsCrawlerMain {
         // OGP設定クラスを初期化
         if (class_exists('NewsCrawlerOGPSettings')) {
             new NewsCrawlerOGPSettings();
+        }
+        
+        // 更新チェッククラスを初期化
+        if (class_exists('NewsCrawlerUpdater')) {
+            new NewsCrawlerUpdater();
         }
     }
     
@@ -427,6 +433,11 @@ class NewsCrawlerMain {
     public function deactivate() {
         // Cronスケジュールをクリア
         wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
+        
+        // 更新チェックのクリーンアップ
+        if (class_exists('NewsCrawlerUpdater')) {
+            NewsCrawlerUpdater::cleanup();
+        }
         
         error_log('NewsCrawler: プラグインが無効化されました');
     }

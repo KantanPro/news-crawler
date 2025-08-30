@@ -5,6 +5,25 @@ All notable changes to the News Crawler plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2025-01-27
+
+### Added
+- **WordPress Update Notification**: Full integration with WordPress standard update system
+- **GitHub Release Integration**: Automatic update checks from GitHub releases
+- **Update Checker Class**: Comprehensive update management with caching
+- **Admin Update Notices**: Dashboard notifications for available updates
+- **Settings Update Tab**: New tab in settings for update information and management
+- **One-Click Updates**: Direct update functionality from WordPress admin
+
+### Changed
+- **Version**: Updated to 2.0.4 to reflect new update functionality
+- **Update System**: Replaced manual GitHub downloads with automatic WordPress updates
+- **User Experience**: Streamlined update process with integrated notifications
+
+### Security
+- **Update Verification**: Secure update process with nonce verification
+- **API Integration**: Safe GitHub API integration with proper error handling
+
 ## [2.0.0] - 2025-08-29
 
 ### Added
