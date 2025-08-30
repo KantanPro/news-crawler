@@ -15,6 +15,13 @@ class NewsCrawlerFeaturedImageGenerator {
     
     public function __construct() {
         add_action('admin_init', array($this, 'admin_init'));
+        
+        // 投稿編集画面にアイキャッチ生成メタボックスを追加
+        add_action('add_meta_boxes', array($this, 'add_featured_image_meta_box'));
+        
+        // AJAXハンドラーを追加
+        add_action('wp_ajax_generate_featured_image', array($this, 'ajax_generate_featured_image'));
+        add_action('wp_ajax_regenerate_featured_image', array($this, 'ajax_regenerate_featured_image'));
     }
     
     public function admin_init() {
@@ -31,10 +38,6 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
     public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
-        error_log('Featured Image Generator: Starting generation for post ' . $post_id . ' with method: ' . $method);
-        error_log('Featured Image Generator: Title: ' . $title);
-        error_log('Featured Image Generator: Keywords: ' . implode(', ', $keywords));
-        
         $settings = get_option($this->option_name, array());
         
         $result = false;
@@ -51,7 +54,16 @@ class NewsCrawlerFeaturedImageGenerator {
                 break;
         }
         
-        error_log('Featured Image Generator: Result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
+        // 最終確認：アイキャッチ画像が正しく設定されているかチェック
+        if ($result) {
+            $final_check = has_post_thumbnail($post_id);
+            $final_thumbnail_id = get_post_thumbnail_id($post_id);
+            
+            if (!$final_check || $final_thumbnail_id != $result) {
+                set_post_thumbnail($post_id, $result);
+            }
+        }
+        
         return $result;
     }
     
@@ -59,11 +71,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * テンプレートベースの画像生成
      */
     private function generate_template_image($post_id, $title, $keywords, $settings) {
-        error_log('Featured Image Generator - Template: Starting template generation');
-        
         // GD拡張の確認
         if (!extension_loaded('gd')) {
-            error_log('Featured Image Generator - Template: GD extension not loaded');
             return false;
         }
         
@@ -73,8 +82,6 @@ class NewsCrawlerFeaturedImageGenerator {
         // 画像サイズ設定（デフォルト値を使用）
         $width = 1200;
         $height = 630;
-        
-        error_log('Featured Image Generator - Template: Image size: ' . $width . 'x' . $height);
         
         // 画像を作成
         $image = imagecreatetruecolor($width, $height);
@@ -101,9 +108,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
         
         // 画像を保存
-        error_log('Featured Image Generator - Template: Saving image as attachment');
         $result = $this->save_image_as_attachment($image, $post_id, $title);
-        error_log('Featured Image Generator - Template: Save result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
         return $result;
     }
     
@@ -115,19 +120,12 @@ class NewsCrawlerFeaturedImageGenerator {
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
         
-        // デバッグログ
-        error_log('Featured Image Generator - AI: API Key exists: ' . (!empty($api_key) ? 'Yes' : 'No'));
-        
         if (empty($api_key)) {
-            error_log('Featured Image Generator - AI: No API key found');
             return false;
         }
         
         // プロンプト生成
         $prompt = $this->create_ai_prompt($title, $keywords, $settings);
-        
-        // デバッグログ
-        error_log('Featured Image Generator - AI: Prompt: ' . $prompt);
         
         // OpenAI API呼び出し
         $response = wp_remote_post('https://api.openai.com/v1/images/generations', array(
@@ -147,25 +145,14 @@ class NewsCrawlerFeaturedImageGenerator {
         ));
         
         if (is_wp_error($response)) {
-            error_log('Featured Image Generator - AI: WP Error: ' . $response->get_error_message());
             return false;
         }
         
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
         
-        // デバッグログ
-        error_log('Featured Image Generator - AI: Response: ' . $body);
-        
         if (isset($data['data'][0]['url'])) {
-            error_log('Featured Image Generator - AI: Image URL found, downloading...');
             return $this->download_and_attach_image($data['data'][0]['url'], $post_id, $title);
-        }
-        
-        if (isset($data['error'])) {
-            error_log('Featured Image Generator - AI: API Error: ' . $data['error']['message']);
-            // ユーザーフレンドリーなエラーメッセージをログに追加
-            error_log('Featured Image Generator - AI: 画像生成中にエラーが発生いたしました。詳細: ' . $data['error']['message']);
         }
         
         return false;
@@ -182,13 +169,11 @@ class NewsCrawlerFeaturedImageGenerator {
         $basic_settings = get_option('news_crawler_basic_settings', array());
         if (!empty($basic_settings['unsplash_access_key'])) {
             $access_key = $basic_settings['unsplash_access_key'];
-            error_log('Featured Image Generator - Unsplash: Access key found in basic settings');
         }
         
         // 2. フィーチャー画像設定から取得
         if (empty($access_key) && !empty($settings['unsplash_access_key'])) {
             $access_key = $settings['unsplash_access_key'];
-            error_log('Featured Image Generator - Unsplash: Access key found in featured image settings');
         }
         
         // 3. ジャンル設定から取得
@@ -197,22 +182,17 @@ class NewsCrawlerFeaturedImageGenerator {
             foreach ($genre_settings as $setting) {
                 if (!empty($setting['unsplash_access_key'])) {
                     $access_key = $setting['unsplash_access_key'];
-                    error_log('Featured Image Generator - Unsplash: Access key found in genre settings');
                     break;
                 }
             }
         }
         
         if (empty($access_key)) {
-            error_log('Featured Image Generator - Unsplash: No access key found in any settings');
             return false;
         }
         
-        error_log('Featured Image Generator - Unsplash: Access key found, length: ' . strlen($access_key));
-        
         // 検索キーワード生成
         $search_query = $this->create_unsplash_query($title, $keywords);
-        error_log('Featured Image Generator - Unsplash: Search query: ' . $search_query);
         
         // Unsplash API呼び出し
         $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
@@ -222,9 +202,6 @@ class NewsCrawlerFeaturedImageGenerator {
             'content_filter' => 'high'
         ));
         
-        error_log('Featured Image Generator - Unsplash: API URL: ' . $api_url);
-        error_log('Featured Image Generator - Unsplash: Authorization header: Client-ID ' . substr($access_key, 0, 8) . '...');
-        
         $response = wp_remote_get($api_url, array(
             'headers' => array(
                 'Authorization' => 'Client-ID ' . $access_key,
@@ -233,37 +210,19 @@ class NewsCrawlerFeaturedImageGenerator {
         ));
         
         if (is_wp_error($response)) {
-            error_log('Featured Image Generator - Unsplash: WP_Error: ' . $response->get_error_message());
             return false;
         }
-        
-        $response_code = wp_remote_retrieve_response_code($response);
-        error_log('Featured Image Generator - Unsplash: Response code: ' . $response_code);
         
         $body = wp_remote_retrieve_body($response);
-        error_log('Featured Image Generator - Unsplash: Response body length: ' . strlen($body));
-        
         $data = json_decode($body, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('Featured Image Generator - Unsplash: JSON decode error: ' . json_last_error_msg());
-            return false;
-        }
-        
-        error_log('Featured Image Generator - Unsplash: Decoded data keys: ' . implode(', ', array_keys($data)));
         
         if (isset($data['results']) && is_array($data['results']) && !empty($data['results'])) {
             if (isset($data['results'][0]['urls']['regular'])) {
                 $image_url = $data['results'][0]['urls']['regular'];
-                error_log('Featured Image Generator - Unsplash: Image URL found: ' . $image_url);
                 return $this->download_and_attach_image($image_url, $post_id, $title);
-            } else {
-                error_log('Featured Image Generator - Unsplash: No regular URL in first result');
             }
-        } else {
-            error_log('Featured Image Generator - Unsplash: No results found in response');
         }
         
-        error_log('Featured Image Generator - Unsplash: Failed to get image URL from response');
         return false;
     }    
     
@@ -1399,24 +1358,17 @@ class NewsCrawlerFeaturedImageGenerator {
      * 画像をWordPressの添付ファイルとして保存
      */
     private function save_image_as_attachment($image, $post_id, $title) {
-        error_log('Featured Image Generator - Save: Starting save process');
-        
         // 一時ファイル作成
         $upload_dir = wp_upload_dir();
         $filename = 'featured-image-' . $post_id . '-' . time() . '.png';
         $filepath = $upload_dir['path'] . '/' . $filename;
         
-        error_log('Featured Image Generator - Save: Upload dir: ' . $upload_dir['path']);
-        error_log('Featured Image Generator - Save: Filename: ' . $filename);
-        
         // PNG形式で保存
         if (!imagepng($image, $filepath)) {
-            error_log('Featured Image Generator - Save: Failed to save PNG file');
             imagedestroy($image);
             return false;
         }
         
-        error_log('Featured Image Generator - Save: PNG file saved successfully');
         imagedestroy($image);
         
         // WordPressの添付ファイルとして登録
@@ -1440,8 +1392,7 @@ class NewsCrawlerFeaturedImageGenerator {
         wp_update_attachment_metadata($attachment_id, $attachment_data);
         
         // 投稿のアイキャッチに設定
-        $thumbnail_result = set_post_thumbnail($post_id, $attachment_id);
-        error_log('Featured Image Generator - Save: Set post thumbnail result: ' . ($thumbnail_result ? 'Success' : 'Failed'));
+        set_post_thumbnail($post_id, $attachment_id);
         
         // OGPマネージャーに通知（存在する場合）
         if (class_exists('NewsCrawlerOGPManager')) {
@@ -1628,5 +1579,294 @@ class NewsCrawlerFeaturedImageGenerator {
         });
         </script>
         <?php
+    }
+    
+    /**
+     * アイキャッチ生成用のメタボックスを追加
+     */
+    public function add_featured_image_meta_box() {
+        // 投稿タイプがpostの場合のみ追加
+        add_meta_box(
+            'news_crawler_featured_image',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - アイキャッチ生成',
+            array($this, 'render_featured_image_meta_box'),
+            'post',
+            'side',
+            'high'
+        );
+    }
+    
+    /**
+     * アイキャッチ生成用のメタボックスの内容を表示
+     */
+    public function render_featured_image_meta_box($post) {
+        // 基本設定からOpenAI APIキーを取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        
+        // アイキャッチ画像設定を取得
+        $featured_image_settings = get_option('news_crawler_featured_image_settings', array());
+        $generation_method = isset($featured_image_settings['featured_image_method']) ? $featured_image_settings['featured_image_method'] : 'ai';
+        
+        // 既にアイキャッチ画像が設定されているかチェック
+        $has_featured_image = has_post_thumbnail($post->ID);
+        $featured_image_id = get_post_thumbnail_id($post->ID);
+        
+        if (empty($api_key) && $generation_method === 'ai') {
+            echo '<div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;">';
+            echo '<p style="margin: 0; color: #721c24;"><strong>⚠️ OpenAI APIキーが設定されていません</strong></p>';
+            echo '<p style="margin: 0; font-size: 12px; color: #721c24;">基本設定でOpenAI APIキーを設定してください。</p>';
+            echo '</div>';
+            return;
+        }
+        
+        echo '<div id="news-crawler-featured-image-controls">';
+        
+        if ($has_featured_image) {
+            echo '<div style="background: #d1ecf1; border: 1px solid #bee5eb; padding: 10px; border-radius: 4px; margin-bottom: 15px;">';
+            echo '<p style="margin: 0 0 10px 0;"><strong>✅ アイキャッチ画像が設定されています</strong></p>';
+            echo '<div style="text-align: center; margin-bottom: 10px;">';
+            echo get_the_post_thumbnail($post->ID, 'thumbnail');
+            echo '</div>';
+            echo '<p style="margin: 0; font-size: 12px; color: #666;">ID: ' . $featured_image_id . '</p>';
+            echo '</div>';
+            
+            echo '<button type="button" id="regenerate-featured-image" class="button button-secondary" style="width: 100%; margin-bottom: 10px;">';
+            echo 'アイキャッチを再生成';
+            echo '</button>';
+        } else {
+            echo '<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; margin-bottom: 15px;">';
+            echo '<p style="margin: 0;"><strong>📷 アイキャッチ画像が設定されていません</strong></p>';
+            echo '</div>';
+            
+            echo '<button type="button" id="generate-featured-image" class="button button-primary" style="width: 100%; margin-bottom: 10px;">';
+            echo 'アイキャッチを生成';
+            echo '</button>';
+        }
+        
+        // 生成方法の選択
+        echo '<div style="margin-bottom: 15px;">';
+        echo '<label for="featured-image-method" style="display: block; margin-bottom: 5px; font-weight: bold;">生成方法:</label>';
+        echo '<select id="featured-image-method" style="width: 100%;">';
+        echo '<option value="ai"' . ($generation_method === 'ai' ? ' selected' : '') . '>AI画像生成 (OpenAI DALL-E)</option>';
+        echo '<option value="unsplash"' . ($generation_method === 'unsplash' ? ' selected' : '') . '>Unsplash画像取得</option>';
+        echo '</select>';
+        echo '</div>';
+        
+        // キーワード入力
+        echo '<div style="margin-bottom: 15px;">';
+        echo '<label for="featured-image-keywords" style="display: block; margin-bottom: 5px; font-weight: bold;">キーワード (オプション):</label>';
+        echo '<input type="text" id="featured-image-keywords" placeholder="カンマ区切りで入力" style="width: 100%;" />';
+        echo '<p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">画像生成の参考に使用されます</p>';
+        echo '</div>';
+        
+        // ステータス表示エリア
+        echo '<div id="featured-image-status" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px;"></div>';
+        
+        echo '</div>';
+        
+        // JavaScript
+        ?>
+        <script>
+        jQuery(document).ready(function($) {
+            // アイキャッチ生成
+            $('#generate-featured-image').click(function() {
+                var button = $(this);
+                var statusDiv = $('#featured-image-status');
+                var method = $('#featured-image-method').val();
+                var keywords = $('#featured-image-keywords').val();
+                
+                button.prop('disabled', true).text('生成中...');
+                statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を生成中です...</div>').show();
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'generate_featured_image',
+                        nonce: '<?php echo wp_create_nonce('generate_featured_image_nonce'); ?>',
+                        post_id: <?php echo $post->ID; ?>,
+                        method: method,
+                        keywords: keywords
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の生成と設定が完了しました！</div>');
+                            
+                            // ページをリロードして更新された内容を表示
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + response.data + '</div>');
+                        }
+                    },
+                    error: function() {
+                        statusDiv.html('<div style="color: #d63638;">❌ 通信エラーが発生しました</div>');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('アイキャッチを生成');
+                    }
+                });
+            });
+            
+            // アイキャッチ再生成
+            $('#regenerate-featured-image').click(function() {
+                var button = $(this);
+                var statusDiv = $('#featured-image-status');
+                var method = $('#featured-image-method').val();
+                var keywords = $('#featured-image-keywords').val();
+                
+                button.prop('disabled', true).text('再生成中...');
+                statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を再生成中です...</div>').show();
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'regenerate_featured_image',
+                        nonce: '<?php echo wp_create_nonce('regenerate_featured_image_nonce'); ?>',
+                        post_id: <?php echo $post->ID; ?>,
+                        method: method,
+                        keywords: keywords
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の再生成と設定が完了しました！</div>');
+                            
+                            // ページをリロードして更新された内容を表示
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + response.data + '</div>');
+                        }
+                    },
+                    error: function() {
+                        statusDiv.html('<div style="color: #d63638;">❌ 通信エラーが発生しました</div>');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('アイキャッチを再生成');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+    }
+    
+    /**
+     * アイキャッチ画像を生成するAJAXハンドラー
+     */
+    public function ajax_generate_featured_image() {
+        check_ajax_referer('generate_featured_image_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $post_id = intval($_POST['post_id']);
+        $method = sanitize_text_field($_POST['method']);
+        $keywords = sanitize_text_field($_POST['keywords']);
+        
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'post') {
+            wp_send_json_error('投稿が見つかりません');
+        }
+        
+        // 既にアイキャッチ画像が設定されている場合はスキップ
+        if (has_post_thumbnail($post_id)) {
+            wp_send_json_error('既にアイキャッチ画像が設定されています');
+        }
+        
+        // キーワードを配列に変換
+        $keywords_array = array();
+        if (!empty($keywords)) {
+            $keywords_array = array_map('trim', explode(',', $keywords));
+        }
+        
+        // アイキャッチ画像を生成
+        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
+        
+        if ($result) {
+            // 生成された画像が確実にアイキャッチ画像として設定されているか確認
+            if (has_post_thumbnail($post_id)) {
+                $thumbnail_id = get_post_thumbnail_id($post_id);
+                
+                if ($thumbnail_id == $result) {
+                    wp_send_json_success('アイキャッチ画像の生成と設定が完了しました');
+                } else {
+                    // 強制的にアイキャッチ画像として設定
+                    set_post_thumbnail($post_id, $result);
+                    wp_send_json_success('アイキャッチ画像の生成と設定が完了しました');
+                }
+            } else {
+                // アイキャッチ画像が設定されていない場合は強制的に設定
+                set_post_thumbnail($post_id, $result);
+                wp_send_json_success('アイキャッチ画像の生成と設定が完了しました');
+            }
+        } else {
+            wp_send_json_error('アイキャッチ画像の生成に失敗しました');
+        }
+    }
+    
+    /**
+     * アイキャッチ画像を再生成するAJAXハンドラー
+     */
+    public function ajax_regenerate_featured_image() {
+        check_ajax_referer('regenerate_featured_image_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $post_id = intval($_POST['post_id']);
+        $method = sanitize_text_field($_POST['method']);
+        $keywords = sanitize_text_field($_POST['keywords']);
+        
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'post') {
+            wp_send_json_error('投稿が見つかりません');
+        }
+        
+        // 既存のアイキャッチ画像を削除
+        $old_thumbnail_id = get_post_thumbnail_id($post_id);
+        if ($old_thumbnail_id) {
+            delete_post_thumbnail($post_id);
+            // 古い添付ファイルも削除（オプション）
+            wp_delete_attachment($old_thumbnail_id, true);
+        }
+        
+        // キーワードを配列に変換
+        $keywords_array = array();
+        if (!empty($keywords)) {
+            $keywords_array = array_map('trim', explode(',', $keywords));
+        }
+        
+        // 新しいアイキャッチ画像を生成
+        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
+        
+        if ($result) {
+            // 生成された画像が確実にアイキャッチ画像として設定されているか確認
+            if (has_post_thumbnail($post_id)) {
+                $thumbnail_id = get_post_thumbnail_id($post_id);
+                
+                if ($thumbnail_id == $result) {
+                    wp_send_json_success('アイキャッチ画像の再生成と設定が完了しました');
+                } else {
+                    // 強制的にアイキャッチ画像として設定
+                    set_post_thumbnail($post_id, $result);
+                    wp_send_json_success('アイキャッチ画像の再生成と設定が完了しました');
+                }
+            } else {
+                // アイキャッチ画像が設定されていない場合は強制的に設定
+                set_post_thumbnail($post_id, $result);
+                wp_send_json_success('アイキャッチ画像の再生成と設定が完了しました');
+            }
+        } else {
+            wp_send_json_error('アイキャッチ画像の再生成に失敗しました');
+        }
     }
 }
