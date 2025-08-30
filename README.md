@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.0.3)
+[![Version](https://img.shields.io/badge/version-2.0.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.0.4)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -18,6 +18,7 @@ Automatically fetch articles from specified news sources and add them as posts t
 - **⚡ Performance Optimized**: Lightweight and fast with minimal resource usage
 - **📊 Analytics**: Built-in statistics and monitoring
 - **🛡️ Production Ready**: Comprehensive testing and security validation for enterprise deployment
+- **🔄 Auto Updates**: WordPress standard update system integration with GitHub releases
 
 ## 📋 Requirements
 
@@ -167,6 +168,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.0.4** (2025-08-30): WordPress standard update system integration
+  - Complete integration with WordPress standard update system
+  - Automatic update checks from GitHub releases
+  - Dashboard notifications for available updates
+  - New settings tab for update information and management
+  - One-click update functionality from WordPress admin
+  - Enhanced security with update verification
 - **v2.0.3** (2025-08-30): Enhanced Cron schedule debugging and individual genre auto-posting
   - Added Cron schedule debugging functionality for genre settings with enhanced next execution display
   - Implemented dynamic registration of individual genre auto-posting schedules
