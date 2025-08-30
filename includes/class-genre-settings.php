@@ -1504,7 +1504,7 @@ class NewsCrawlerGenreSettings {
         .genre-settings-table th:nth-child(8),
         .genre-settings-table td:nth-child(8) {
             width: 120px;
-            text-align: center;
+            text-align: left;
             font-size: 12px;
         }
         .genre-report {
