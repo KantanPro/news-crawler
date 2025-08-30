@@ -17,9 +17,11 @@ class NewsCrawlerSettingsManager {
     public function __construct() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_test_api_connection', array($this, 'test_api_connection'));
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
         add_action('wp_ajax_check_for_updates', array($this, 'check_for_updates'));
+        add_action('wp_ajax_force_update_check', array($this, 'force_update_check'));
     }
     
     /**
@@ -46,6 +48,26 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings',
             array($this, 'settings_page')
         );
+    }
+    
+    /**
+     * 管理画面スクリプトを読み込み
+     */
+    public function enqueue_admin_scripts($hook) {
+        if ($hook === 'toplevel_page_news-crawler-settings') {
+            wp_enqueue_script(
+                'news-crawler-settings-admin',
+                NEWS_CRAWLER_PLUGIN_URL . 'assets/js/settings-admin.js',
+                array('jquery'),
+                NEWS_CRAWLER_VERSION,
+                true
+            );
+            
+            wp_localize_script('news-crawler-settings-admin', 'newsCrawlerSettings', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('check_for_updates')
+            ));
+        }
     }
     
     /**
@@ -100,6 +122,14 @@ class NewsCrawlerSettingsManager {
             array($this, 'featured_image_method_callback'),
             'news-crawler-settings',
             'feature_settings'
+        );
+        
+        // 更新情報セクション
+        add_settings_section(
+            'update_info',
+            '更新情報',
+            array($this, 'update_info_section_callback'),
+            'news-crawler-settings'
         );
         
         add_settings_field(
@@ -212,10 +242,17 @@ class NewsCrawlerSettingsManager {
                     </table>
                 </div>
                 
-                <div id="update-info" class="tab-content">
-                    <h2>更新情報</h2>
-                    <?php $this->display_update_info(); ?>
-                </div>
+                        <div id="update-info" class="tab-content">
+            <h2>更新情報</h2>
+            <div class="update-info-container">
+                <?php $this->display_update_info(); ?>
+            </div>
+            <div class="card">
+                <h3>強制更新チェック</h3>
+                <p>キャッシュをクリアして最新の更新情報を強制的に取得します。</p>
+                <button type="button" id="force-update-check" class="button button-secondary">強制更新チェック</button>
+            </div>
+        </div>
                 
                 <div id="system-info" class="tab-content">
                     <h2>システム情報</h2>
@@ -324,7 +361,6 @@ class NewsCrawlerSettingsManager {
                             resultsDiv.html('<div class="notice notice-success"><p>' + response.data + '</p></div>');
                         } else {
                             resultsDiv.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
-                        }
                     },
                     error: function() {
                         resultsDiv.html('<div class="notice notice-error"><p>テストに失敗しました。</p></div>');
@@ -334,6 +370,37 @@ class NewsCrawlerSettingsManager {
                     }
                 });
             }
+            
+            // 強制更新チェック
+            $('#force-update-check').click(function() {
+                if (confirm('キャッシュをクリアして強制的に更新チェックを実行しますか？')) {
+                    var button = $(this);
+                    button.prop('disabled', true).text('強制チェック中...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'force_update_check',
+                            nonce: '<?php echo wp_create_nonce('force_update_check'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                alert('強制更新チェックが完了しました。ページを再読み込みします。');
+                                location.reload();
+                            } else {
+                                alert('強制更新チェックに失敗しました: ' + response.data);
+                            }
+                        },
+                        error: function() {
+                            alert('強制更新チェックに失敗しました。');
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('強制更新チェック');
+                        }
+                    });
+                }
+            });
             
             // 設定リセット
             $('#reset-settings').click(function() {
@@ -355,35 +422,6 @@ class NewsCrawlerSettingsManager {
                         }
                     });
                 }
-            });
-            
-            // 更新チェック
-            $('#check-updates').click(function() {
-                var button = $(this);
-                button.prop('disabled', true).text('チェック中...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'check_for_updates',
-                        nonce: '<?php echo wp_create_nonce('check_for_updates'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('更新チェックが完了しました。ページを再読み込みします。');
-                            location.reload();
-                        } else {
-                            alert('更新チェックに失敗しました: ' + response.data);
-                        }
-                    },
-                    error: function() {
-                        alert('更新チェックに失敗しました。');
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('今すぐチェック');
-                    }
-                });
             });
         });
         </script>
@@ -858,5 +896,34 @@ class NewsCrawlerSettingsManager {
         }
         
         wp_send_json_success('更新チェックが完了しました。');
+    }
+    
+    /**
+     * 更新情報セクションのコールバック
+     */
+    public function update_info_section_callback() {
+        echo '<p>プラグインの更新状況と最新バージョン情報を表示します。</p>';
+        $this->display_update_info();
+    }
+    
+    /**
+     * 強制更新チェックAJAX
+     */
+    public function force_update_check() {
+        if (!wp_verify_nonce($_POST['nonce'], 'force_update_check')) {
+            wp_die('Security check failed');
+        }
+        
+        // キャッシュをクリア
+        delete_transient('news_crawler_latest_version');
+        delete_site_transient('update_plugins');
+        
+        // 更新チェックを実行
+        if (class_exists('NewsCrawlerUpdater')) {
+            $updater = new NewsCrawlerUpdater();
+            $updater->check_for_updates(get_site_transient('update_plugins'));
+        }
+        
+        wp_send_json_success('強制更新チェックが完了しました。');
     }
 }
