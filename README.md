@@ -168,11 +168,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.0.9** (2025-08-31): Enhanced featured image generation functionality
-  - Enhanced featured image generation with post editor meta box integration
-  - Implemented AJAX handlers for image generation and regeneration
+- **v2.0.9** (2025-08-31): Enhanced featured image generation and post editor integration
+  - Enhanced featured image generation functionality with post editor metabox integration
+  - Implemented AJAX handlers for featured image generation and regeneration
   - Removed unnecessary debug logs and added image setting verification
-  - Improved user experience with better image management tools
+  - Improved plugin stability and user experience
 - **v2.0.8** (2025-08-30): Plugin version management and release process improvements
   - Enhanced plugin version management and release process
   - Updated changelog organization and documentation
