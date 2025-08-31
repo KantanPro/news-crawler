@@ -85,8 +85,15 @@ class NewsCrawlerUpdater {
             return $transient;
         }
         
-        // バージョン比較
-        if (version_compare($current_version, $latest_version['version'], '<')) {
+        // バージョン比較（デバッグ情報を追加）
+        $version_comparison = version_compare($current_version, $latest_version['version'], '<');
+        
+        // デバッグログ（開発環境でのみ有効）
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log("News Crawler Update Check: Current: {$current_version}, Latest: {$latest_version['version']}, Has Update: " . ($version_comparison ? 'Yes' : 'No'));
+        }
+        
+        if ($version_comparison) {
             $transient->response[$this->plugin_basename] = (object) array(
                 'slug' => $this->plugin_slug,
                 'new_version' => $latest_version['version'],
@@ -124,6 +131,28 @@ class NewsCrawlerUpdater {
         if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
             delete_transient('news_crawler_latest_version');
             delete_site_transient('update_plugins');
+            delete_transient('news_crawler_last_check');
+        }
+        
+        // 管理画面での手動更新チェック
+        if (isset($_GET['page']) && $_GET['page'] === 'news-crawler-settings') {
+            // 設定画面にアクセスした際にキャッシュをクリア
+            delete_transient('news_crawler_latest_version');
+        }
+        
+        // キャッシュクリア機能
+        if (isset($_GET['clear-cache']) && $_GET['clear-cache'] === '1') {
+            delete_transient('news_crawler_latest_version');
+            delete_site_transient('update_plugins');
+            delete_transient('news_crawler_last_check');
+            wp_clean_plugins_cache();
+            
+            // 成功メッセージ
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p><strong>News Crawler</strong> のキャッシュがクリアされました。更新情報を再チェックしてください。</p>';
+                echo '</div>';
+            });
         }
     }
     
@@ -271,11 +300,16 @@ class NewsCrawlerUpdater {
             // 更新後の処理
             delete_transient('news_crawler_latest_version');
             delete_site_transient('update_plugins');
+            delete_transient('news_crawler_last_check');
+            
+            // プラグイン情報の再読み込みを強制
+            wp_clean_plugins_cache();
             
             // 更新完了メッセージ
             add_action('admin_notices', function() {
                 echo '<div class="notice notice-success is-dismissible">';
                 echo '<p><strong>News Crawler</strong> が正常に更新されました。新しい機能や改善点については、<a href="' . esc_url($this->github_repo_url . '/releases') . '" target="_blank">リリースノート</a>をご確認ください。</p>';
+                echo '<p>ページを再読み込みして、バージョン情報が正しく表示されることを確認してください。</p>';
                 echo '</div>';
             });
         }
@@ -306,12 +340,15 @@ class NewsCrawlerUpdater {
             );
             
             $force_check_url = add_query_arg('force-check', '1', admin_url('update-core.php'));
+            $clear_cache_url = add_query_arg('clear-cache', '1', admin_url('admin.php?page=news-crawler-settings'));
             
             echo '<div class="notice notice-warning is-dismissible">';
             echo '<p><strong>News Crawler</strong> の新しいバージョン <strong>' . esc_html($latest_version['version']) . '</strong> が利用可能です。';
             echo ' <a href="' . esc_url($update_url) . '" class="button button-primary">今すぐ更新</a> ';
             echo ' <a href="' . esc_url($this->github_repo_url . '/releases') . '" target="_blank" class="button">詳細を確認</a> ';
-            echo ' <a href="' . esc_url($force_check_url) . '" class="button">更新を再チェック</a></p>';
+            echo ' <a href="' . esc_url($force_check_url) . '" class="button">更新を再チェック</a>';
+            echo ' <a href="' . esc_url($clear_cache_url) . '" class="button">キャッシュクリア</a></p>';
+            echo '<p><small>更新後はページを再読み込みして、バージョン情報が正しく表示されることを確認してください。</small></p>';
             echo '</div>';
         }
     }
