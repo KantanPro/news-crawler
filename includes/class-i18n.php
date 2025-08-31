@@ -26,7 +26,8 @@ class NewsCrawlerI18n {
      * 初期化
      */
     public static function init() {
-        add_action('plugins_loaded', array(__CLASS__, 'load_textdomain'));
+        // 翻訳を即座に読み込み
+        self::load_textdomain();
     }
     
     /**

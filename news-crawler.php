@@ -45,9 +45,15 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 
 // プラグイン初期化
 function news_crawler_init() {
-    // 国際化の初期化
+    // 国際化の初期化（翻訳読み込みを最初に実行）
     NewsCrawlerI18n::init();
     
+    // 翻訳読み込み完了後に他の初期化処理を実行
+    add_action('init', 'news_crawler_init_components', 15);
+}
+
+// プラグインコンポーネントの初期化
+function news_crawler_init_components() {
     // セキュリティマネージャーの初期化
     NewsCrawlerSecurityManager::get_instance();
     // ジャンル設定管理クラスを初期化
@@ -115,10 +121,8 @@ function news_crawler_init() {
     if (class_exists('NewsCrawlerUpdater')) {
         new NewsCrawlerUpdater();
     }
-    
-
 }
-add_action('plugins_loaded', 'news_crawler_init');
+add_action('init', 'news_crawler_init', 5);
 
 // 自動投稿のcron設定を確実に実行するための追加フック
 add_action('init', 'news_crawler_ensure_cron_setup');
