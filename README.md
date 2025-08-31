@@ -168,7 +168,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.1.3** (2025-08-31): Update system fixes and reliability improvements
+- **v2.1.3** (2025-08-31): WordPress 6.7.0 compatibility and update system fixes
+  - Fixed translation loading timing warnings for WordPress 6.7.0+ compatibility
   - Fixed version inconsistency issues in update system for better reliability
   - Enhanced plugin stability and performance
   - Code optimization and bug fixes
