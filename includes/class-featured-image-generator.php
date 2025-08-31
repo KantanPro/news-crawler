@@ -38,6 +38,15 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
     public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
+        // 投稿にカテゴリーが設定されているかチェック
+        $current_categories = wp_get_post_categories($post_id);
+        if (empty($current_categories)) {
+            return array('error' => 'カテゴリーを設定してください');
+        }
+        
+        // 現在のカテゴリーを保存
+        $saved_categories = $current_categories;
+        
         $settings = get_option($this->option_name, array());
         
         $result = false;
@@ -62,6 +71,9 @@ class NewsCrawlerFeaturedImageGenerator {
             if (!$final_check || $final_thumbnail_id != $result) {
                 set_post_thumbnail($post_id, $result);
             }
+            
+            // カテゴリーを復元
+            wp_set_post_categories($post_id, $saved_categories);
         }
         
         return $result;
@@ -121,7 +133,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
         
         if (empty($api_key)) {
-            return false;
+            return array('error' => 'OpenAI APIキーが設定されていません。基本設定でAPIキーを設定してください。');
         }
         
         // プロンプト生成
@@ -145,7 +157,7 @@ class NewsCrawlerFeaturedImageGenerator {
         ));
         
         if (is_wp_error($response)) {
-            return false;
+            return array('error' => 'OpenAI DALL-E APIへの通信に失敗しました: ' . $response->get_error_message());
         }
         
         $body = wp_remote_retrieve_body($response);
@@ -155,7 +167,12 @@ class NewsCrawlerFeaturedImageGenerator {
             return $this->download_and_attach_image($data['data'][0]['url'], $post_id, $title);
         }
         
-        return false;
+        // APIレスポンスの解析に失敗した場合
+        if (isset($data['error'])) {
+            return array('error' => 'OpenAI DALL-E APIエラー: ' . $data['error']['message']);
+        }
+        
+        return array('error' => 'OpenAI DALL-E APIからの応答が不正です。しばらく時間をおいてから再試行してください。');
     }
     
     /**
@@ -188,7 +205,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
         
         if (empty($access_key)) {
-            return false;
+            return array('error' => 'Unsplash Access Keyが設定されていません。基本設定、フィーチャー画像設定、またはジャンル設定でAccess Keyを設定してください。');
         }
         
         // 検索キーワード生成
@@ -210,7 +227,7 @@ class NewsCrawlerFeaturedImageGenerator {
         ));
         
         if (is_wp_error($response)) {
-            return false;
+            return array('error' => 'Unsplash APIへの通信に失敗しました: ' . $response->get_error_message());
         }
         
         $body = wp_remote_retrieve_body($response);
@@ -223,7 +240,12 @@ class NewsCrawlerFeaturedImageGenerator {
             }
         }
         
-        return false;
+        // APIレスポンスの解析に失敗した場合
+        if (isset($data['errors'])) {
+            return array('error' => 'Unsplash APIエラー: ' . implode(', ', $data['errors']));
+        }
+        
+        return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。別のキーワードを試してください。');
     }    
     
 /**
@@ -1790,7 +1812,9 @@ class NewsCrawlerFeaturedImageGenerator {
         // アイキャッチ画像を生成
         $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
         
-        if ($result) {
+        if (is_array($result) && isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        } elseif ($result) {
             // 生成された画像が確実にアイキャッチ画像として設定されているか確認
             if (has_post_thumbnail($post_id)) {
                 $thumbnail_id = get_post_thumbnail_id($post_id);
@@ -1848,7 +1872,9 @@ class NewsCrawlerFeaturedImageGenerator {
         // 新しいアイキャッチ画像を生成
         $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
         
-        if ($result) {
+        if (is_array($result) && isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        } elseif ($result) {
             // 生成された画像が確実にアイキャッチ画像として設定されているか確認
             if (has_post_thumbnail($post_id)) {
                 $thumbnail_id = get_post_thumbnail_id($post_id);

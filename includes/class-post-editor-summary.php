@@ -197,7 +197,9 @@ class NewsCrawlerPostEditorSummary {
             $summarizer = new NewsCrawlerOpenAISummarizer();
             $result = $summarizer->generate_summary($post_id);
             
-            if ($result) {
+            if (is_array($result) && isset($result['error'])) {
+                wp_send_json_error($result['error']);
+            } elseif ($result === true) {
                 wp_send_json_success('要約とまとめの生成が完了しました');
             } else {
                 wp_send_json_error('要約の生成に失敗しました');
@@ -229,7 +231,9 @@ class NewsCrawlerPostEditorSummary {
             $summarizer = new NewsCrawlerOpenAISummarizer();
             $result = $summarizer->regenerate_summary($post_id);
             
-            if ($result) {
+            if (is_array($result) && isset($result['error'])) {
+                wp_send_json_error($result['error']);
+            } elseif ($result === true) {
                 wp_send_json_success('要約とまとめの再生成が完了しました');
             } else {
                 wp_send_json_error('要約の再生成に失敗しました');

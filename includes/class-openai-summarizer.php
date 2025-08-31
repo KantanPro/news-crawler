@@ -109,6 +109,20 @@ class NewsCrawlerOpenAISummarizer {
         try {
             error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' のOpenAI要約生成を開始いたします');
             
+            // 投稿の本文が空かチェック
+            if (empty(trim(wp_strip_all_tags($post->post_content)))) {
+                return array('error' => '本文を入力してから実行してください');
+            }
+            
+            // 投稿にカテゴリーが設定されているかチェック
+            $current_categories = wp_get_post_categories($post_id);
+            if (empty($current_categories)) {
+                return array('error' => 'カテゴリーを設定してください');
+            }
+            
+            // 現在のカテゴリーを保存
+            update_post_meta($post_id, '_news_summary_categories', $current_categories);
+            
             // 投稿内容から要約とまとめを生成
             $summary_result = $this->generate_summary_with_openai($post->post_content, $post->post_title);
             
@@ -142,6 +156,13 @@ class NewsCrawlerOpenAISummarizer {
                 error_log('NewsCrawlerOpenAISummarizer: 投稿更新結果: ' . print_r($update_result, true));
                 
                 if ($update_result && !is_wp_error($update_result)) {
+                    // カテゴリーを復元
+                    $saved_categories = get_post_meta($post_id, '_news_summary_categories', true);
+                    if (!empty($saved_categories)) {
+                        wp_set_post_categories($post_id, $saved_categories);
+                        error_log('NewsCrawlerOpenAISummarizer: カテゴリーを復元しました。投稿ID: ' . $post_id);
+                    }
+                    
                     // 要約生成完了のメタデータを保存
                     update_post_meta($post_id, '_openai_summary_generated', true);
                     update_post_meta($post_id, '_openai_summary_date', current_time('mysql'));
@@ -181,7 +202,7 @@ class NewsCrawlerOpenAISummarizer {
         // 内容が短すぎる場合はスキップ
         if (mb_strlen($text_content) < 100) {
             error_log('NewsCrawlerOpenAISummarizer: 内容が短すぎるためスキップいたします');
-            return false;
+            return array('error' => '本文の文字数が不足しています。最低100文字以上入力してください。（現在: ' . mb_strlen($text_content) . '文字）');
         }
         
         // プロンプトを作成
@@ -225,7 +246,7 @@ class NewsCrawlerOpenAISummarizer {
         
         if (!$data || !isset($data['choices'][0]['message']['content'])) {
             error_log('NewsCrawlerOpenAISummarizer: OpenAI APIレスポンスの解析に失敗いたしました');
-            return false;
+            return array('error' => 'OpenAI APIからの応答が不正です。しばらく時間をおいてから再試行してください。');
         }
         
         $response_content = $data['choices'][0]['message']['content'];
@@ -314,11 +335,10 @@ class NewsCrawlerOpenAISummarizer {
             error_log('NewsCrawlerOpenAISummarizer: まとめの抽出に失敗いたしました');
         }
         
-        // 抽出に失敗した場合は、レスポンス全体を要約として使用
+        // 抽出に失敗した場合は、エラーメッセージを返す
         if (empty($summary) && empty($conclusion)) {
-            error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの両方の抽出に失敗いたしました。フォールバックを使用いたします');
-            $summary = '申し訳ございませんが、AIによる要約の生成中にエラーが発生いたしました。記事の内容をご確認いただけますと幸いです。';
-            $conclusion = '要約の生成に失敗いたしました。記事の内容を直接お読みいただくことをお勧めいたします。';
+            error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの両方の抽出に失敗いたしました');
+            return array('error' => 'AIからの応答形式が正しくありません。要約の生成に失敗しました。しばらく時間をおいてから再試行してください。');
         }
         
         $result = array(
@@ -335,6 +355,9 @@ class NewsCrawlerOpenAISummarizer {
      */
     private function append_summary_to_post($content, $summary, $conclusion) {
         error_log('NewsCrawlerOpenAISummarizer: 要約「' . $summary . '」とまとめ「' . $conclusion . '」で投稿への要約追加が呼び出されました');
+        
+        // 既存の要約とまとめを削除
+        $content = $this->remove_existing_summary_and_conclusion($content);
         
         // 要約の段落のみを最初のH2タグの上に挿入
         $summary_paragraph = '<!-- wp:paragraph -->';
@@ -380,6 +403,35 @@ class NewsCrawlerOpenAISummarizer {
         error_log('NewsCrawlerOpenAISummarizer: 最終コンテンツの長さ: ' . strlen($result) . '文字');
         
         return $result;
+    }
+    
+    /**
+     * 既存の要約とまとめを削除
+     */
+    private function remove_existing_summary_and_conclusion($content) {
+        // 既存の要約を削除（最初のH2タグの前にある要約段落）
+        $first_h2_pos = strpos($content, '<!-- wp:heading {"level":2} -->');
+        if ($first_h2_pos !== false) {
+            // 最初のH2タグの前の内容を取得
+            $before_h2 = substr($content, 0, $first_h2_pos);
+            
+            // 要約段落のパターンを検索して削除
+            $summary_pattern = '/<!-- wp:paragraph -->\s*<p>.*?<\/p>\s*<!-- \/wp:paragraph -->/s';
+            $before_h2 = preg_replace($summary_pattern, '', $before_h2);
+            
+            // 最初のH2タグ以降の内容を取得
+            $after_h2 = substr($content, $first_h2_pos);
+            
+            // まとめセクションを削除
+            $conclusion_pattern = '/<!-- wp:group.*?まとめ.*?<!-- \/wp:group -->/s';
+            $after_h2 = preg_replace($conclusion_pattern, '', $after_h2);
+            
+            // 結合して返す
+            $content = $before_h2 . $after_h2;
+            error_log('NewsCrawlerOpenAISummarizer: 既存の要約とまとめを削除しました');
+        }
+        
+        return $content;
     }
     
     /**

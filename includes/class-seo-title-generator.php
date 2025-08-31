@@ -84,6 +84,20 @@ class NewsCrawlerSEOTitleGenerator {
             return false;
         }
         
+        // 投稿の本文が空かチェック
+        if (empty(trim(wp_strip_all_tags($post->post_content)))) {
+            return array('error' => '本文を入力してから実行してください');
+        }
+        
+        // 投稿にカテゴリーが設定されているかチェック
+        $current_categories = wp_get_post_categories($post_id);
+        if (empty($current_categories)) {
+            return array('error' => 'カテゴリーを設定してください');
+        }
+        
+        // 現在のカテゴリーを保存
+        $saved_categories = $current_categories;
+        
         // News Crawlerで設定されているジャンル名を取得
         $genre_name = $this->get_news_crawler_genre_name($post_id);
         
@@ -96,6 +110,9 @@ class NewsCrawlerSEOTitleGenerator {
                 'ID' => $post_id,
                 'post_title' => $seo_title
             ));
+            
+            // カテゴリーを復元
+            wp_set_post_categories($post_id, $saved_categories);
             
             // メタデータを保存
             update_post_meta($post_id, '_seo_title_generated', true);
@@ -226,7 +243,7 @@ class NewsCrawlerSEOTitleGenerator {
         ));
         
         if (is_wp_error($response)) {
-            return false;
+            return array('error' => 'OpenAI APIへの通信に失敗しました: ' . $response->get_error_message());
         }
         
         $body = wp_remote_retrieve_body($response);
@@ -236,7 +253,12 @@ class NewsCrawlerSEOTitleGenerator {
             return trim($result['choices'][0]['message']['content']);
         }
         
-        return false;
+        // APIレスポンスの解析に失敗した場合
+        if (isset($result['error'])) {
+            return array('error' => 'OpenAI APIエラー: ' . $result['error']['message']);
+        }
+        
+        return array('error' => 'OpenAI APIからの応答が不正です。しばらく時間をおいてから再試行してください。');
     }
     
     /**
@@ -377,7 +399,9 @@ class NewsCrawlerSEOTitleGenerator {
         
         $result = $this->generate_seo_title($post_id);
         
-        if ($result) {
+        if (is_array($result) && isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        } elseif ($result === true) {
             wp_send_json_success('SEOタイトルが正常に生成されました');
         } else {
             wp_send_json_error('SEOタイトルの生成に失敗しました');
