@@ -2539,6 +2539,9 @@ class NewsCrawlerGenreSettings {
             $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}", $post_id);
             error_log('Execute Auto Posting for Genre - Success logged');
             
+            // 次回実行スケジュールを更新
+            $this->reschedule_next_execution($genre_id, $setting);
+            
         } catch (Exception $e) {
             error_log('Execute Auto Posting for Genre - Exception occurred: ' . $e->getMessage());
             // エラーログを記録
@@ -2683,11 +2686,20 @@ class NewsCrawlerGenreSettings {
         // 開始時刻から現在時刻までの経過時間を計算
         $elapsed = $current_time - $start_time;
         
-        // 次回実行までの回数を計算
-        $cycles = ceil($elapsed / $interval);
+        // 既に経過したサイクル数を計算（floor使用で正確な経過サイクル数を取得）
+        $completed_cycles = floor($elapsed / $interval);
         
-        // 次回実行時刻を計算
-        return $start_time + ($cycles * $interval);
+        // 次回実行時刻を計算（次のサイクル）
+        $next_execution = $start_time + (($completed_cycles + 1) * $interval);
+        
+        // デバッグ情報をログに記録
+        error_log('Next Execution Calculation - Start: ' . date('Y-m-d H:i:s', $start_time) . 
+                  ', Current: ' . date('Y-m-d H:i:s', $current_time) . 
+                  ', Interval: ' . $interval . 's (' . ($interval / 3600) . 'h)' .
+                  ', Completed cycles: ' . $completed_cycles . 
+                  ', Next: ' . date('Y-m-d H:i:s', $next_execution));
+        
+        return $next_execution;
     }
     
     /**
@@ -2706,10 +2718,13 @@ class NewsCrawlerGenreSettings {
     private function get_frequency_interval($frequency, $setting) {
         switch ($frequency) {
             case 'daily':
+            case '毎日':
                 return 24 * 60 * 60; // 24時間
             case 'weekly':
+            case '1週間ごと':
                 return 7 * 24 * 60 * 60; // 7日
             case 'monthly':
+            case '1ヶ月ごと':
                 return 30 * 24 * 60 * 60; // 30日
             case 'custom':
                 $days = $setting['custom_frequency_days'] ?? 7;
@@ -2719,6 +2734,41 @@ class NewsCrawlerGenreSettings {
         }
     }
     
+    /**
+     * 実際の次回実行時刻を取得（cronスケジュールを優先）
+     */
+    private function get_actual_next_execution_time($genre_id, $setting) {
+        // 1. 個別ジャンルのcronスケジュールをチェック
+        $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+        $next_cron = wp_next_scheduled($hook_name);
+        
+        if ($next_cron) {
+            // WordPressのUTCタイムスタンプをローカルタイムに変換
+            $local_timestamp = get_date_from_gmt(date('Y-m-d H:i:s', $next_cron), 'U');
+            return array(
+                'timestamp' => $local_timestamp,
+                'source' => ' (cronスケジュール)'
+            );
+        }
+        
+        // 2. 全体のcronスケジュールをチェック
+        $global_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
+        if ($global_cron) {
+            $local_timestamp = get_date_from_gmt(date('Y-m-d H:i:s', $global_cron), 'U');
+            return array(
+                'timestamp' => $local_timestamp,
+                'source' => ' (全体cronスケジュール)'
+            );
+        }
+        
+        // 3. cronが設定されていない場合は計算値を使用
+        $calculated_time = $this->calculate_next_execution_time_for_display($setting);
+        return array(
+            'timestamp' => $calculated_time,
+            'source' => ' (計算値 - cronが未設定)'
+        );
+    }
+
     /**
      * 表示用の次回実行時刻を計算（ジャンル別設定のスケジュールを正しく反映）
      */
@@ -2748,10 +2798,14 @@ class NewsCrawlerGenreSettings {
     private function get_frequency_text($frequency, $custom_days = 7) {
         switch ($frequency) {
             case 'daily':
+            case '毎日':
                 return '毎日';
             case 'weekly':
+            case '1週間ごと':
                 return '1週間ごと';
             case 'monthly':
+            case '毎月':
+            case '1ヶ月ごと':
                 return '毎月';
             case 'custom':
                 return $custom_days . '日ごと';
@@ -2760,6 +2814,32 @@ class NewsCrawlerGenreSettings {
         }
     }
     
+    /**
+     * 次回実行スケジュールを更新（実行後に呼び出し）
+     */
+    private function reschedule_next_execution($genre_id, $setting) {
+        error_log('Reschedule Next Execution - Starting for genre: ' . $setting['genre_name']);
+        
+        // 現在のスケジュールをクリア
+        $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
+        wp_clear_scheduled_hook($hook_name);
+        
+        // 次回実行時刻を計算
+        $next_execution = $this->calculate_next_execution_time_for_display($setting);
+        
+        // UTCタイムスタンプに変換してcronに登録
+        $utc_timestamp = get_gmt_from_date(date('Y-m-d H:i:s', $next_execution), 'U');
+        
+        // 単発イベントとしてスケジュール
+        $scheduled = wp_schedule_single_event($utc_timestamp, $hook_name, array($genre_id));
+        
+        if ($scheduled) {
+            error_log('Reschedule Next Execution - Successfully rescheduled for genre ' . $setting['genre_name'] . ' at: ' . date('Y-m-d H:i:s', $next_execution));
+        } else {
+            error_log('Reschedule Next Execution - Failed to reschedule for genre ' . $setting['genre_name']);
+        }
+    }
+
     /**
      * 次回実行時刻を更新
      */
@@ -3094,19 +3174,15 @@ class NewsCrawlerGenreSettings {
                     $test_results[] = "  理由: " . $check_result['reason'];
                 }
                 
-                // 設定側で入力された次回実行予定時刻を表示
-                if (!empty($setting['next_execution_display'])) {
-                    $test_results[] = "  次回実行予定: " . esc_html($setting['next_execution_display']);
-                } else {
-                    // 設定されていない場合は計算値を使用
-                    $next_execution = $this->calculate_next_execution_time_for_display($setting);
-                    $test_results[] = "  次回実行予定: " . date('Y-m-d H:i:s', $next_execution) . " (計算値)";
-                }
+                // 次回実行予定時刻を取得（実際のcronスケジュールを優先）
+                $next_execution = $this->get_actual_next_execution_time($genre_id, $setting);
+                $next_execution_formatted = date('Y年n月j日 H:i', $next_execution['timestamp']);
+                $test_results[] = "  次回実行予定: " . $next_execution_formatted . $next_execution['source'];
                 
                 // スケジュール詳細を表示
                 if (!empty($setting['start_execution_time'])) {
                     $start_time = strtotime($setting['start_execution_time']);
-                    $test_results[] = "  開始実行日時: " . date('Y-m-d H:i:s', $start_time);
+                    $test_results[] = "  開始実行日時: " . date('Y年n月j日 H:i', $start_time);
                 }
                 
                 $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
