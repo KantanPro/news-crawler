@@ -38,6 +38,9 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
     public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
+        // 現在のカテゴリーを保存
+        $current_categories = wp_get_post_categories($post_id);
+        
         $settings = get_option($this->option_name, array());
         
         $result = false;
@@ -61,6 +64,11 @@ class NewsCrawlerFeaturedImageGenerator {
             
             if (!$final_check || $final_thumbnail_id != $result) {
                 set_post_thumbnail($post_id, $result);
+            }
+            
+            // カテゴリーを復元
+            if (!empty($current_categories)) {
+                wp_set_post_categories($post_id, $current_categories);
             }
         }
         

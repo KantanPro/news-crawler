@@ -107,16 +107,13 @@ class NewsCrawlerOpenAISummarizer {
         }
         
         try {
-            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' のOpenAI要約生成を開始いたします');
+            // 現在のカテゴリーを保存
+            $current_categories = wp_get_post_categories($post_id);
             
-            // 投稿内容から要約とまとめを生成
+            // OpenAI APIを使用して要約とまとめを生成
             $summary_result = $this->generate_summary_with_openai($post->post_content, $post->post_title);
             
-            error_log('NewsCrawlerOpenAISummarizer: OpenAI結果: ' . print_r($summary_result, true));
-            
             if ($summary_result && isset($summary_result['summary']) && isset($summary_result['conclusion'])) {
-                error_log('NewsCrawlerOpenAISummarizer: 要約生成が成功いたしました。投稿内容を更新いたします');
-                
                 // 投稿内容に要約とまとめを追加
                 $updated_content = $this->append_summary_to_post($post->post_content, $summary_result['summary'], $summary_result['conclusion']);
                 
@@ -133,31 +130,31 @@ class NewsCrawlerOpenAISummarizer {
                 if ($summary_to_excerpt) {
                     $excerpt = wp_trim_words($summary_result['summary'], 25, '...');
                     $post_update_data['post_excerpt'] = $excerpt;
-                    error_log('NewsCrawlerOpenAISummarizer: 要約をexcerptに設定しました: ' . $excerpt);
                 }
                 
                 // 投稿を更新
                 $update_result = wp_update_post($post_update_data);
                 
-                error_log('NewsCrawlerOpenAISummarizer: 投稿更新結果: ' . print_r($update_result, true));
-                
                 if ($update_result && !is_wp_error($update_result)) {
+                    // カテゴリーを復元
+                    if (!empty($current_categories)) {
+                        wp_set_post_categories($post_id, $current_categories);
+                    }
+                    
                     // 要約生成完了のメタデータを保存
                     update_post_meta($post_id, '_openai_summary_generated', true);
                     update_post_meta($post_id, '_openai_summary_date', current_time('mysql'));
                     update_post_meta($post_id, '_openai_summary_text', $summary_result['summary']);
                     update_post_meta($post_id, '_openai_conclusion_text', $summary_result['conclusion']);
                     
-                    error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの生成が正常に完了いたしました。投稿ID: ' . $post_id);
                     return true;
-                } else {
-                    error_log('NewsCrawlerOpenAISummarizer: 投稿更新に失敗いたしました: ' . print_r($update_result, true));
                 }
-            } else {
-                error_log('NewsCrawlerOpenAISummarizer: 要約生成に失敗いたしました。または不完全な結果です');
             }
         } catch (Exception $e) {
-            error_log('NewsCrawlerOpenAISummarizer: 要約生成中にエラーが発生いたしました: ' . $e->getMessage());
+            // エラーが発生した場合もカテゴリーを復元
+            if (!empty($current_categories)) {
+                wp_set_post_categories($post_id, $current_categories);
+            }
         }
         
         return false;

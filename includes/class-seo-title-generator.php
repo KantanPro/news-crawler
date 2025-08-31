@@ -84,6 +84,9 @@ class NewsCrawlerSEOTitleGenerator {
             return false;
         }
         
+        // 現在のカテゴリーを保存
+        $current_categories = wp_get_post_categories($post_id);
+        
         // News Crawlerで設定されているジャンル名を取得
         $genre_name = $this->get_news_crawler_genre_name($post_id);
         
@@ -96,6 +99,11 @@ class NewsCrawlerSEOTitleGenerator {
                 'ID' => $post_id,
                 'post_title' => $seo_title
             ));
+            
+            // カテゴリーを復元
+            if (!empty($current_categories)) {
+                wp_set_post_categories($post_id, $current_categories);
+            }
             
             // メタデータを保存
             update_post_meta($post_id, '_seo_title_generated', true);
