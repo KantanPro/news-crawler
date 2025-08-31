@@ -168,6 +168,10 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.1.2** (2025-08-31): Version consistency and update system improvements
+  - Fixed version number consistency issues for better WordPress update system compatibility
+  - Stabilized plugin update check functionality
+  - Improved update notification display in admin interface
 - **v2.0.9** (2025-08-31): Enhanced featured image generation functionality
   - Enhanced featured image generation with post editor meta box integration
   - Implemented AJAX handlers for image generation and regeneration
