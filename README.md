@@ -172,6 +172,9 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
   - Fixed version number consistency issues for better WordPress update system compatibility
   - Stabilized plugin update check functionality
   - Improved update notification display in admin interface
+  - Enhanced post summary generation with improved error handling
+  - Added post content and category validation with detailed API response error messages
+  - Implemented functionality to remove existing summaries and summaries
 - **v2.0.9** (2025-08-31): Enhanced featured image generation functionality
   - Enhanced featured image generation with post editor meta box integration
   - Implemented AJAX handlers for image generation and regeneration
