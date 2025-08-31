@@ -168,7 +168,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.1.3** (2025-08-31): Stability and performance improvements
+- **v2.1.3** (2025-08-31): Update system fixes and reliability improvements
+  - Fixed version inconsistency issues in update system for better reliability
   - Enhanced plugin stability and performance
   - Code optimization and bug fixes
   - Improved admin interface usability
