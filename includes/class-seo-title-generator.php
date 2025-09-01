@@ -71,6 +71,15 @@ class NewsCrawlerSEOTitleGenerator {
             return;
         }
         
+        // ライセンスチェック - 高度な機能が有効かどうかを確認
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            if (!$license_manager->is_advanced_features_enabled()) {
+                error_log('NewsCrawlerSEOTitleGenerator: ライセンスが無効なため、SEOタイトル生成機能をスキップします');
+                return;
+            }
+        }
+        
         // SEOタイトル生成を実行
         $this->generate_seo_title($post_id);
     }

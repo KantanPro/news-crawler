@@ -64,6 +64,15 @@ class NewsCrawlerOpenAISummarizer {
             return;
         }
         
+        // ライセンスチェック - AI要約機能が有効かどうかを確認
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            if (!$license_manager->is_ai_summary_enabled()) {
+                error_log('NewsCrawlerOpenAISummarizer: ライセンスが無効なため、AI要約機能をスキップします');
+                return;
+            }
+        }
+        
         // OpenAI APIキーが設定されていない場合はスキップ
         if (empty($this->api_key)) {
             error_log('NewsCrawlerOpenAISummarizer: OpenAI APIキーが設定されておりません');

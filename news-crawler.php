@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '2.1.4');
+define('NEWS_CRAWLER_VERSION', '2.1.5');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -41,6 +41,8 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 
 
 // プラグイン初期化
@@ -120,6 +122,16 @@ function news_crawler_init_components() {
     // 更新チェッククラスを初期化
     if (class_exists('NewsCrawlerUpdater')) {
         new NewsCrawlerUpdater();
+    }
+    
+    // ライセンス管理クラスを初期化
+    if (class_exists('NewsCrawler_License_Manager')) {
+        NewsCrawler_License_Manager::get_instance();
+    }
+    
+    // ライセンス設定クラスを初期化
+    if (class_exists('NewsCrawler_License_Settings')) {
+        NewsCrawler_License_Settings::get_instance();
     }
 }
 add_action('init', 'news_crawler_init', 5);
@@ -377,6 +389,8 @@ class NewsCrawler {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_news_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_news_crawler_test_fetch', array($this, 'test_fetch'));
+        add_action('wp_ajax_news_crawler_manual_run_news', array($this, 'manual_run_news'));
+        add_action('wp_ajax_news_crawler_test_news_fetch', array($this, 'test_news_fetch'));
     }
     
     public function init() {
@@ -391,7 +405,8 @@ class NewsCrawler {
             'news_crawler_main',
             'ニュースクロール基本設定',
             array($this, 'main_section_callback'),
-            'news-crawler'
+            'news_crawler_main',
+            array('label_for' => 'max_articles')
         );
         
         add_settings_field(
@@ -409,7 +424,7 @@ class NewsCrawler {
             array($this, 'keywords_callback'),
             'news-crawler',
             'news_crawler_main',
-            array('label_for' => 'keywords')
+            array('label_for' => 'max_articles')
         );
         
         add_settings_field(
@@ -418,16 +433,25 @@ class NewsCrawler {
             array($this, 'news_sources_callback'),
             'news-crawler',
             'news_crawler_main',
-            array('label_for' => 'news_sources')
+            array('label_for' => 'max_articles')
         );
         
         add_settings_field(
-            'post_category',
+            'post_categories',
             '投稿カテゴリー',
-            array($this, 'post_category_callback'),
+            array($this, 'post_categories_callback'),
             'news-crawler',
             'news_crawler_main',
-            array('label_for' => 'post_category')
+            array('label_for' => 'max_articles')
+        );
+        
+        add_settings_field(
+            'post_status',
+            '投稿ステータス',
+            array($this, 'post_status_callback'),
+            'news-crawler',
+            'news_crawler_main',
+            array('label_for' => 'max_articles')
         );
     }
     
@@ -479,11 +503,11 @@ class NewsCrawler {
         echo '<p class="description">1行に1キーワードを入力してください。キーワードにマッチした動画のみを取得します。</p>';
     }
     
-    public function post_category_callback() {
+    public function post_categories_callback() {
         $options = get_option($this->option_name, array());
         $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
         $categories_text = implode("\n", $categories);
-        echo '<textarea id="youtube_post_categories" name="' . $this->option_name . '[post_categories]" rows="3" cols="50" placeholder="1行に1カテゴリー名を入力してください">' . esc_textarea($categories_text) . '</textarea>';
+        echo '<textarea id="news_post_categories" name="' . $this->option_name . '[post_categories]" rows="3" cols="50" placeholder="1行に1カテゴリー名を入力してください">' . esc_textarea($categories_text) . '</textarea>';
         echo '<p class="description">投稿するカテゴリー名を1行に1つずつ入力してください。存在しない場合は自動的に作成されます。</p>';
     }
     
@@ -496,12 +520,15 @@ class NewsCrawler {
             'private' => '非公開',
             'pending' => '承認待ち'
         );
-        echo '<select id="youtube_post_status" name="' . $this->option_name . '[post_status]">';
+        echo '<select id="news_post_status" name="' . $this->option_name . '[post_status]">';
         foreach ($statuses as $value => $label) {
             echo '<option value="' . $value . '" ' . selected($value, $status, false) . '>' . $label . '</option>';
         }
         echo '</select>';
+        echo '<p class="description">作成する投稿の初期ステータスを選択してください。</p>';
     }
+    
+
     
     public function embed_type_callback() {
         $options = get_option($this->option_name, array());
@@ -522,6 +549,36 @@ class NewsCrawler {
         $sanitized = array();
         
         $existing_options = get_option($this->option_name, array());
+        
+        // ニュース記事数の処理
+        if (isset($input['max_articles'])) {
+            if (is_numeric($input['max_articles']) || (is_string($input['max_articles']) && !empty(trim($input['max_articles'])))) {
+                $max_articles = intval($input['max_articles']);
+                $sanitized['max_articles'] = max(1, min(50, $max_articles));
+            } else {
+                $sanitized['max_articles'] = isset($existing_options['max_articles']) ? $existing_options['max_articles'] : 3;
+            }
+        } else {
+            $sanitized['max_articles'] = isset($existing_options['max_articles']) ? $existing_options['max_articles'] : 3;
+        }
+        
+        // ニュースソースの処理
+        if (isset($input['news_sources'])) {
+            if (is_array($input['news_sources'])) {
+                $news_sources = array_map('trim', $input['news_sources']);
+                $news_sources = array_filter($news_sources);
+                $sanitized['news_sources'] = $news_sources;
+            } elseif (is_string($input['news_sources']) && !empty(trim($input['news_sources']))) {
+                $news_sources = explode("\n", $input['news_sources']);
+                $news_sources = array_map('trim', $news_sources);
+                $news_sources = array_filter($news_sources);
+                $sanitized['news_sources'] = $news_sources;
+            } else {
+                $sanitized['news_sources'] = isset($existing_options['news_sources']) ? $existing_options['news_sources'] : array();
+            }
+        } else {
+            $sanitized['news_sources'] = isset($existing_options['news_sources']) ? $existing_options['news_sources'] : array();
+        }
         
         if (isset($input['max_videos'])) {
             if (is_numeric($input['max_videos']) || (is_string($input['max_videos']) && !empty(trim($input['max_videos'])))) {
@@ -610,7 +667,7 @@ class NewsCrawler {
     public function admin_page() {
         ?>
         <div class="wrap">
-            <h1>YouTube Crawler</h1>
+            <h1>News Crawler</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -621,14 +678,27 @@ class NewsCrawler {
             <form method="post" action="options.php">
                 <?php
                 settings_fields($this->option_name);
-                do_settings_sections('youtube-crawler');
+                do_settings_sections('news-crawler');
                 submit_button();
                 ?>
             </form>
             
             <hr>
             
-            <h2>動画投稿を作成</h2>
+            <h2>ニュースクロール機能</h2>
+            <p>設定したニュースソースからキーワードにマッチした記事を取得して、要約と共に投稿を作成します。</p>
+            
+            <h3>ニュースソースのテスト</h3>
+            <button type="button" id="news-test-fetch" class="button button-secondary">ニュースソースをテスト</button>
+            <div id="news-test-fetch-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
+            
+            <h3>ニュース投稿を作成</h3>
+            <button type="button" id="news-manual-run" class="button button-primary">ニュース投稿を作成</button>
+            <div id="news-manual-run-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto;"></div>
+            
+            <hr>
+            
+            <h2>YouTube動画クロール機能</h2>
             <p>設定したYouTubeチャンネルからキーワードにマッチした動画を取得して、動画の埋め込みと要約を含む投稿を作成します。</p>
             <button type="button" id="youtube-manual-run" class="button button-primary">動画投稿を作成</button>
             
@@ -637,6 +707,36 @@ class NewsCrawler {
             <hr>
             
             <h2>統計情報</h2>
+            <h3>ニュース統計</h3>
+            <?php $news_stats = $this->get_news_statistics(); ?>
+            <table class="widefat">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>数値</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>総ニュース投稿数</td>
+                        <td><?php echo $news_stats['total_posts']; ?>件</td>
+                    </tr>
+                    <tr>
+                        <td>今月のニュース投稿数</td>
+                        <td><?php echo $news_stats['posts_this_month']; ?>件</td>
+                    </tr>
+                    <tr>
+                        <td>重複スキップ数</td>
+                        <td><?php echo $news_stats['duplicates_skipped']; ?>件</td>
+                    </tr>
+                    <tr>
+                        <td>最後の実行日時</td>
+                        <td><?php echo $news_stats['last_run']; ?></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>YouTube統計</h3>
             <?php $stats = $this->get_youtube_statistics(); ?>
             <table class="widefat">
                 <thead>
@@ -667,6 +767,68 @@ class NewsCrawler {
             
             <script>
             jQuery(document).ready(function($) {
+                // ニュースソースのテスト
+                $('#news-test-fetch').click(function() {
+                    var button = $(this);
+                    var resultDiv = $('#news-test-fetch-result');
+                    button.prop('disabled', true).text('テスト中...');
+                    resultDiv.html('ニュースソースのテストを開始します...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: {
+                            action: 'news_crawler_test_news_fetch',
+                            nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                resultDiv.html('<div class="notice notice-success"><p><strong>ニュースソーステスト結果:</strong><br>' + response.data.replace(/\n/g, '<br>') + '</p></div>');
+                            } else {
+                                resultDiv.html('<div class="notice notice-error"><p><strong>ニュースソーステストエラー:</strong><br>' + response.data + '</p></div>');
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            resultDiv.html('<div class="notice notice-error"><p><strong>エラーが発生しました:</strong><br>' + error + '</p></div>');
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('ニュースソースをテスト');
+                        }
+                    });
+                });
+                
+                // ニュース投稿の作成
+                $('#news-manual-run').click(function() {
+                    var button = $(this);
+                    var resultDiv = $('#news-manual-run-result');
+                    button.prop('disabled', true).text('実行中...');
+                    resultDiv.html('ニュースクロールと投稿作成を開始します...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: {
+                            action: 'news_crawler_manual_run_news',
+                            nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                resultDiv.html('<div class="notice notice-success"><p><strong>ニュース投稿作成結果:</strong><br>' + response.data.replace(/\n/g, '<br>') + '</p></div>');
+                            } else {
+                                resultDiv.html('<div class="notice notice-error"><p><strong>ニュース投稿作成エラー:</strong><br>' + response.data + '</p></div>');
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            resultDiv.html('<div class="notice notice-error"><p><strong>エラーが発生しました:</strong><br>' + error + '</p></div>');
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('ニュース投稿を作成');
+                        }
+                    });
+                });
+                
                 $('#youtube-manual-run').click(function() {
                     var button = $(this);
                     var resultDiv = $('#youtube-manual-run-result');
@@ -799,6 +961,173 @@ class NewsCrawler {
         wp_send_json_success($result);
     }
     
+    /**
+     * ニュースクロールを実行
+     */
+    public function crawl_news() {
+        $options = get_option($this->option_name, array());
+        $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
+        $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 3;
+        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
+        $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
+        
+        if (empty($news_sources)) {
+            return 'ニュースソースが設定されていません。';
+        }
+        
+        $matched_articles = array();
+        $errors = array();
+        $duplicates_skipped = 0;
+        $debug_info = array();
+        
+        foreach ($news_sources as $source) {
+            try {
+                $articles = $this->fetch_news_articles($source, 20);
+                if ($articles && is_array($articles)) {
+                    $debug_info[] = $source . ': ' . count($articles) . '件の記事を取得';
+                    foreach ($articles as $article) {
+                        if ($this->is_news_keyword_match($article, $keywords)) {
+                            $matched_articles[] = $article;
+                            $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                        } else {
+                            $debug_info[] = '  - キーワードマッチなし: ' . $article['title'];
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $errors[] = $source . ': ' . $e->getMessage();
+            }
+        }
+        
+        $debug_info[] = "\nキーワードマッチした記事数: " . count($matched_articles);
+        
+        $valid_articles = array();
+        foreach ($matched_articles as $article) {
+            $debug_info[] = "  - 記事: " . $article['title'];
+            
+            if ($this->is_duplicate_news($article)) {
+                $duplicates_skipped++;
+                $debug_info[] = "    → 重複のためスキップ";
+                continue;
+            }
+            
+            $debug_info[] = "    → 有効記事として追加";
+            $valid_articles[] = $article;
+        }
+        
+        $valid_articles = array_slice($valid_articles, 0, $max_articles);
+        
+        $posts_created = 0;
+        $post_id = null;
+        if (!empty($valid_articles)) {
+            $post_id = $this->create_news_summary_post($valid_articles, $categories, $status);
+            if ($post_id && !is_wp_error($post_id)) {
+                $posts_created = 1;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+            } else {
+                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
+                $debug_info[] = "\n投稿作成失敗: " . $error_message;
+            }
+        } else {
+            $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+        }
+        
+        $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
+        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
+        if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
+        
+        $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
+        
+        $this->update_news_statistics($posts_created, $duplicates_skipped);
+        
+        return $result;
+    }
+    
+    /**
+     * オプション指定でニュースクロールを実行
+     */
+    public function crawl_news_with_options($options) {
+        $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
+        $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
+        $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 3;
+        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
+        $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
+        
+        if (empty($news_sources)) {
+            return 'ニュースソースが設定されていません。';
+        }
+        
+        $matched_articles = array();
+        $errors = array();
+        $duplicates_skipped = 0;
+        $debug_info = array();
+        
+        foreach ($news_sources as $source) {
+            try {
+                $articles = $this->fetch_news_articles($source, 20);
+                if ($articles && is_array($articles)) {
+                    $debug_info[] = $source . ': ' . count($articles) . '件の記事を取得';
+                    foreach ($articles as $article) {
+                        if ($this->is_news_keyword_match($article, $keywords)) {
+                            $matched_articles[] = $article;
+                            $debug_info[] = '  - キーワードマッチ: ' . $article['title'];
+                        } else {
+                            $debug_info[] = '  - キーワードマッチなし: ' . $article['title'];
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $errors[] = $source . ': ' . $e->getMessage();
+            }
+        }
+        
+        $debug_info[] = "\nキーワードマッチした記事数: " . count($matched_articles);
+        
+        $valid_articles = array();
+        foreach ($matched_articles as $article) {
+            $debug_info[] = "  - 記事: " . $article['title'];
+            
+            if ($this->is_duplicate_news($article)) {
+                $duplicates_skipped++;
+                $debug_info[] = "    → 重複のためスキップ";
+                continue;
+            }
+            
+            $debug_info[] = "    → 有効記事として追加";
+            $valid_articles[] = $article;
+        }
+        
+        $valid_articles = array_slice($valid_articles, 0, $max_articles);
+        
+        $posts_created = 0;
+        $post_id = null;
+        if (!empty($valid_articles)) {
+            $post_id = $this->create_news_summary_post($valid_articles, $categories, $status);
+            if ($post_id && !is_wp_error($post_id)) {
+                $posts_created = 1;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+            } else {
+                $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
+                $debug_info[] = "\n投稿作成失敗: " . $error_message;
+            }
+        } else {
+            $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+        }
+        
+        $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
+        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
+        if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
+        
+        $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
+        
+        $this->update_news_statistics($posts_created, $duplicates_skipped);
+        
+        return $result;
+    }
+    
     public function test_fetch() {
         check_ajax_referer('youtube_crawler_nonce', 'nonce');
         
@@ -828,6 +1157,57 @@ class NewsCrawler {
         }
         
         wp_send_json_success(implode('<br>', $test_result));
+    }
+    
+    /**
+     * ニュースソースのテスト実行
+     */
+    public function test_news_fetch() {
+        check_ajax_referer('news_crawler_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $options = get_option($this->option_name, array());
+        $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
+        
+        if (empty($news_sources)) {
+            wp_send_json_success('ニュースソースが設定されていません。');
+        }
+        
+        $test_result = array();
+        foreach ($news_sources as $source) {
+            try {
+                $articles = $this->fetch_news_articles($source, 3);
+                if ($articles && is_array($articles)) {
+                    $test_result[] = $source . ': 取得成功 (' . count($articles) . '件の記事)';
+                    foreach (array_slice($articles, 0, 2) as $article) {
+                        $test_result[] = '  - ' . $article['title'];
+                    }
+                } else {
+                    $test_result[] = $source . ': 取得失敗';
+                }
+            } catch (Exception $e) {
+                $test_result[] = $source . ': エラー - ' . $e->getMessage();
+            }
+        }
+        
+        wp_send_json_success(implode('<br>', $test_result));
+    }
+    
+    /**
+     * ニュースクロールの手動実行
+     */
+    public function manual_run_news() {
+        check_ajax_referer('news_crawler_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $result = $this->crawl_news();
+        wp_send_json_success($result);
     }
     
     public function crawl_youtube() {
@@ -1316,6 +1696,16 @@ class NewsCrawler {
         }
     }
     
+    private function get_news_statistics() {
+        global $wpdb;
+        $stats = array();
+        $stats['total_posts'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = '_news_summary'");
+        $stats['posts_this_month'] = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = '_news_crawled_date' AND meta_value >= %s", date('Y-m-01')));
+        $stats['duplicates_skipped'] = get_option('news_crawler_duplicates_skipped', 0);
+        $stats['last_run'] = get_option('news_crawler_last_run', '未実行');
+        return $stats;
+    }
+    
     private function get_youtube_statistics() {
         global $wpdb;
         $stats = array();
@@ -1404,6 +1794,342 @@ class NewsCrawler {
         error_log('YouTubeCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
         
         return $result;
+    }
+    
+    /**
+     * ニュース記事を取得
+     */
+    private function fetch_news_articles($source, $max_results = 20) {
+        // RSSフィードかどうかを判定
+        if ($this->is_rss_feed($source)) {
+            return $this->fetch_rss_articles($source, $max_results);
+        } else {
+            return $this->fetch_html_articles($source, $max_results);
+        }
+    }
+    
+    /**
+     * RSSフィードかどうかを判定
+     */
+    private function is_rss_feed($url) {
+        $response = wp_remote_get($url, array(
+            'timeout' => 10,
+            'sslverify' => false
+        ));
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        return strpos($body, '<rss') !== false || strpos($body, '<feed') !== false;
+    }
+    
+    /**
+     * RSSフィードから記事を取得
+     */
+    private function fetch_rss_articles($url, $max_results = 20) {
+        if (!class_exists('SimplePie')) {
+            require_once(ABSPATH . WPINC . '/class-simplepie.php');
+        }
+        
+        $feed = new SimplePie();
+        $feed->set_feed_url($url);
+        $feed->set_cache_location(WP_CONTENT_DIR . '/cache');
+        $feed->set_cache_duration(300); // 5分
+        $feed->init();
+        
+        if ($feed->error()) {
+            throw new Exception('RSSフィードの読み込みに失敗しました: ' . $feed->error());
+        }
+        
+        $items = $feed->get_items();
+        $articles = array();
+        
+        foreach (array_slice($items, 0, $max_results) as $item) {
+            $articles[] = array(
+                'title' => $item->get_title(),
+                'content' => $item->get_content(),
+                'url' => $item->get_permalink(),
+                'published_at' => $item->get_date('Y-m-d H:i:s'),
+                'author' => $item->get_author() ? $item->get_author()->get_name() : '',
+                'source' => $url
+            );
+        }
+        
+        return $articles;
+    }
+    
+    /**
+     * HTMLページから記事を取得
+     */
+    private function fetch_html_articles($url, $max_results = 20) {
+        $response = wp_remote_get($url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
+        
+        if (is_wp_error($response)) {
+            throw new Exception('HTMLページの取得に失敗しました: ' . $response->get_error_message());
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        
+        // HTMLパース（簡易版）
+        $articles = array();
+        
+        // タイトルを取得
+        if (preg_match('/<title[^>]*>(.*?)<\/title>/i', $body, $matches)) {
+            $title = trim(strip_tags($matches[1]));
+        } else {
+            $title = 'タイトルなし';
+        }
+        
+        // 本文を取得（最初の段落から）
+        $content = '';
+        if (preg_match('/<p[^>]*>(.*?)<\/p>/i', $body, $matches)) {
+            $content = trim(strip_tags($matches[1]));
+        }
+        
+        // メタディスクリプションを取得
+        if (preg_match('/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']/i', $body, $matches)) {
+            $description = trim($matches[1]);
+        } else {
+            $description = $content;
+        }
+        
+        $articles[] = array(
+            'title' => $title,
+            'content' => $content,
+            'description' => $description,
+            'url' => $url,
+            'published_at' => current_time('Y-m-d H:i:s'),
+            'author' => '',
+            'source' => $url
+        );
+        
+        return $articles;
+    }
+    
+    /**
+     * ニュース記事のキーワードマッチング
+     */
+    private function is_news_keyword_match($article, $keywords) {
+        $text_to_search = strtolower($article['title'] . ' ' . ($article['content'] ?? '') . ' ' . ($article['description'] ?? ''));
+        
+        foreach ($keywords as $keyword) {
+            $keyword_trimmed = trim($keyword);
+            if (empty($keyword_trimmed)) {
+                continue;
+            }
+            
+            if (stripos($text_to_search, strtolower($keyword_trimmed)) !== false) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * ニュース記事の重複チェック
+     */
+    private function is_duplicate_news($article) {
+        global $wpdb;
+        $title = $article['title'];
+        $url = $article['url'];
+        
+        // 基本設定から重複チェック設定を取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $period = isset($basic_settings['duplicate_check_period']) ? intval($basic_settings['duplicate_check_period']) : 30;
+        
+        // URLの完全一致チェック
+        $existing_url = $wpdb->get_var($wpdb->prepare(
+            "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
+             INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+             WHERE pm.meta_key = '_news_crawler_source_url' AND pm.meta_value = %s 
+             AND p.post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)
+             AND p.post_status IN ('publish', 'draft', 'pending', 'private')",
+            $url,
+            $period
+        ));
+        
+        if ($existing_url) {
+            return true;
+        }
+        
+        // タイトルの完全一致チェック
+        $exact_title_match = $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} 
+             WHERE post_title = %s 
+             AND post_type = 'post' 
+             AND post_status IN ('publish', 'draft', 'pending', 'private') 
+             AND post_date >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $title,
+            $period
+        ));
+        
+        if ($exact_title_match) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * ニュース記事の投稿を作成
+     */
+    private function create_news_summary_post($articles, $categories, $status) {
+        $cat_ids = array();
+        foreach ($categories as $category) {
+            $cat_ids[] = $this->get_or_create_category($category);
+        }
+        
+        // キーワード情報を取得
+        $options = get_option($this->option_name, array());
+        $keywords = isset($options['keywords']) ? $options['keywords'] : array('ニュース');
+        
+        $keyword_text = implode('、', array_slice($keywords, 0, 3));
+        $post_title = $keyword_text . '：ニュースまとめ – ' . date_i18n('Y年n月j日');
+        
+        $post_content = '';
+        
+        foreach ($articles as $article) {
+            $post_content .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"20px","bottom":"20px"}}}} -->';
+            $post_content .= '<div class="wp-block-group" style="margin-top:20px;margin-bottom:20px">';
+            
+            $post_content .= '<!-- wp:heading {"level":3} -->';
+            $post_content .= '<h3>' . esc_html($article['title']) . '</h3>';
+            $post_content .= '<!-- /wp:heading -->';
+            
+            if (!empty($article['content'])) {
+                $post_content .= '<!-- wp:paragraph -->';
+                $post_content .= '<p>' . esc_html(wp_trim_words($article['content'], 100, '...')) . '</p>';
+                $post_content .= '<!-- /wp:paragraph -->';
+            }
+            
+            if (!empty($article['url'])) {
+                $post_content .= '<!-- wp:paragraph -->';
+                $post_content .= '<p><a href="' . esc_url($article['url']) . '" target="_blank" rel="noopener noreferrer">📰 元記事を読む</a></p>';
+                $post_content .= '<!-- /wp:paragraph -->';
+            }
+            
+            $meta_info = [];
+            if (!empty($article['published_at'])) {
+                $meta_info[] = '<strong>公開日:</strong> ' . esc_html($article['published_at']);
+            }
+            if (!empty($article['author'])) {
+                $meta_info[] = '<strong>著者:</strong> ' . esc_html($article['author']);
+            }
+            if (!empty($article['source'])) {
+                $meta_info[] = '<strong>ソース:</strong> ' . esc_html($article['source']);
+            }
+            
+            if (!empty($meta_info)) {
+                $post_content .= '<!-- wp:paragraph {"fontSize":"small"} -->';
+                $post_content .= '<p class="has-small-font-size">' . implode(' | ', $meta_info) . '</p>';
+                $post_content .= '<!-- /wp:paragraph -->';
+            }
+            
+            $post_content .= '</div>';
+            $post_content .= '<!-- /wp:group -->';
+        }
+        
+        // 投稿を作成
+        $post_data = array(
+            'post_title'    => $post_title,
+            'post_content'  => $post_content,
+            'post_status'   => 'draft',
+            'post_author'   => get_current_user_id() ?: 1,
+            'post_type'     => 'post',
+            'post_category' => $cat_ids
+        );
+        
+        $post_id = wp_insert_post($post_data, true);
+        
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+        
+        // メタデータの保存
+        update_post_meta($post_id, '_news_summary', true);
+        update_post_meta($post_id, '_news_articles_count', count($articles));
+        update_post_meta($post_id, '_news_crawled_date', current_time('mysql'));
+        update_post_meta($post_id, '_news_crawler_created', true);
+        update_post_meta($post_id, '_news_crawler_creation_method', 'news');
+        update_post_meta($post_id, '_news_crawler_intended_status', $status);
+        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
+        update_post_meta($post_id, '_news_crawler_ready', false);
+        
+        // ジャンルIDを保存（自動投稿用）
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            update_post_meta($post_id, '_news_crawler_genre_id', $current_genre_setting['id']);
+        }
+        
+        // ソースURLを保存
+        if (!empty($articles[0]['url'])) {
+            update_post_meta($post_id, '_news_crawler_source_url', $articles[0]['url']);
+        }
+        
+        // アイキャッチ生成
+        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        
+        // AI要約生成
+        if (class_exists('NewsCrawlerOpenAISummarizer')) {
+            $summarizer = new NewsCrawlerOpenAISummarizer();
+            $summarizer->generate_summary($post_id);
+        }
+        
+        // 投稿ステータス変更を遅延実行
+        if ($status !== 'draft') {
+            $this->schedule_post_status_update($post_id, $status);
+        }
+        
+        return $post_id;
+    }
+    
+    /**
+     * ニュース統計情報を更新
+     */
+    private function update_news_statistics($posts_created, $duplicates_skipped) {
+        if ($duplicates_skipped > 0) {
+            $current_duplicates = get_option('news_crawler_duplicates_skipped', 0);
+            update_option('news_crawler_duplicates_skipped', $current_duplicates + $duplicates_skipped);
+        }
+        update_option('news_crawler_last_run', current_time('mysql'));
+    }
+    
+    /**
+     * 投稿ステータス変更をスケジュール
+     */
+    private function schedule_post_status_update($post_id, $status) {
+        wp_schedule_single_event(time() + 60, 'news_crawler_update_post_status', array($post_id, $status));
+    }
+    
+    /**
+     * タイトルの類似度を計算
+     */
+    private function calculate_title_similarity($title1, $title2) {
+        $title1 = strtolower(trim($title1));
+        $title2 = strtolower(trim($title2));
+        
+        if ($title1 === $title2) {
+            return 1.0;
+        }
+        
+        $words1 = explode(' ', $title1);
+        $words2 = explode(' ', $title2);
+        
+        $common_words = array_intersect($words1, $words2);
+        $total_words = array_unique(array_merge($words1, $words2));
+        
+        if (empty($total_words)) {
+            return 0.0;
+        }
+        
+        return count($common_words) / count($total_words);
     }
 }
 

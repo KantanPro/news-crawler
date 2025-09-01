@@ -22,6 +22,9 @@ class NewsCrawlerSettingsManager {
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
         add_action('wp_ajax_check_for_updates', array($this, 'check_for_updates'));
         add_action('wp_ajax_force_update_check', array($this, 'force_update_check'));
+        
+        // ライセンス認証の処理を追加
+        add_action('admin_init', array($this, 'handle_license_activation'));
     }
     
     /**
@@ -48,6 +51,16 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings',
             array($this, 'settings_page')
         );
+        
+        // ライセンス設定サブメニュー
+        add_submenu_page(
+            'news-crawler-settings',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - ライセンス設定',
+            'ライセンス設定',
+            'manage_options',
+            'news-crawler-license',
+            array($this, 'create_license_page')
+        );
     }
     
     /**
@@ -66,6 +79,29 @@ class NewsCrawlerSettingsManager {
             wp_localize_script('news-crawler-settings-admin', 'newsCrawlerSettings', array(
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('check_for_updates')
+            ));
+        }
+        
+        // ライセンス設定ページでもスクリプトを読み込み
+        if ($hook === 'news-crawler_page_news-crawler-license') {
+            wp_enqueue_script(
+                'news-crawler-license-manager',
+                NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
+                array('jquery'),
+                NEWS_CRAWLER_VERSION,
+                true
+            );
+            
+            // AJAX用のデータをローカライズ
+            wp_localize_script('news-crawler-license-manager', 'news_crawler_license_ajax', array(
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce'   => wp_create_nonce('news_crawler_license_nonce'),
+                'strings' => array(
+                    'verifying' => __( '認証中...', 'news-crawler' ),
+                    'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),
+                    'error'     => __( 'ライセンスの認証に失敗しました。', 'news-crawler' ),
+                    'network_error' => __( '通信エラーが発生しました。', 'news-crawler' )
+                )
             ));
         }
     }
@@ -892,7 +928,10 @@ class NewsCrawlerSettingsManager {
         // 更新チェックを実行
         if (class_exists('NewsCrawlerUpdater')) {
             $updater = new NewsCrawlerUpdater();
-            $updater->check_for_updates(get_site_transient('update_plugins'));
+            $transient = get_site_transient('update_plugins');
+            if ($transient) {
+                $updater->check_for_updates($transient);
+            }
         }
         
         wp_send_json_success('更新チェックが完了しました。');
@@ -921,9 +960,261 @@ class NewsCrawlerSettingsManager {
         // 更新チェックを実行
         if (class_exists('NewsCrawlerUpdater')) {
             $updater = new NewsCrawlerUpdater();
-            $updater->check_for_updates(get_site_transient('update_plugins'));
+            $transient = get_site_transient('update_plugins');
+            if ($transient) {
+                $updater->check_for_updates($transient);
+            }
         }
         
         wp_send_json_success('強制更新チェックが完了しました。');
+    }
+    
+    /**
+     * ライセンス設定ページの表示
+     */
+    public function create_license_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'この設定ページにアクセスする権限がありません。', 'news-crawler' ) );
+        }
+
+        // ライセンス状態再確認の処理
+        if ( isset( $_POST['news_crawler_license_recheck'] ) && wp_verify_nonce( $_POST['news_crawler_license_recheck_nonce'], 'news_crawler_license_recheck' ) ) {
+            $this->handle_license_recheck();
+        }
+
+        // ライセンスマネージャーのインスタンスを取得
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            $license_status = $license_manager->get_license_status();
+        } else {
+            $license_status = array(
+                'status' => 'not_set',
+                'message' => 'ライセンス管理機能が利用できません。',
+                'icon' => 'dashicons-warning',
+                'color' => '#f56e28'
+            );
+        }
+        
+        ?>
+        <div class="wrap ktp-admin-wrap">
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span><?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            
+            <?php
+            // 通知表示
+            settings_errors( 'news_crawler_license' );
+            ?>
+            
+            <div class="ktp-settings-container">
+                <div class="ktp-settings-section">
+                    <!-- ライセンスステータス表示 -->
+                    <div class="ktp-license-status-display" style="margin-bottom: 30px; padding: 20px; background: #fff; border: 1px solid #ddd; border-radius: 5px;">
+                        <h3 style="margin-top: 0;">
+                            <span class="dashicons <?php echo esc_attr( $license_status['icon'] ); ?>" style="color: <?php echo esc_attr( $license_status['color'] ); ?>;"></span>
+                            <?php echo esc_html__( 'ライセンスステータス', 'news-crawler' ); ?>
+                        </h3>
+                        <p style="font-size: 16px; margin: 10px 0;">
+                            <strong><?php echo esc_html( $license_status['message'] ); ?></strong>
+                        </p>
+                        <?php if ( isset($license_status['is_dev_mode']) && ! empty( $license_status['is_dev_mode'] ) ) : ?>
+                            <div class="ktp-dev-mode-toggle" style="margin-top: 15px; padding: 10px; background-color: #fff8e1; border: 1px solid #ffecb3; border-radius: 4px;">
+                                <p style="margin: 0; display: flex; align-items: center; justify-content: space-between;">
+                                    <span><span class="dashicons dashicons-info-outline"></span> 開発環境モードで動作中です。</span>
+                                    <button id="toggle-dev-license" class="button button-secondary">
+                                        <?php echo isset($license_manager) && $license_manager->is_dev_license_enabled() ? '開発用ライセンスを無効化' : '開発用ライセンスを有効化'; ?>
+                                    </button>
+                                    <span class="spinner" style="float: none; margin-left: 5px;"></span>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ( isset( $license_status['info'] ) && ! empty( $license_status['info'] ) ) : ?>
+                            <div class="ktp-license-info-details" style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 3px;">
+                                <h4 style="margin-top: 0;"><?php echo esc_html__( 'ライセンス詳細', 'news-crawler' ); ?></h4>
+                                <table class="form-table" style="margin: 0;">
+                                    <?php
+                                    // 表示する項目を制限
+                                    $display_fields = array(
+                                        'user_email' => 'User email',
+                                        'start_date' => '開始',
+                                        'end_date' => '終了',
+                                        'remaining_days' => '残り日数'
+                                    );
+                                    
+                                    foreach ( $display_fields as $key => $label ) :
+                                        if ( isset( $license_status['info'][$key] ) ) :
+                                    ?>
+                                        <tr>
+                                            <th style="padding: 5px 0; font-weight: normal;"><?php echo esc_html( $label ); ?></th>
+                                            <td style="padding: 5px 0;"><?php echo esc_html( $license_status['info'][$key] ); ?></td>
+                                        </tr>
+                                    <?php 
+                                        endif;
+                                    endforeach; 
+                                    ?>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- ライセンス認証フォーム -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <form method="post" action="" id="news-crawler-license-form" style="display: flex; align-items: center; gap: 10px; margin: 0;">
+                            <?php wp_nonce_field( 'news_crawler_license_activation', 'news_crawler_license_nonce' ); ?>
+                            <input type="hidden" name="news_crawler_license_activation" value="1">
+
+                            <label for="news_crawler_license_key" style="margin-bottom: 0;"><?php echo esc_html__( 'ライセンスキー', 'news-crawler' ); ?></label>
+
+                            <input type="password"
+                                   id="news_crawler_license_key"
+                                   name="news_crawler_license_key"
+                                   value="<?php echo esc_attr( get_option( 'news_crawler_license_key' ) ); ?>"
+                                   style="width: 400px;"
+                                   placeholder="KTPA-XXXXXX-XXXXXX-XXXX"
+                                   autocomplete="off">
+
+                            <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
+                        </form>
+
+                        <!-- ライセンス状態再確認フォーム -->
+                        <?php if ( ! empty( get_option( 'news_crawler_license_key' ) ) ) : ?>
+                            <form method="post" action="" style="margin: 0;">
+                                <?php wp_nonce_field( 'news_crawler_license_recheck', 'news_crawler_license_recheck_nonce' ); ?>
+                                <input type="hidden" name="news_crawler_license_recheck" value="1">
+                                <?php submit_button( __( 'ライセンス状態を再確認', 'news-crawler' ), 'secondary', 'recheck_license', false, ['style' => 'margin: 0;'] ); ?>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+
+                    <p class="description" style="padding-left: 8px; margin-top: 5px;">
+                        <?php echo esc_html__( 'KantanPro License Managerから取得したライセンスキーを入力してください。', 'news-crawler' ); ?>
+                    </p>
+
+                    <!-- ライセンス情報 -->
+                    <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
+                        <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
+                        <p><?php echo esc_html__( 'News Crawlerプラグインの一部の機能を利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
+
+                        <!-- 利用可能なライセンスプラン -->
+                        <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #0073aa;">
+                            <h4 style="margin-top: 0; color: #0073aa;"><?php echo esc_html__( '利用可能なライセンスプラン', 'news-crawler' ); ?></h4>
+                            <ul style="margin-left: 20px; line-height: 1.8;">
+                                <li><strong><?php echo esc_html__( '月額プラン', 'news-crawler' ); ?></strong>: 980円/月</li>
+                                <li><strong><?php echo esc_html__( '年額プラン', 'news-crawler' ); ?></strong>: 9,980円/年</li>
+                                <li><strong><?php echo esc_html__( '買い切りプラン', 'news-crawler' ); ?></strong>: 49,900円</li>
+                            </ul>
+                        </div>
+
+                        <ul style="margin-left: 20px;">
+                            <li><?php echo esc_html__( 'ライセンスキーはKantanPro公式サイトから購入できます。', 'news-crawler' ); ?></li>
+                            <li><?php echo esc_html__( 'ライセンス認証により、AI要約生成などの高度な機能が有効になります。', 'news-crawler' ); ?></li>
+                            <li><?php echo esc_html__( 'ライセンスキーに関する問題がございましたら、サポートまでお問い合わせください。', 'news-crawler' ); ?></li>
+                        </ul>
+                        <p>
+                            <a href="https://www.kantanpro.com/" target="_blank" class="button button-primary">
+                                <?php echo esc_html__( 'ライセンスを購入', 'news-crawler' ); ?>
+                            </a>
+                            <a href="mailto:support@kantanpro.com" class="button button-secondary">
+                                <?php echo esc_html__( 'サポートに問い合わせる', 'news-crawler' ); ?>
+                            </a>
+                        </p>
+                    </div>
+
+                    <!-- 機能制限情報 -->
+                    <div class="ktp-feature-limitations" style="margin-top: 30px; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+                        <h3 style="margin-top: 0; color: #856404;">
+                            <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
+                            <?php echo esc_html__( '機能制限について', 'news-crawler' ); ?>
+                        </h3>
+                        <p><?php echo esc_html__( 'ライセンスキーがない場合、以下の機能が制限されます：', 'news-crawler' ); ?></p>
+                        <ul style="margin-left: 20px; line-height: 1.8;">
+                            <li><strong><?php echo esc_html__( 'AI要約生成', 'news-crawler' ); ?></strong>: OpenAI APIを使用した記事の自動要約</li>
+                            <li><strong><?php echo esc_html__( '高度なアイキャッチ生成', 'news-crawler' ); ?></strong>: AIを使用した画像生成</li>
+                            <li><strong><?php echo esc_html__( 'SEOタイトル最適化', 'news-crawler' ); ?></strong>: AIによるタイトルの最適化提案</li>
+                            <li><strong><?php echo esc_html__( '高度なOGP管理', 'news-crawler' ); ?></strong>: 自動OGPタグ生成</li>
+                        </ul>
+                        <p style="margin-bottom: 0;">
+                            <em><?php echo esc_html__( '基本的なニュースクロール機能は無料でご利用いただけます。', 'news-crawler' ); ?></em>
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+    
+    /**
+     * ライセンス状態再確認の処理
+     */
+    private function handle_license_recheck() {
+        $license_key = get_option( 'news_crawler_license_key' );
+        
+        if ( empty( $license_key ) ) {
+            add_settings_error( 'news_crawler_license', 'empty_key', __( 'ライセンスキーが設定されていません。', 'news-crawler' ), 'error' );
+            return;
+        }
+
+        // ライセンスマネージャーのインスタンスを取得
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            
+            // 強制的にライセンスを再検証
+            $result = $license_manager->verify_license( $license_key );
+            
+            if ( $result['success'] ) {
+                // ライセンスが有効な場合、情報を更新
+                update_option( 'news_crawler_license_status', 'active' );
+                update_option( 'news_crawler_license_info', $result['data'] );
+                update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+                
+                add_settings_error( 'news_crawler_license', 'recheck_success', __( 'ライセンス状態の再確認が完了しました。ライセンスは有効です。', 'news-crawler' ), 'success' );
+            } else {
+                // ライセンスが無効な場合、ステータスを更新
+                update_option( 'news_crawler_license_status', 'invalid' );
+                error_log( 'NewsCrawler License: License recheck failed: ' . $result['message'] );
+                
+                add_settings_error( 'news_crawler_license', 'recheck_failed', __( 'ライセンス状態の再確認が完了しました。ライセンスは無効です。', 'news-crawler' ) . ' (' . $result['message'] . ')', 'error' );
+            }
+        } else {
+            add_settings_error( 'news_crawler_license', 'license_manager_not_found', __( 'ライセンス管理機能が利用できません。', 'news-crawler' ), 'error' );
+        }
+    }
+    
+    /**
+     * ライセンス認証の処理
+     */
+    public function handle_license_activation() {
+        if ( ! isset( $_POST['news_crawler_license_activation'] ) || ! wp_verify_nonce( $_POST['news_crawler_license_nonce'], 'news_crawler_license_activation' ) ) {
+            return;
+        }
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'この操作を実行する権限がありません。', 'news-crawler' ) );
+        }
+
+        $license_key = sanitize_text_field( $_POST['news_crawler_license_key'] ?? '' );
+        
+        if ( empty( $license_key ) ) {
+            add_settings_error( 'news_crawler_license', 'empty_key', __( 'ライセンスキーを入力してください。', 'news-crawler' ), 'error' );
+            return;
+        }
+
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            $result = $license_manager->verify_license( $license_key );
+            
+            if ( $result['success'] ) {
+                // Save license key
+                update_option( 'news_crawler_license_key', $license_key );
+                update_option( 'news_crawler_license_status', 'active' );
+                update_option( 'news_crawler_license_info', $result['data'] );
+                update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+                
+                add_settings_error( 'news_crawler_license', 'activation_success', __( 'ライセンスが正常に認証されました。', 'news-crawler' ), 'success' );
+            } else {
+                add_settings_error( 'news_crawler_license', 'activation_failed', $result['message'], 'error' );
+            }
+        } else {
+            add_settings_error( 'news_crawler_license', 'license_manager_not_found', __( 'ライセンス管理機能が利用できません。', 'news-crawler' ), 'error' );
+        }
     }
 }

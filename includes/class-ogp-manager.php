@@ -16,12 +16,24 @@ class NewsCrawlerOGPManager {
         // 設定に基づいてOGPとTwitter Cardの出力を制御
         $ogp_settings = get_option('news_crawler_ogp_settings', array());
         
+        // ライセンスチェック - 高度なOGP機能が有効かどうかを確認
+        $advanced_ogp_enabled = true;
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            $advanced_ogp_enabled = $license_manager->is_advanced_features_enabled();
+        }
+        
         if (isset($ogp_settings['enable_ogp']) ? $ogp_settings['enable_ogp'] : true) {
             add_action('wp_head', array($this, 'output_ogp_meta_tags'));
         }
         
         if (isset($ogp_settings['enable_twitter_card']) ? $ogp_settings['enable_twitter_card'] : true) {
             add_action('wp_head', array($this, 'output_twitter_card_meta_tags'));
+        }
+        
+        // 高度なOGP機能が無効な場合は、基本的なOGPのみ出力
+        if (!$advanced_ogp_enabled) {
+            error_log('NewsCrawlerOGPManager: ライセンスが無効なため、高度なOGP機能を制限します');
         }
     }
     

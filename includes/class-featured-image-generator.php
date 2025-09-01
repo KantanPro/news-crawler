@@ -47,6 +47,16 @@ class NewsCrawlerFeaturedImageGenerator {
         // 現在のカテゴリーを保存
         $saved_categories = $current_categories;
         
+        // ライセンスチェック - AI画像生成などの高度な機能が有効かどうかを確認
+        if ($method === 'ai' && class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            if (!$license_manager->is_advanced_features_enabled()) {
+                error_log('NewsCrawlerFeaturedImageGenerator: ライセンスが無効なため、AI画像生成機能をスキップします');
+                // AI画像生成が無効な場合は、テンプレートベースの生成にフォールバック
+                $method = 'template';
+            }
+        }
+        
         $settings = get_option($this->option_name, array());
         
         $result = false;
