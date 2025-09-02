@@ -19,6 +19,7 @@ class NewsCrawlerCronSettings {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_validate_cron_settings', array($this, 'validate_cron_settings'));
         add_action('wp_ajax_generate_cron_script', array($this, 'generate_cron_script'));
+        add_action('wp_ajax_news_crawler_cron_execute', array($this, 'handle_cron_execution'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
     }
     
@@ -709,16 +710,34 @@ echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始\" >> \"\$L
 if command -v wp &> /dev/null; then
     # wp-cliを使用してNews Crawlerを実行
     cd \"\$WP_PATH\"
-    wp news-crawler run --path=\"\$WP_PATH\" >> \"\$LOG_FILE\" 2>&1
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中...\" >> \"\$LOG_FILE\"
+    
+    # News Crawlerの自動投稿機能を直接実行
+    wp eval \"
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            \$genre_settings = new NewsCrawlerGenreSettings();
+            \$genre_settings->execute_auto_posting();
+            echo 'News Crawler自動投稿を実行しました';
+        } else {
+            echo 'News CrawlerGenreSettingsクラスが見つかりません';
+        }
+    \" >> \"\$LOG_FILE\" 2>&1
+    
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
 else
-    # wp-cliが利用できない場合は、WordPressのHTTPリクエストを使用
+    # wp-cliが利用できない場合は、HTTPリクエストでNews Crawlerを実行
     SITE_URL=\"" . home_url() . "\"
-    CRON_URL=\"\$SITE_URL/wp-cron.php\"
+    CRON_URL=\"\$SITE_URL/wp-admin/admin-ajax.php\"
     
-    # WordPressのcronを実行
-    curl -s \"\$CRON_URL\" >> \"\$LOG_FILE\" 2>&1
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でWordPress cronを実行しました\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行中...\" >> \"\$LOG_FILE\"
+    
+    # News Crawlerの自動投稿機能をHTTPリクエストで実行
+    curl -s -X POST \"\$CRON_URL\" \\
+        -d \"action=news_crawler_cron_execute\" \\
+        -d \"nonce=" . wp_create_nonce('news_crawler_cron_nonce') . "\" \\
+        >> \"\$LOG_FILE\" 2>&1
+    
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
 fi
 
 # ログに実行終了を記録
@@ -788,5 +807,26 @@ echo \"---\" >> \"\$LOG_FILE\"
         });
         </script>
         <?php
+    }
+    
+    /**
+     * サーバーcronからのHTTPリクエストを処理
+     */
+    public function handle_cron_execution() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'news_crawler_cron_nonce')) {
+            wp_die('セキュリティ検証に失敗しました');
+        }
+        
+        // News Crawlerの自動投稿機能を実行
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings->execute_auto_posting();
+            echo 'News Crawler自動投稿を実行しました';
+        } else {
+            echo 'News CrawlerGenreSettingsクラスが見つかりません';
+        }
+        
+        wp_die(); // AJAX処理を終了
     }
 }

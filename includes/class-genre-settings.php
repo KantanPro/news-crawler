@@ -30,9 +30,9 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
         add_action('wp_ajax_debug_cron_schedule', array($this, 'debug_cron_schedule'));
         
-        // 自動投稿のスケジュール処理
-        add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
-        add_action('wp_loaded', array($this, 'setup_auto_posting_cron'));
+        // 自動投稿のスケジュール処理（サーバーcron使用のため無効化）
+        // add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
+        // add_action('wp_loaded', array($this, 'setup_auto_posting_cron'));
         
         // 個別ジャンルの自動投稿フックを動的に登録
         add_action('init', array($this, 'register_genre_hooks'));
@@ -839,9 +839,20 @@ class NewsCrawlerGenreSettings {
                             <tr>
                                 <th scope="row">自動投稿</th>
                                 <td>
+                                    <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin-bottom: 15px;">
+                                        <h4 style="margin-top: 0; color: #856404;">⚠️ 自動投稿設定について</h4>
+                                        <p style="margin-bottom: 10px;">自動投稿は<strong>サーバーのcronジョブ</strong>を使用して実行されます。</p>
+                                        <p style="margin-bottom: 0;">
+                                            <strong>設定手順：</strong><br>
+                                            1. <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブを設定<br>
+                                            2. サーバーのcrontabに設定を追加<br>
+                                            3. この設定で自動投稿を有効化
+                                        </p>
+                                    </div>
+                                    
                                     <label>
                                         <input type="checkbox" id="auto-posting" name="auto_posting" value="1">
-                                        自動投稿を有効にする
+                                        自動投稿を有効にする（サーバーcronジョブが設定されている場合）
                                     </label>
                                     <div id="auto-posting-settings" style="margin-top: 10px; display: none;">
                                         <table class="form-table" style="margin: 0;">
@@ -857,6 +868,7 @@ class NewsCrawlerGenreSettings {
                                                     <div id="custom-frequency-settings" style="margin-top: 5px; display: none;">
                                                         <input type="number" id="custom-frequency-days" name="custom_frequency_days" value="7" min="1" max="365" style="width: 80px;" /> 日ごと
                                                     </div>
+                                                    <p class="description" style="margin: 5px 0 0 0; color: #d63638;">※ 実際の実行頻度はサーバーのcronジョブ設定に依存します</p>
                                                 </td>
                                             </tr>
                                             <tr>
@@ -876,8 +888,8 @@ class NewsCrawlerGenreSettings {
                                             <tr>
                                                 <th scope="row" style="padding: 5px 0;">次回実行予定</th>
                                                 <td style="padding: 5px 0;">
-                                                    <span id="next-execution-time">未設定</span>
-                                                    <p class="description" style="margin: 5px 0 0 0;">自動投稿の次回実行予定時刻</p>
+                                                    <span id="next-execution-time" style="color: #0073aa; font-weight: bold;">サーバーcronジョブで管理</span>
+                                                    <p class="description" style="margin: 5px 0 0 0;">実際の実行スケジュールはサーバーのcronジョブ設定で管理されます</p>
                                                 </td>
                                             </tr>
                                         </table>
