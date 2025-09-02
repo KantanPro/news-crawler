@@ -168,14 +168,11 @@ class NewsCrawlerCronSettings {
         
         // 詳細なファイル存在チェック
         $plugin_file_path = NEWS_CRAWLER_PLUGIN_DIR . $value;
-        $upload_file_path = $upload_dir['basedir'] . '/' . $value;
         
         echo '<br><strong>詳細ファイルチェック：</strong><br>';
         echo 'プラグインファイルパス: ' . esc_html($plugin_file_path) . '<br>';
         echo 'プラグインファイル存在: ' . (file_exists($plugin_file_path) ? '✓' : '❌') . '<br>';
         echo 'プラグインファイル読み取り可能: ' . (is_readable($plugin_file_path) ? '✓' : '❌') . '<br>';
-        echo 'アップロードファイルパス: ' . esc_html($upload_file_path) . '<br>';
-        echo 'アップロードファイル存在: ' . (file_exists($upload_file_path) ? '✓' : '❌') . '<br>';
         
         // ディレクトリ内容を表示
         echo '<br><strong>プラグインディレクトリ内容：</strong><br>';
