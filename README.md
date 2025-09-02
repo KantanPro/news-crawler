@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.5-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.5)
+[![Version](https://img.shields.io/badge/version-2.2.7-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.7)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,13 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.2.7** (2025-09-03): Enhanced metadata processing and AI functionality improvements
+  - Improved News Crawler metadata setting process with immediate post status updates
+  - Enabled AI summary generation by default with enhanced error logging
+  - Added option to force enable AI functionality in license management
+  - Optimized metadata setting timing during post creation for improved stability
+  - Enhanced debugging logs for better problem identification and resolution
 
 - **v2.2.6** (2025-09-02): Plugin update system fixes and permission improvements
   - Fixed plugin update system permission check issues
