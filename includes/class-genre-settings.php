@@ -42,6 +42,11 @@ class NewsCrawlerGenreSettings {
         
         // ライセンス管理用スクリプトの読み込み
         add_action('admin_enqueue_scripts', array($this, 'enqueue_license_scripts'));
+        
+        // Cron設定クラスの初期化
+        if (class_exists('NewsCrawlerCronSettings')) {
+            new NewsCrawlerCronSettings();
+        }
     }
     
     public function add_admin_menu() {
@@ -84,6 +89,16 @@ class NewsCrawlerGenreSettings {
             'manage_options',
             'news-crawler-ogp-settings',
             array($this, 'ogp_settings_page')
+        );
+        
+        // Cron設定サブメニュー
+        add_submenu_page(
+            'news-crawler-main',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - Cron設定',
+            'Cron設定',
+            'manage_options',
+            'news-crawler-cron-settings',
+            array($this, 'cron_settings_page')
         );
         
         // ライセンス設定サブメニュー
@@ -667,6 +682,19 @@ class NewsCrawlerGenreSettings {
             $ogp_settings->admin_page();
         } else {
             echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
+        }
+    }
+    
+    /**
+     * Cron設定ページの表示
+     */
+    public function cron_settings_page() {
+        // Cron設定クラスのインスタンスを作成してページを表示
+        if (class_exists('NewsCrawlerCronSettings')) {
+            $cron_settings = new NewsCrawlerCronSettings();
+            $cron_settings->admin_page();
+        } else {
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - Cron設定</h1><p>Cron設定クラスが見つかりません。</p></div>';
         }
     }
     

@@ -39,6 +39,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-openai-summarizer.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-post-editor-summary.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-cron-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
