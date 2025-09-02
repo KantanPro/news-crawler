@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.8-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.1.8)
+[![Version](https://img.shields.io/badge/version-2.1.9-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.1.9)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.1.9** (2025-09-02): UI simplification and menu optimization
+  - Discontinued auto-posting execution report section, keeping only the "Force Execute (Now)" button
+  - Optimized admin submenu order (Post Settings, Basic Settings, Cron Settings, License Settings, OGP Settings)
+  - Removed unnecessary test execution buttons and AJAX handlers to simplify UI
+  - Enhanced admin interface operability and usability
+  - Improved overall plugin stability and performance
+  - General maintenance and improvements
 
 - **v2.1.8** (2025-09-02): Shell script auto-generation functionality
   - Added shell script auto-generation functionality with admin interface script existence check and permission information display
