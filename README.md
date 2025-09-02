@@ -168,6 +168,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.2.6** (2025-09-02): Plugin update system fixes and permission improvements
+  - Fixed plugin update system permission check issues
+  - Improved cache clear functionality access permissions (now allows update_plugins capability)
+  - Resolved conflicts with WordPress standard Update URI
+  - Prevented duplicate update notifications
+  - Enhanced plugin update process stability and reliability
+
 - **v2.2.5** (2025-09-02): AI-powered content generation fixes and stability improvements
   - Fixed AI-powered featured image generation and summary generation issues
   - Resolved YouTube post metadata timing problems

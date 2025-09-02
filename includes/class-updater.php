@@ -285,6 +285,12 @@ class NewsCrawlerUpdater {
      */
     public function check_for_updates($transient) {
         try {
+            // WordPress標準のUpdate URIが設定されている場合は、独自の更新チェックをスキップ
+            $plugin_data = get_plugin_data($this->plugin_file);
+            if (!empty($plugin_data['UpdateURI']) && $plugin_data['UpdateURI'] !== 'false') {
+                return $transient;
+            }
+            
             // プロパティの初期化を確実に行う
             $transient = $this->ensure_transient_properties($transient);
             
@@ -415,8 +421,8 @@ class NewsCrawlerUpdater {
         
         // キャッシュクリア機能
         if (isset($_GET['clear-cache']) && $_GET['clear-cache'] === '1') {
-            // 権限チェック
-            if (!current_user_can('manage_options')) {
+            // 権限チェック（update_plugins権限またはmanage_options権限）
+            if (!current_user_can('update_plugins') && !current_user_can('manage_options')) {
                 wp_die(__('You do not have sufficient permissions to access this page.', 'news-crawler'));
             }
             
@@ -606,6 +612,12 @@ class NewsCrawlerUpdater {
     public function admin_update_notice() {
         // 管理者のみに表示（update_plugins権限またはmanage_options権限）
         if (!current_user_can('update_plugins') && !current_user_can('manage_options')) {
+            return;
+        }
+        
+        // WordPress標準のUpdate URIが設定されている場合は、独自の更新通知を表示しない
+        $plugin_data = get_plugin_data($this->plugin_file);
+        if (!empty($plugin_data['UpdateURI']) && $plugin_data['UpdateURI'] !== 'false') {
             return;
         }
         
