@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.4)
+[![Version](https://img.shields.io/badge/version-2.2.5-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.5)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.2.5** (2025-09-02): AI-powered content generation fixes and stability improvements
+  - Fixed AI-powered featured image generation and summary generation issues
+  - Resolved YouTube post metadata timing problems
+  - Enhanced summary generation recognition with retry functionality
+  - Strengthened featured image generation timeout handling and error management
+  - Significantly improved auto-posting functionality stability and reliability
+  - Enhanced debugging logs for better problem identification and resolution
 
 - **v2.2.4** (2025-09-02): Docker environment cron job configuration and timezone fixes
   - Implemented Docker environment cron job configuration and timezone correction

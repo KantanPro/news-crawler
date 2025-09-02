@@ -59,9 +59,21 @@ class NewsCrawlerOpenAISummarizer {
         
         error_log('NewsCrawlerOpenAISummarizer: 投稿メタデータの確認 - _news_summary: ' . ($is_news_summary ? 'true' : 'false') . ', _youtube_summary: ' . ($is_youtube_summary ? 'true' : 'false'));
         
+        // YouTube投稿作成中の場合は少し待機してから再確認
         if (!$is_news_summary && !$is_youtube_summary) {
-            error_log('NewsCrawlerOpenAISummarizer: ニュースまたはYouTube投稿ではないためスキップいたします');
-            return;
+            $is_creating_youtube = get_transient('news_crawler_creating_youtube_post');
+            if ($is_creating_youtube) {
+                error_log('NewsCrawlerOpenAISummarizer: YouTube投稿作成中です。少し待機してから再確認します。');
+                // 少し待機してから再確認
+                sleep(1);
+                $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
+                error_log('NewsCrawlerOpenAISummarizer: 再確認後の_youtube_summary: ' . ($is_youtube_summary ? 'true' : 'false'));
+            }
+            
+            if (!$is_news_summary && !$is_youtube_summary) {
+                error_log('NewsCrawlerOpenAISummarizer: ニュースまたはYouTube投稿ではないためスキップいたします');
+                return;
+            }
         }
         
         // ライセンスチェック - AI要約機能が有効かどうかを確認

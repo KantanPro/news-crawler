@@ -24,6 +24,8 @@ class NewsCrawlerGenreSettings {
 
 
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
+        add_action('wp_ajax_get_auto_posting_logs', array($this, 'get_auto_posting_logs'));
+        add_action('wp_ajax_clear_auto_posting_logs', array($this, 'clear_auto_posting_logs'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
         // サーバーcron対応のため、以下のハンドラーは削除
@@ -941,6 +943,22 @@ class NewsCrawlerGenreSettings {
                         <div id="test-result" style="margin-top: 15px; display: none;">
                             <div id="test-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
                         </div>
+                        
+                        <!-- エラーログ表示セクション -->
+                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                            <h4 style="margin-top: 0; color: #495057;">📋 自動投稿エラーログ</h4>
+                            <p style="margin-bottom: 15px; color: #6c757d;">自動投稿実行時のエラーログとデバッグ情報を表示します。</p>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <button type="button" id="show-error-logs" class="button">エラーログを表示</button>
+                                <button type="button" id="clear-error-logs" class="button" style="margin-left: 10px;">ログをクリア</button>
+                                <button type="button" id="refresh-error-logs" class="button" style="margin-left: 10px;">更新</button>
+                            </div>
+                            
+                            <div id="error-logs-container" style="display: none;">
+                                <div id="error-logs-content" style="white-space: pre-wrap; background: #ffffff; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.4;"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1243,6 +1261,145 @@ class NewsCrawlerGenreSettings {
                         button.prop('disabled', false).text('強制実行（今すぐ）');
                     }
                 });
+            });
+            
+            // エラーログ表示
+            $('#show-error-logs').click(function() {
+                var container = $('#error-logs-container');
+                var content = $('#error-logs-content');
+                
+                if (container.is(':visible')) {
+                    container.hide();
+                    $(this).text('エラーログを表示');
+                } else {
+                    $(this).text('読み込み中...');
+                    content.html('ログを読み込み中...');
+                    container.show();
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'get_auto_posting_logs',
+                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            console.log('AJAX Success Response:', response);
+                            if (response.success) {
+                                if (response.data && response.data.trim() !== '') {
+                                    content.html(response.data);
+                                } else {
+                                    content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
+                                }
+                            } else {
+                                var errorMsg = response.data || '不明なエラー';
+                                console.log('AJAX Error Response:', response);
+                                content.html('❌ ログの取得に失敗しました: ' + errorMsg);
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.log('AJAX Error:', xhr, status, error);
+                            console.log('Response Text:', xhr.responseText);
+                            var errorMsg = '通信エラーが発生しました';
+                            if (xhr.responseJSON && xhr.responseJSON.data) {
+                                errorMsg = xhr.responseJSON.data;
+                            } else if (xhr.responseText) {
+                                try {
+                                    var responseData = JSON.parse(xhr.responseText);
+                                    if (responseData.data) {
+                                        errorMsg = responseData.data;
+                                    }
+                                } catch (e) {
+                                    errorMsg = 'サーバーエラー: ' + xhr.status + ' ' + xhr.statusText;
+                                }
+                            } else if (error) {
+                                errorMsg = error;
+                            }
+                            content.html('❌ ' + errorMsg + '\n\nデバッグ情報:\nStatus: ' + status + '\nError: ' + error + '\nResponse: ' + xhr.responseText);
+                        },
+                        complete: function() {
+                            $('#show-error-logs').text('エラーログを非表示');
+                        }
+                    });
+                }
+            });
+            
+            // エラーログクリア
+            $('#clear-error-logs').click(function() {
+                if (confirm('エラーログをクリアしますか？この操作は元に戻せません。')) {
+                    var button = $(this);
+                    button.prop('disabled', true).text('クリア中...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'clear_auto_posting_logs',
+                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                $('#error-logs-content').html('✅ ログがクリアされました');
+                                alert('エラーログがクリアされました');
+                            } else {
+                                alert('ログのクリアに失敗しました: ' + response.data);
+                            }
+                        },
+                        error: function() {
+                            alert('通信エラーが発生しました');
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('ログをクリア');
+                        }
+                    });
+                }
+            });
+            
+            // エラーログ更新
+            $('#refresh-error-logs').click(function() {
+                var container = $('#error-logs-container');
+                var content = $('#error-logs-content');
+                
+                if (container.is(':visible')) {
+                    var button = $(this);
+                    button.prop('disabled', true).text('更新中...');
+                    content.html('ログを更新中...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'get_auto_posting_logs',
+                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                if (response.data && response.data.trim() !== '') {
+                                    content.html(response.data);
+                                } else {
+                                    content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
+                                }
+                            } else {
+                                var errorMsg = response.data || '不明なエラー';
+                                content.html('❌ ログの取得に失敗しました: ' + errorMsg);
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            var errorMsg = '通信エラーが発生しました';
+                            if (xhr.responseJSON && xhr.responseJSON.data) {
+                                errorMsg = xhr.responseJSON.data;
+                            } else if (error) {
+                                errorMsg = error;
+                            }
+                            content.html('❌ ' + errorMsg);
+                        },
+                        complete: function() {
+                            button.prop('disabled', false).text('更新');
+                        }
+                    });
+                } else {
+                    alert('エラーログを表示してから更新してください');
+                }
             });
         });
         
@@ -3604,6 +3761,193 @@ class NewsCrawlerGenreSettings {
                     'network_error' => __( '通信エラーが発生しました。', 'news-crawler' )
                 )
             ));
+        }
+    }
+    
+    /**
+     * 自動投稿ログを取得
+     */
+    public function get_auto_posting_logs() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'auto_posting_logs_nonce')) {
+            wp_die('セキュリティ検証に失敗しました');
+        }
+        
+        try {
+            // デバッグ情報を追加
+            error_log('Get Auto Posting Logs - Starting log retrieval...');
+            
+            $logs = get_option('news_crawler_auto_posting_logs', array());
+            error_log('Get Auto Posting Logs - Retrieved logs count: ' . count($logs));
+            
+            $debug_log = $this->get_debug_log_content();
+            error_log('Get Auto Posting Logs - Debug log length: ' . strlen($debug_log));
+            
+            $cron_log = $this->get_cron_log_content();
+            error_log('Get Auto Posting Logs - Cron log length: ' . strlen($cron_log));
+            
+            $output = "=== 自動投稿ログ ===\n\n";
+            
+            if (empty($logs)) {
+                $output .= "自動投稿ログはありません。\n\n";
+            } else {
+                $output .= "記録されたログ数: " . count($logs) . "件\n\n";
+                
+                // 最新の10件のログを表示
+                $recent_logs = array_slice(array_reverse($logs), 0, 10);
+                foreach ($recent_logs as $log) {
+                    $output .= "[" . $log['timestamp'] . "] ";
+                    $output .= "ジャンル: " . $log['genre_name'] . " ";
+                    $output .= "ステータス: " . $log['status'] . " ";
+                    $output .= "メッセージ: " . $log['message'] . "\n";
+                }
+                $output .= "\n";
+            }
+            
+            $output .= "=== WordPressデバッグログ（最新50行） ===\n\n";
+            $output .= $debug_log;
+            
+            $output .= "\n\n=== Cron実行ログ（最新20行） ===\n\n";
+            $output .= $cron_log;
+            
+            error_log('Get Auto Posting Logs - Output length: ' . strlen($output));
+            
+            // ログが空の場合は空文字列を返す（フロントエンドで「正常に機能しています」と表示）
+            if (empty($logs) && 
+                (strpos($debug_log, 'News Crawler関連のデバッグログは見つかりませんでした') !== false || 
+                 strpos($debug_log, 'デバッグログファイルが見つかりません') !== false) &&
+                (strpos($cron_log, 'Cron実行ログファイルが見つかりません') !== false || 
+                 strpos($cron_log, 'Cron実行ログの読み込みに失敗しました') !== false)) {
+                error_log('Get Auto Posting Logs - Returning empty response (no logs found)');
+                wp_send_json_success('');
+            } else {
+                error_log('Get Auto Posting Logs - Returning log data');
+                wp_send_json_success($output);
+            }
+            
+        } catch (Exception $e) {
+            error_log('Get Auto Posting Logs - Exception: ' . $e->getMessage());
+            error_log('Get Auto Posting Logs - Exception trace: ' . $e->getTraceAsString());
+            wp_send_json_error('ログの取得中にエラーが発生しました: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('Get Auto Posting Logs - Fatal Error: ' . $e->getMessage());
+            error_log('Get Auto Posting Logs - Error trace: ' . $e->getTraceAsString());
+            wp_send_json_error('致命的なエラーが発生しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 自動投稿ログをクリア
+     */
+    public function clear_auto_posting_logs() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'auto_posting_logs_nonce')) {
+            wp_die('セキュリティ検証に失敗しました');
+        }
+        
+        try {
+            // 自動投稿ログをクリア
+            update_option('news_crawler_auto_posting_logs', array());
+            
+            wp_send_json_success('ログがクリアされました');
+            
+        } catch (Exception $e) {
+            wp_send_json_error('ログのクリア中にエラーが発生しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * WordPressデバッグログの内容を取得
+     */
+    private function get_debug_log_content() {
+        try {
+            $debug_log_path = WP_CONTENT_DIR . '/debug.log';
+            error_log('Get Debug Log - Path: ' . $debug_log_path);
+            
+            if (!file_exists($debug_log_path)) {
+                error_log('Get Debug Log - File not found');
+                return "デバッグログファイルが見つかりません。\n";
+            }
+            
+            if (!is_readable($debug_log_path)) {
+                error_log('Get Debug Log - File not readable');
+                return "デバッグログファイルが読み取りできません。\n";
+            }
+            
+            $lines = file($debug_log_path, FILE_IGNORE_NEW_LINES);
+            if ($lines === false) {
+                error_log('Get Debug Log - Failed to read file');
+                return "デバッグログの読み込みに失敗しました。\n";
+            }
+            
+            error_log('Get Debug Log - Total lines: ' . count($lines));
+            
+            // 最新の50行を取得
+            $recent_lines = array_slice($lines, -50);
+            error_log('Get Debug Log - Recent lines: ' . count($recent_lines));
+            
+            // News Crawler関連のログのみをフィルタリング
+            $filtered_lines = array_filter($recent_lines, function($line) {
+                return stripos($line, 'news crawler') !== false || 
+                       stripos($line, 'auto posting') !== false ||
+                       stripos($line, 'execute_auto_posting') !== false;
+            });
+            
+            error_log('Get Debug Log - Filtered lines: ' . count($filtered_lines));
+            
+            if (empty($filtered_lines)) {
+                return "News Crawler関連のデバッグログは見つかりませんでした。\n";
+            }
+            
+            return implode("\n", $filtered_lines) . "\n";
+            
+        } catch (Exception $e) {
+            error_log('Get Debug Log - Exception: ' . $e->getMessage());
+            return "デバッグログの取得中にエラーが発生しました: " . $e->getMessage() . "\n";
+        }
+    }
+    
+    /**
+     * Cron実行ログの内容を取得
+     */
+    private function get_cron_log_content() {
+        try {
+            $cron_log_path = plugin_dir_path(__FILE__) . '../news-crawler-cron.log';
+            error_log('Get Cron Log - Path: ' . $cron_log_path);
+            
+            if (!file_exists($cron_log_path)) {
+                error_log('Get Cron Log - File not found');
+                return "Cron実行ログファイルが見つかりません。\n";
+            }
+            
+            if (!is_readable($cron_log_path)) {
+                error_log('Get Cron Log - File not readable');
+                return "Cron実行ログファイルが読み取りできません。\n";
+            }
+            
+            $lines = file($cron_log_path, FILE_IGNORE_NEW_LINES);
+            if ($lines === false) {
+                error_log('Get Cron Log - Failed to read file');
+                return "Cron実行ログの読み込みに失敗しました。\n";
+            }
+            
+            error_log('Get Cron Log - Total lines: ' . count($lines));
+            
+            // 最新の20行を取得
+            $recent_lines = array_slice($lines, -20);
+            error_log('Get Cron Log - Recent lines: ' . count($recent_lines));
+            
+            return implode("\n", $recent_lines) . "\n";
+            
+        } catch (Exception $e) {
+            error_log('Get Cron Log - Exception: ' . $e->getMessage());
+            return "Cron実行ログの取得中にエラーが発生しました: " . $e->getMessage() . "\n";
         }
     }
 }

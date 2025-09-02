@@ -641,13 +641,19 @@ class NewsCrawlerYouTubeCrawler {
             'post_category' => $cat_ids
         );
         
+        // メタデータを事前に設定するためのフラグ
+        set_transient('news_crawler_creating_youtube_post', true, 60);
+        
         $post_id = wp_insert_post($post_data, true);
         
         if (is_wp_error($post_id)) {
+            delete_transient('news_crawler_creating_youtube_post');
             return $post_id;
         }
         
-        // メタデータの保存
+        error_log('YouTubeCrawler: Post created with ID: ' . $post_id);
+        
+        // メタデータの保存（即座に実行）
         update_post_meta($post_id, '_youtube_summary', true);
         update_post_meta($post_id, '_youtube_videos_count', count($videos));
         update_post_meta($post_id, '_youtube_crawled_date', current_time('mysql'));
@@ -675,6 +681,13 @@ class NewsCrawlerYouTubeCrawler {
             update_post_meta($post_id, '_youtube_video_' . $index . '_channel', $video['channel_title']);
         }
         
+        // メタデータ設定完了をログに記録
+        error_log('YouTubeCrawler: All metadata set for post ' . $post_id);
+        error_log('YouTubeCrawler: _youtube_summary meta: ' . get_post_meta($post_id, '_youtube_summary', true));
+        
+        // フラグを削除
+        delete_transient('news_crawler_creating_youtube_post');
+        
         // アイキャッチ生成
         $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         
@@ -684,8 +697,17 @@ class NewsCrawlerYouTubeCrawler {
             error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
             $summarizer = new NewsCrawlerOpenAISummarizer();
             error_log('YouTubeCrawler: Calling generate_summary for post ' . $post_id);
-            $summarizer->generate_summary($post_id);
-            error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
+            
+            try {
+                // タイムアウト設定（60秒）
+                set_time_limit(60);
+                $summarizer->generate_summary($post_id);
+                error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
+            } catch (Exception $e) {
+                error_log('YouTubeCrawler: AI summarizer error: ' . $e->getMessage());
+            } catch (Error $e) {
+                error_log('YouTubeCrawler: AI summarizer fatal error: ' . $e->getMessage());
+            }
         } else {
             error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class NOT found');
         }
@@ -757,10 +779,27 @@ class NewsCrawlerYouTubeCrawler {
         
         error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
         
-        $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
-        error_log('YouTubeCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
-        
-        return $result;
+        try {
+            // タイムアウト設定（30秒）
+            set_time_limit(30);
+            
+            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+            
+            if ($result) {
+                error_log('YouTubeCrawler: Featured image generation result: Success (ID: ' . $result . ')');
+            } else {
+                error_log('YouTubeCrawler: Featured image generation result: Failed - No result returned');
+            }
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            error_log('YouTubeCrawler: Featured image generation error: ' . $e->getMessage());
+            return false;
+        } catch (Error $e) {
+            error_log('YouTubeCrawler: Featured image generation fatal error: ' . $e->getMessage());
+            return false;
+        }
     }
     
     private function is_duplicate_video($video) {
