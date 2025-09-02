@@ -98,3 +98,16 @@ Security check failed. Please try again.[2025-09-02 11:32:04] HTTPリクエス�
 [2025-09-02 11:32:24] WordPressパス: /var/www/html/
 [2025-09-02 11:32:24] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
 [2025-09-02 11:32:24] PHP直接実行でNews Crawlerを実行中...
+[2025-09-02 19:00:01] News Crawler Cron 実行開始
+[2025-09-02 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
+[2025-09-02 19:00:01] WordPressパス: /var/www/html/
+[2025-09-02 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-02 19:00:01] PHP直接実行でNews Crawlerを実行中...
+/var/www/html/wp-content/plugins/news-crawler/news-crawler-cron.sh: line 47: php: command not found
+[2025-09-02 19:00:01] PHP直接実行でNews Crawlerを実行しました
+[2025-09-02 19:00:01] 取得したサイトURL: 
+[2025-09-02 19:00:01] HTTPリクエスト経由でNews Crawlerを実行中...
+[2025-09-02 19:00:01] 生成されたnonce: 
+[2025-09-02 19:00:01] HTTPリクエスト経由でNews Crawlerを実行しました
+[2025-09-02 19:00:01] News Crawler Cron 実行終了
+---
