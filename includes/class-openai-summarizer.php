@@ -93,7 +93,7 @@ class NewsCrawlerOpenAISummarizer {
         
         // 基本設定で要約生成が無効になっている場合はスキップ
         $basic_settings = get_option('news_crawler_basic_settings', array());
-        $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : false;
+        $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true; // デフォルトで有効
         if (!$auto_summary_enabled) {
             error_log('NewsCrawlerOpenAISummarizer: 要約自動生成が無効になっています');
             return;

@@ -60,16 +60,35 @@ class NewsCrawlerFeaturedImageGenerator {
         $settings = get_option($this->option_name, array());
         
         $result = false;
+        $original_method = $method;
+        
         switch ($method) {
             case 'ai':
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
+                // AI画像生成に失敗した場合は何も生成しない
+                if (is_array($result) && isset($result['error'])) {
+                    error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
+                    $result = false;
+                }
                 break;
             case 'unsplash':
                 $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                // Unsplash画像取得に失敗した場合は何も生成しない
+                if (is_array($result) && isset($result['error'])) {
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
+                    $result = false;
+                }
+                break;
+            case 'template':
+                $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 break;
             default:
-                // デフォルトはAI画像生成を使用
+                // デフォルトはAI画像生成を使用し、失敗時は何も生成しない
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
+                if (is_array($result) && isset($result['error'])) {
+                    error_log('NewsCrawlerFeaturedImageGenerator: デフォルトAI画像生成に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
+                    $result = false;
+                }
                 break;
         }
         
@@ -179,7 +198,25 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // APIレスポンスの解析に失敗した場合
         if (isset($data['error'])) {
-            return array('error' => 'OpenAI DALL-E APIエラー: ' . $data['error']['message']);
+            $error_message = $data['error']['message'];
+            $error_type = isset($data['error']['type']) ? $data['error']['type'] : 'unknown';
+            
+            // 課金制限エラーの場合は詳細な情報を提供
+            if (strpos($error_message, 'billing') !== false || strpos($error_message, 'limit') !== false) {
+                error_log('OpenAI DALL-E API課金制限エラー: ' . $error_message);
+                return array(
+                    'error' => 'OpenAI DALL-E APIの課金制限に達しました。',
+                    'details' => 'エラー詳細: ' . $error_message,
+                    'suggestion' => '以下の点を確認してください：' . "\n" .
+                                   '1. OpenAIアカウントの課金設定（https://platform.openai.com/account/billing）' . "\n" .
+                                   '2. APIキーが正しく設定されているか' . "\n" .
+                                   '3. アカウントに十分なクレジットがあるか' . "\n" .
+                                   '4. 月間使用制限に達していないか' . "\n" .
+                                   '5. クレジットカードの有効期限が切れていないか'
+                );
+            }
+            
+            return array('error' => 'OpenAI DALL-E APIエラー: ' . $error_message);
         }
         
         return array('error' => 'OpenAI DALL-E APIからの応答が不正です。しばらく時間をおいてから再試行してください。');

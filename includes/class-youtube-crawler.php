@@ -541,6 +541,9 @@ class NewsCrawlerYouTubeCrawler {
     }
     
     private function create_video_summary_post($videos, $categories, $status) {
+        // デバッグ: 受け取ったステータスをログに記録
+        error_log('YouTubeCrawler: create_video_summary_post called with status: ' . $status);
+        
         $cat_ids = array();
         foreach ($categories as $category) {
             $cat_ids[] = $this->get_or_create_category($category);
@@ -694,19 +697,27 @@ class NewsCrawlerYouTubeCrawler {
         // AI要約生成（メタデータ設定後に呼び出し）
         error_log('YouTubeCrawler: About to call AI summarizer for YouTube post ' . $post_id);
         if (class_exists('NewsCrawlerOpenAISummarizer')) {
-            error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
-            $summarizer = new NewsCrawlerOpenAISummarizer();
-            error_log('YouTubeCrawler: Calling generate_summary for post ' . $post_id);
+            // 基本設定で要約生成が有効かチェック（デフォルトで有効）
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
             
-            try {
-                // タイムアウト設定（60秒）
-                set_time_limit(60);
-                $summarizer->generate_summary($post_id);
-                error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
-            } catch (Exception $e) {
-                error_log('YouTubeCrawler: AI summarizer error: ' . $e->getMessage());
-            } catch (Error $e) {
-                error_log('YouTubeCrawler: AI summarizer fatal error: ' . $e->getMessage());
+            if ($auto_summary_enabled) {
+                error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
+                $summarizer = new NewsCrawlerOpenAISummarizer();
+                error_log('YouTubeCrawler: Calling generate_summary for post ' . $post_id);
+                
+                try {
+                    // タイムアウト設定（60秒）
+                    set_time_limit(60);
+                    $summarizer->generate_summary($post_id);
+                    error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
+                } catch (Exception $e) {
+                    error_log('YouTubeCrawler: AI summarizer error: ' . $e->getMessage());
+                } catch (Error $e) {
+                    error_log('YouTubeCrawler: AI summarizer fatal error: ' . $e->getMessage());
+                }
+            } else {
+                error_log('YouTubeCrawler: AI要約生成が無効のためスキップします (投稿ID: ' . $post_id . ')');
             }
         } else {
             error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class NOT found');
@@ -714,9 +725,26 @@ class NewsCrawlerYouTubeCrawler {
         
         // X（Twitter）自動シェア機能は削除済み
         
-        // News Crawler用の処理のため、投稿ステータス変更を遅延実行
+        // News Crawler用の処理のため、投稿ステータス変更を即座に実行（cronジョブに依存しない）
+        error_log('YouTubeCrawler: 投稿ステータス変更処理開始 - 現在のステータス: ' . $status . ', 投稿ID: ' . $post_id);
         if ($status !== 'draft') {
-            $this->schedule_post_status_update($post_id, $status);
+            // 即座にステータスを変更
+            $update_data = array(
+                'ID' => $post_id,
+                'post_status' => $status
+            );
+            
+            error_log('YouTubeCrawler: 投稿ステータス更新を実行 - データ: ' . print_r($update_data, true));
+            $result = wp_update_post($update_data);
+            if ($result) {
+                error_log('YouTubeCrawler: 投稿ステータスを即座に ' . $status . ' に更新しました (ID: ' . $post_id . ')');
+            } else {
+                error_log('YouTubeCrawler: 投稿ステータスの即座更新に失敗しました (ID: ' . $post_id . ')');
+                // 即座更新に失敗した場合は遅延実行をスケジュール
+                $this->schedule_post_status_update($post_id, $status);
+            }
+        } else {
+            error_log('YouTubeCrawler: ステータスがdraftのため、ステータス変更をスキップしました (ID: ' . $post_id . ')');
         }
         
         return $post_id;
@@ -764,7 +792,7 @@ class NewsCrawlerYouTubeCrawler {
         }
         
         if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
-            error_log('YouTubeCrawler: Featured image generation skipped - not enabled');
+            error_log('YouTubeCrawler: Featured image generation skipped - not enabled in genre setting');
             return false;
         }
         

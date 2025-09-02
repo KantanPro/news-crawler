@@ -321,6 +321,13 @@ class NewsCrawler_License_Manager {
             error_log( 'NewsCrawler License Check: Development environment active, license assumed valid.' );
             return true;
         }
+        
+        // 本番環境でも、AI機能を強制的に有効にするオプション
+        $force_ai_enabled = get_option( 'news_crawler_force_ai_enabled', true ); // デフォルトで有効
+        if ( $force_ai_enabled ) {
+            error_log( 'NewsCrawler License Check: AI features forced enabled by setting.' );
+            return true;
+        }
 
         // --- 以下、本番環境のライセンスチェックロジック ---
 
@@ -382,6 +389,13 @@ class NewsCrawler_License_Manager {
      * @return bool True if AI summary should be enabled
      */
     public function is_ai_summary_enabled() {
+        // 強制的にAI機能を有効にするオプション
+        $force_ai_enabled = get_option( 'news_crawler_force_ai_enabled', true ); // デフォルトで有効
+        if ( $force_ai_enabled ) {
+            error_log( 'NewsCrawler License: AI summary forced enabled by setting.' );
+            return true;
+        }
+        
         return $this->is_license_valid();
     }
 
@@ -435,7 +449,15 @@ class NewsCrawler_License_Manager {
         $is_dev_domain = strpos( $host, '.local' ) !== false || strpos( $host, '.test' ) !== false;
         $is_dev_constant = defined( 'WP_DEBUG' ) && WP_DEBUG;
         
-        return $is_localhost || $is_dev_domain || $is_dev_constant;
+        // Docker環境も開発環境として認識
+        $is_docker = strpos( $host, 'docker' ) !== false || strpos( $host, 'container' ) !== false;
+        
+        // より柔軟な開発環境判定
+        $is_dev = $is_localhost || $is_dev_domain || $is_dev_constant || $is_docker;
+        
+        error_log('NewsCrawler License: Environment check - Host: ' . $host . ', Localhost: ' . ($is_localhost ? 'true' : 'false') . ', Dev domain: ' . ($is_dev_domain ? 'true' : 'false') . ', WP_DEBUG: ' . ($is_dev_constant ? 'true' : 'false') . ', Docker: ' . ($is_docker ? 'true' : 'false') . ', Is Dev: ' . ($is_dev ? 'true' : 'false'));
+        
+        return $is_dev;
     }
 
     /**

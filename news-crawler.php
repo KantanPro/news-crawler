@@ -366,7 +366,7 @@ function news_crawler_ensure_meta($post_id) {
     
     // 投稿が存在するかチェック
     $post = get_post($post_id);
-    if (!$post_id) {
+    if (!$post) {
         return;
     }
     
@@ -376,6 +376,22 @@ function news_crawler_ensure_meta($post_id) {
         // News Crawler用のメタデータを再設定
         update_post_meta($post_id, '_news_crawler_ready', true);
         update_post_meta($post_id, '_news_crawler_last_meta_update', current_time('mysql'));
+        
+        // 本来の投稿ステータスを取得して設定
+        $intended_status = get_post_meta($post_id, '_news_crawler_intended_status', true);
+        if ($intended_status && $intended_status !== 'draft' && $post->post_status === 'draft') {
+            $update_data = array(
+                'ID' => $post_id,
+                'post_status' => $intended_status
+            );
+            
+            $result = wp_update_post($update_data);
+            if ($result) {
+                error_log('NewsCrawler: メタデータ設定時に投稿ステータスを ' . $intended_status . ' に更新しました (ID: ' . $post_id . ')');
+            } else {
+                error_log('NewsCrawler: メタデータ設定時の投稿ステータス更新に失敗しました (ID: ' . $post_id . ')');
+            }
+        }
         
         error_log('NewsCrawler: メタデータを確実に設定しました (ID: ' . $post_id . ')');
     }
@@ -1782,7 +1798,7 @@ class NewsCrawler {
         }
         
         if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
-            error_log('YouTubeCrawler: Featured image generation skipped - not enabled');
+            error_log('NewsCrawler: Featured image generation skipped - not enabled in genre setting');
             return false;
         }
         
@@ -1988,6 +2004,9 @@ class NewsCrawler {
      * ニュース記事の投稿を作成
      */
     private function create_news_summary_post($articles, $categories, $status) {
+        // デバッグ: 受け取ったステータスをログに記録
+        error_log('NewsCrawler: create_news_summary_post called with status: ' . $status);
+        
         $cat_ids = array();
         foreach ($categories as $category) {
             $cat_ids[] = $this->get_or_create_category($category);
@@ -2043,11 +2062,11 @@ class NewsCrawler {
             $post_content .= '<!-- /wp:group -->';
         }
         
-        // 投稿を作成
+        // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => 'draft',
+            'post_status'   => 'draft', // 最初は下書きとして作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
@@ -2085,13 +2104,39 @@ class NewsCrawler {
         
         // AI要約生成
         if (class_exists('NewsCrawlerOpenAISummarizer')) {
-            $summarizer = new NewsCrawlerOpenAISummarizer();
-            $summarizer->generate_summary($post_id);
+            // 基本設定で要約生成が有効かチェック（デフォルトで有効）
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
+            
+            if ($auto_summary_enabled) {
+                error_log('NewsCrawler: AI要約生成を実行します (投稿ID: ' . $post_id . ')');
+                $summarizer = new NewsCrawlerOpenAISummarizer();
+                $summarizer->generate_summary($post_id);
+            } else {
+                error_log('NewsCrawler: AI要約生成が無効のためスキップします (投稿ID: ' . $post_id . ')');
+            }
         }
         
-        // 投稿ステータス変更を遅延実行
+        // 投稿ステータス変更を即座に実行（cronジョブに依存しない）
+        error_log('NewsCrawler: 投稿ステータス変更処理開始 - 現在のステータス: ' . $status . ', 投稿ID: ' . $post_id);
         if ($status !== 'draft') {
-            $this->schedule_post_status_update($post_id, $status);
+            // 即座にステータスを変更
+            $update_data = array(
+                'ID' => $post_id,
+                'post_status' => $status
+            );
+            
+            error_log('NewsCrawler: 投稿ステータス更新を実行 - データ: ' . print_r($update_data, true));
+            $result = wp_update_post($update_data);
+            if ($result) {
+                error_log('NewsCrawler: 投稿ステータスを即座に ' . $status . ' に更新しました (ID: ' . $post_id . ')');
+            } else {
+                error_log('NewsCrawler: 投稿ステータスの即座更新に失敗しました (ID: ' . $post_id . ')');
+                // 即座更新に失敗した場合は遅延実行をスケジュール
+                $this->schedule_post_status_update($post_id, $status);
+            }
+        } else {
+            error_log('NewsCrawler: ステータスがdraftのため、ステータス変更をスキップしました (ID: ' . $post_id . ')');
         }
         
         return $post_id;
@@ -2112,7 +2157,13 @@ class NewsCrawler {
      * 投稿ステータス変更をスケジュール
      */
     private function schedule_post_status_update($post_id, $status) {
-        wp_schedule_single_event(time() + 60, 'news_crawler_update_post_status', array($post_id, $status));
+        // XPosterが新規投稿を認識するまで10秒待ってからステータスを変更
+        wp_schedule_single_event(time() + 10, 'news_crawler_update_post_status', array($post_id, $status));
+        
+        // 追加でNews Crawler用のメタデータを再設定
+        wp_schedule_single_event(time() + 2, 'news_crawler_ensure_meta', array($post_id));
+        
+        error_log('NewsCrawler: 投稿ステータス変更を遅延実行でスケジュール (ID: ' . $post_id . ', 対象ステータス: ' . $status . ')');
     }
     
     /**
