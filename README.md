@@ -172,6 +172,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
   - Enhanced shell script generation process with file existence check and deletion functionality
   - Changed success behavior during script generation in admin interface for more intuitive operation
   - Improved debug information to include final script path and write permissions
+  - Removed upload file information from detailed file existence check to focus on plugin file checking
   - Enhanced admin interface operability and usability
   - Improved overall plugin stability and performance
   - General maintenance and improvements
