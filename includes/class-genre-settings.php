@@ -23,12 +23,13 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
 
         add_action('wp_ajax_test_auto_posting', array($this, 'test_auto_posting'));
-        add_action('wp_ajax_check_auto_posting_schedule', array($this, 'check_auto_posting_schedule'));
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
-        add_action('wp_ajax_reset_cron_schedule', array($this, 'reset_cron_schedule'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
-        add_action('wp_ajax_debug_cron_schedule', array($this, 'debug_cron_schedule'));
+        // サーバーcron対応のため、以下のハンドラーは削除
+        // add_action('wp_ajax_check_auto_posting_schedule', array($this, 'check_auto_posting_schedule'));
+        // add_action('wp_ajax_reset_cron_schedule', array($this, 'reset_cron_schedule'));
+        // add_action('wp_ajax_debug_cron_schedule', array($this, 'debug_cron_schedule'));
         
         // 自動投稿のスケジュール処理（サーバーcron使用のため無効化）
         // add_action('news_crawler_auto_posting_cron', array($this, 'execute_auto_posting'));
@@ -918,15 +919,22 @@ class NewsCrawlerGenreSettings {
                     <h2>自動投稿実行レポート</h2>
                     
                     <!-- テスト実行とスケジュール確認 -->
-                    <div style="margin-bottom: 20px; padding: 15px; background: #f0f6fc; border: 1px solid #0073aa; border-radius: 4px;">
-                        <h3 style="margin-top: 0;">テスト実行とスケジュール確認</h3>
-                        <p>自動投稿の動作をテストしたり、スケジュール状況を確認できます。現在の保存済み投稿設定で設定されたスケジュールで投稿作成可能数も表示されます。テスト実行では実際にニュースソースに記事があるかどうかも確認します。</p>
+                    <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                        <h3 style="margin-top: 0; color: #856404;">⚠️ 自動投稿テストとスケジュール確認</h3>
+                        <p style="color: #856404;">自動投稿は<strong>サーバーのcronジョブ</strong>で実行されます。以下のボタンでテスト実行やスケジュール確認ができます。</p>
                         
-                        <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
-                        <button type="button" id="check-schedule" class="button button-secondary">スケジュール状況を確認</button>
-                        <button type="button" id="debug-cron-schedule" class="button button-secondary">Cronデバッグ情報</button>
-                        <button type="button" id="reset-cron" class="button button-secondary">Cronスケジュールをリセット</button>
-                        <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
+                        <div style="margin: 15px 0;">
+                            <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
+                            <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
+                        </div>
+                        
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                            <h4 style="margin-top: 0; color: #495057;">📋 サーバーcron設定について</h4>
+                            <p style="margin-bottom: 10px;">自動投稿のスケジュールは<strong>サーバーのcronジョブ</strong>で管理されます。</p>
+                            <p style="margin-bottom: 0;">
+                                <strong>設定確認：</strong> <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブの設定を確認してください。
+                            </p>
+                        </div>
                         
                         <div id="test-result" style="margin-top: 15px; display: none;">
                             <div id="test-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
@@ -1231,104 +1239,7 @@ class NewsCrawlerGenreSettings {
                 });
             });
             
-            // スケジュール状況確認
-            $('#check-schedule').click(function() {
-                var button = $(this);
-                var resultDiv = $('#test-result');
-                var resultContent = $('#test-result-content');
-                
-                button.prop('disabled', true).text('確認中...');
-                resultDiv.show();
-                resultContent.html('スケジュール状況を確認中...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'check_auto_posting_schedule',
-                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            resultContent.html('📅 スケジュール状況\n\n' + response.data);
-                        } else {
-                            resultContent.html('❌ 確認失敗\n\n' + response.data);
-                        }
-                    },
-                    error: function() {
-                        resultContent.html('❌ 通信エラーが発生しました');
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('スケジュール状況を確認');
-                    }
-                });
-            });
-            
-            // Cronデバッグ情報
-            $('#debug-cron-schedule').click(function() {
-                var button = $(this);
-                var resultDiv = $('#test-result');
-                var resultContent = $('#test-result-content');
-                
-                button.prop('disabled', true).text('デバッグ中...');
-                resultDiv.show();
-                resultContent.html('Cronデバッグ情報を取得中...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'debug_cron_schedule',
-                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            resultContent.html('🔍 Cronデバッグ情報\n\n' + response.data);
-                        } else {
-                            resultContent.html('❌ デバッグ情報取得失敗\n\n' + response.data);
-                        }
-                    },
-                    error: function() {
-                        resultContent.html('❌ 通信エラーが発生しました');
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('Cronデバッグ情報');
-                    }
-                });
-            });
-            
-            // Cronスケジュールリセット
-            $('#reset-cron').click(function() {
-                var button = $(this);
-                var resultDiv = $('#test-result');
-                var resultContent = $('#test-result-content');
-                
-                button.prop('disabled', true).text('リセット中...');
-                resultDiv.show();
-                resultContent.html('Cronスケジュールをリセット中...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'reset_cron_schedule',
-                        nonce: '<?php echo wp_create_nonce('auto_posting_schedule_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            resultContent.html('✅ ' + response.data);
-                        } else {
-                            resultContent.html('❌ リセット失敗\n\n' + response.data);
-                        }
-                    },
-                    error: function() {
-                        resultContent.html('❌ 通信エラーが発生しました');
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('Cronスケジュールをリセット');
-                    }
-                });
-            });
+            // 不要なボタンのイベントハンドラーは削除（サーバーcron対応のため）
             
             // 強制実行
             $('#force-execution').click(function() {
@@ -3234,116 +3145,9 @@ class NewsCrawlerGenreSettings {
         wp_send_json_success($result);
     }
     
-    /**
-     * 自動投稿のスケジュール状況確認用AJAXハンドラー
-     */
-    public function check_auto_posting_schedule() {
-        check_ajax_referer('auto_posting_schedule_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $current_time = current_time('timestamp');
-        $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
-        
-        $result = "現在時刻: " . date('Y-m-d H:i:s', $current_time) . "\n";
-        $result .= "次回cron実行予定: " . ($next_cron ? date('Y-m-d H:i:s', $next_cron) : '未設定') . "\n\n";
-        
-        $genre_settings = $this->get_genre_settings();
-        $auto_posting_count = 0;
-        $total_possible_posts = 0;
-        $display_id = 1; // 表示用の連番
-        
-        foreach ($genre_settings as $genre_id => $setting) {
-            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $auto_posting_count++;
-                
-                // 設定側で入力された次回実行予定時刻を表示
-                if (!empty($setting['next_execution_display'])) {
-                    $next_execution_display = esc_html($setting['next_execution_display']);
-                    $status = '設定済み';
-                } else {
-                    // 設定されていない場合は計算値を使用
-                    $next_execution = $this->calculate_next_execution_time_for_display($setting);
-                    $next_execution_display = date('Y-m-d H:i:s', $next_execution) . " (計算値)";
-                    $status = $next_execution <= $current_time ? '実行可能' : '待機中';
-                }
-                
-                // 投稿作成可能数を計算
-                $max_posts_per_execution = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
-                $total_possible_posts += $max_posts_per_execution;
-                
-                $result .= "ID: " . $display_id . " - ジャンル: " . $setting['genre_name'] . "\n";
-                $result .= "  次回実行予定: " . $next_execution_display . "\n";
-                $result .= "  状況: " . $status . "\n";
-                $result .= "  投稿作成可能数: " . $max_posts_per_execution . " 件\n";
-                
-                // スケジュール詳細を表示
-                if (!empty($setting['start_execution_time'])) {
-                    $start_time = strtotime($setting['start_execution_time']);
-                    $result .= "  開始実行日時: " . date('Y-m-d H:i:s', $start_time) . "\n";
-                }
-                
-                $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
-                $result .= "  投稿頻度: " . $frequency_text . "\n";
-                $result .= "\n";
-                $display_id++; // 連番をインクリメント
-            }
-        }
-        
-        if ($auto_posting_count === 0) {
-            $result .= "自動投稿が有効なジャンル設定がありません。";
-        } else {
-            $result .= "=== 投稿作成可能数サマリー ===\n";
-            $result .= "有効なジャンル数: " . $auto_posting_count . " ジャンル\n";
-            $result .= "総投稿作成可能数: " . $total_possible_posts . " 件\n";
-            $result .= "（各ジャンルの設定された「1回の実行で作成する投稿数」の合計）\n";
-        }
-        
-        wp_send_json_success($result);
-    }
+    // check_auto_posting_schedule メソッドは削除（サーバーcron対応のため）
     
-    /**
-     * CronスケジュールをリセットするAJAXハンドラー
-     */
-    public function reset_cron_schedule() {
-        check_ajax_referer('auto_posting_schedule_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        try {
-            // 既存のcronスケジュールをクリア
-            wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
-            
-            // 新しいcronスケジュールを設定
-            $this->setup_auto_posting_cron();
-            
-            // 設定されたスケジュールを確認
-            $next_scheduled = wp_next_scheduled('news_crawler_auto_posting_cron');
-            $current_time = current_time('timestamp');
-            
-            $result = "Cronスケジュールをリセットしました。\n\n";
-            $result .= "現在時刻: " . date('Y-m-d H:i:s', $current_time) . "\n";
-            $result .= "次回cron実行予定: " . ($next_scheduled ? date('Y-m-d H:i:s', $next_scheduled) : '未設定') . "\n";
-            
-            if ($next_scheduled && $next_scheduled <= $current_time) {
-                $result .= "\n⚠️ 警告: 次回実行予定が現在時刻以前になっています。\n";
-                $result .= "WordPressのcronシステムに問題がある可能性があります。";
-            } else {
-                $result .= "\n✅ 正常にスケジュールされました。";
-            }
-            
-            $result .= "\n\nスケジュール状況を再確認してください。";
-            
-            wp_send_json_success($result);
-            
-        } catch (Exception $e) {
-            wp_send_json_error('Cronスケジュールのリセット中にエラーが発生しました: ' . $e->getMessage());
-        }
-    }
+    // reset_cron_schedule メソッドは削除（サーバーcron対応のため）
     
     /**
      * 自動投稿の強制実行用AJAXハンドラー
@@ -3640,115 +3444,7 @@ class NewsCrawlerGenreSettings {
         return $matching_count;
     }
     
-    /**
-     * Cronスケジュールのデバッグ情報を取得
-     */
-    public function debug_cron_schedule() {
-        if (!current_user_can('manage_options')) {
-            wp_die('権限がありません');
-        }
-        
-        $debug_info = array();
-        
-        // 現在時刻
-        $current_time = current_time('timestamp');
-        $debug_info[] = '現在時刻: ' . date('Y-m-d H:i:s', $current_time);
-        $debug_info[] = 'WordPressタイムゾーン: ' . get_option('timezone_string', 'UTC');
-        $debug_info[] = '';
-        
-        // 全体的なcronスケジュール
-        $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
-        if ($next_cron) {
-            $debug_info[] = '全体チェック用cron: ' . date('Y-m-d H:i:s', $next_cron);
-        } else {
-            $debug_info[] = '全体チェック用cron: 未設定';
-        }
-        $debug_info[] = '';
-        
-        // ジャンル別スケジュール
-        $genre_settings = $this->get_genre_settings();
-        $debug_info[] = 'ジャンル別スケジュール:';
-        
-        $display_id = 1; // 表示用の連番（管理画面と同じ仕組み）
-        foreach ($genre_settings as $genre_id => $setting) {
-            $debug_info[] = '--- ' . $setting['genre_name'] . ' (ID: ' . $display_id . ') ---';
-            
-            if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
-                $debug_info[] = '  自動投稿: 無効';
-                $debug_info[] = '';
-                $display_id++; // 連番をインクリメント
-                continue;
-            }
-            
-            $debug_info[] = '  自動投稿: 有効';
-            $debug_info[] = '  開始実行日時: ' . ($setting['start_execution_time'] ?? '未設定');
-            $debug_info[] = '  投稿頻度: ' . ($setting['posting_frequency'] ?? 'daily');
-            
-            // 個別cronスケジュール
-            $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
-            $next_execution = wp_next_scheduled($hook_name);
-            if ($next_execution) {
-                $debug_info[] = '  次回実行予定（UTC）: ' . date('Y-m-d H:i:s', $next_execution);
-                $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $next_execution), 'Y-m-d H:i:s');
-                $debug_info[] = '  次回実行予定（WP）: ' . $wp_time;
-                $time_diff = $next_execution - $current_time;
-                if ($time_diff > 0) {
-                    $hours = floor($time_diff / 3600);
-                    $minutes = floor(($time_diff % 3600) / 60);
-                    $debug_info[] = '  実行まで: ' . $hours . '時間' . $minutes . '分';
-                } else {
-                    $debug_info[] = '  実行まで: 過去の時刻（要確認）';
-                }
-            } else {
-                $debug_info[] = '  次回実行予定: 未設定';
-            }
-            
-            // 計算ロジックのデバッグ
-            if (!empty($setting['start_execution_time'])) {
-                $start_time = strtotime($setting['start_execution_time']);
-                $debug_info[] = '  開始時刻（タイムスタンプ）: ' . $start_time . ' (' . date('Y-m-d H:i:s', $start_time) . ')';
-                
-                if ($start_time <= $current_time) {
-                    $calculated_next = $this->calculate_next_execution_from_start_time($setting, $start_time);
-                    $debug_info[] = '  計算された次回実行: ' . date('Y-m-d H:i:s', $calculated_next);
-                    
-                    // JavaScript側の計算も再現
-                    $frequency = $setting['posting_frequency'] ?? 'daily';
-                    $interval = $this->get_frequency_interval($frequency, $setting);
-                    $elapsed = $current_time - $start_time;
-                    $cycles = ceil($elapsed / $interval);
-                    $js_calculated = $start_time + ($cycles * $interval);
-                    $debug_info[] = '  JS計算ロジック結果: ' . date('Y-m-d H:i:s', $js_calculated);
-                    $debug_info[] = '  間隔: ' . $interval . '秒, 経過: ' . $elapsed . '秒, サイクル: ' . $cycles;
-                }
-            }
-            
-            // 最後の実行時刻
-            $last_execution = get_option('news_crawler_last_execution_' . $genre_id, 0);
-            if ($last_execution) {
-                $debug_info[] = '  最後の実行: ' . date('Y-m-d H:i:s', $last_execution);
-            } else {
-                $debug_info[] = '  最後の実行: なし';
-            }
-            
-            $debug_info[] = '';
-            $display_id++; // 連番をインクリメント
-        }
-        
-        // 全てのcronイベントを確認
-        $debug_info[] = '登録済みcronイベント:';
-        $cron_array = _get_cron_array();
-        foreach ($cron_array as $timestamp => $cron) {
-            foreach ($cron as $hook => $events) {
-                if (strpos($hook, 'news_crawler') !== false) {
-                    $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $timestamp), 'Y-m-d H:i:s');
-                    $debug_info[] = '  ' . $hook . ': ' . $wp_time . ' (UTC: ' . date('Y-m-d H:i:s', $timestamp) . ')';
-                }
-            }
-        }
-        
-        wp_send_json_success(implode("\n", $debug_info));
-    }
+    // debug_cron_schedule メソッドは削除（サーバーcron対応のため）
     
     /**
      * 期間制限機能のテスト
