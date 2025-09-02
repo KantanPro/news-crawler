@@ -22,7 +22,7 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
 
-        add_action('wp_ajax_test_auto_posting', array($this, 'test_auto_posting'));
+
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
@@ -82,16 +82,6 @@ class NewsCrawlerGenreSettings {
             array($this, 'basic_settings_page')
         );
         
-        // OGP設定サブメニュー
-        add_submenu_page(
-            'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - OGP設定',
-            'OGP設定',
-            'manage_options',
-            'news-crawler-ogp-settings',
-            array($this, 'ogp_settings_page')
-        );
-        
         // Cron設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
@@ -110,6 +100,16 @@ class NewsCrawlerGenreSettings {
             'manage_options',
             'news-crawler-license',
             array($this, 'license_settings_page')
+        );
+        
+        // OGP設定サブメニュー
+        add_submenu_page(
+            'news-crawler-main',
+            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - OGP設定',
+            'OGP設定',
+            'manage_options',
+            'news-crawler-ogp-settings',
+            array($this, 'ogp_settings_page')
         );
     }
     
@@ -914,17 +914,15 @@ class NewsCrawlerGenreSettings {
                     </div>
                 </div>
                 
-                <!-- 自動投稿実行レポート -->
+                <!-- 強制実行ボタン -->
                 <div class="card" style="max-width: none; margin-top: 20px;">
-                    <h2>自動投稿実行レポート</h2>
+                    <h2>自動投稿実行</h2>
                     
-                    <!-- テスト実行とスケジュール確認 -->
                     <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
-                        <h3 style="margin-top: 0; color: #856404;">⚠️ 自動投稿テストとスケジュール確認</h3>
-                        <p style="color: #856404;">自動投稿は<strong>サーバーのcronジョブ</strong>で実行されます。以下のボタンでテスト実行やスケジュール確認ができます。</p>
+                        <h3 style="margin-top: 0; color: #856404;">⚠️ 自動投稿実行</h3>
+                        <p style="color: #856404;">自動投稿は<strong>サーバーのcronジョブ</strong>で実行されます。以下のボタンで強制実行できます。</p>
                         
                         <div style="margin: 15px 0;">
-                            <button type="button" id="test-auto-posting" class="button button-secondary">自動投稿をテスト実行</button>
                             <button type="button" id="force-execution" class="button button-primary">強制実行（今すぐ）</button>
                         </div>
                         
@@ -939,10 +937,6 @@ class NewsCrawlerGenreSettings {
                         <div id="test-result" style="margin-top: 15px; display: none;">
                             <div id="test-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
                         </div>
-                    </div>
-                    
-                    <div id="auto-posting-reports">
-                        <?php $this->render_auto_posting_reports(); ?>
                     </div>
                 </div>
             </div>
@@ -1206,38 +1200,7 @@ class NewsCrawlerGenreSettings {
                 updateNextExecutionTime();
             });
             
-            // 自動投稿テスト実行
-            $('#test-auto-posting').click(function() {
-                var button = $(this);
-                var resultDiv = $('#test-result');
-                var resultContent = $('#test-result-content');
-                
-                button.prop('disabled', true).text('テスト実行中...');
-                resultDiv.show();
-                resultContent.html('自動投稿のテスト実行を開始します...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'test_auto_posting',
-                        nonce: '<?php echo wp_create_nonce('auto_posting_test_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            resultContent.html('✅ テスト実行完了\n\n' + response.data);
-                        } else {
-                            resultContent.html('❌ テスト実行失敗\n\n' + response.data);
-                        }
-                    },
-                    error: function() {
-                        resultContent.html('❌ 通信エラーが発生しました');
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('自動投稿をテスト実行');
-                    }
-                });
-            });
+
             
             // 不要なボタンのイベントハンドラーは削除（サーバーcron対応のため）
             
@@ -2844,79 +2807,7 @@ class NewsCrawlerGenreSettings {
         }
     }
     
-    /**
-     * 自動投稿実行レポートを表示
-     */
-    public function render_auto_posting_reports() {
-        // 成功した投稿履歴を全て表示
-        $logs = get_option('news_crawler_auto_posting_logs', array());
-        
-        if (!empty($logs)) {
-            // 成功した投稿のログをフィルタリング
-            $success_logs = array_filter($logs, function($log) {
-                return $log['status'] === 'success' && !empty($log['post_id']);
-            });
-            
-            if (!empty($success_logs)) {
-                // 成功ログを日時順にソート（最新が上）
-                usort($success_logs, function($a, $b) {
-                    return strtotime($b['execution_time']) - strtotime($a['execution_time']);
-                });
-                
-                echo '<div class="card" style="margin-bottom: 20px;">';
-                echo '<h3>最近の成功投稿</h3>';
-                
-                // 全ての成功投稿レポートを表示
-                foreach ($success_logs as $index => $success_log) {
-                    $is_latest = ($index === 0);
-                    $border_color = $is_latest ? '#0073aa' : '#4CAF50';
-                    $background_color = $is_latest ? '#f0f8ff' : '#f0fff0';
-                    
-                    echo '<div style="background: ' . $background_color . '; padding: 15px; border-left: 4px solid ' . $border_color . '; border-radius: 4px; margin-bottom: 15px;">';
-                    
-                    // 最新の投稿かどうかを表示
-                    if ($is_latest) {
-                        echo '<p style="margin: 0 0 10px 0; font-weight: bold; color: #0073aa;">最新の成功投稿</p>';
-                    } else {
-                        echo '<p style="margin: 0 0 10px 0; font-weight: bold; color: #4CAF50;">成功投稿 #' . ($index + 1) . '</p>';
-                    }
-                    
-                    // 投稿タイトルを表示
-                    $post_title = get_the_title($success_log['post_id']);
-                    if ($post_title) {
-                        echo '<p><strong>投稿タイトル:</strong> ' . esc_html($post_title) . '</p>';
-                    }
-                    
-                    // 投稿日時を表示
-                    if (!empty($success_log['execution_time'])) {
-                        $execution_date = date('Y年n月j日 H:i', strtotime($success_log['execution_time']));
-                        echo '<p><strong>投稿日時:</strong> ' . esc_html($execution_date) . '</p>';
-                    }
-                    
-                    // ジャンル名を表示
-                    if (!empty($success_log['genre_id'])) {
-                        $genre_settings = $this->get_genre_settings();
-                        if (isset($genre_settings[$success_log['genre_id']])) {
-                            $genre_name = $genre_settings[$success_log['genre_id']]['genre_name'];
-                            echo '<p><strong>設定名:</strong> ' . esc_html($genre_name) . '</p>';
-                        }
-                    }
-                    
-                    // 投稿へのリンクを表示
-                    if (!empty($success_log['post_id'])) {
-                        $post_url = get_permalink($success_log['post_id']);
-                        if ($post_url) {
-                            echo '<p><a href="' . esc_url($post_url) . '" target="_blank" class="button button-small">投稿を表示</a></p>';
-                        }
-                    }
-                    
-                    echo '</div>';
-                }
-                
-                echo '</div>';
-            }
-        }
-    }
+
     
     /**
      * 実行詳細情報を取得
@@ -3059,91 +2950,7 @@ class NewsCrawlerGenreSettings {
         }
     }
     
-    /**
-     * 自動投稿のテスト実行用AJAXハンドラー
-     */
-    public function test_auto_posting() {
-        check_ajax_referer('auto_posting_test_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $genre_settings = $this->get_genre_settings();
-        $auto_posting_enabled = 0;
-        $test_results = array();
-        $total_possible_posts = 0;
-        $total_available_articles = 0;
-        $display_id = 1; // 表示用の連番
-        
-        foreach ($genre_settings as $genre_id => $setting) {
-            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $auto_posting_enabled++;
-                
-                // 実行前チェック
-                $check_result = $this->pre_execution_check($setting);
-                $test_results[] = "ID: " . $display_id . " - ジャンル: " . $setting['genre_name'];
-                $test_results[] = "  実行可能: " . ($check_result['can_execute'] ? 'はい' : 'いいえ');
-                if (!$check_result['can_execute']) {
-                    $test_results[] = "  理由: " . $check_result['reason'];
-                }
-                
-                // 次回実行予定時刻を取得（実際のcronスケジュールを優先）
-                $next_execution = $this->get_actual_next_execution_time($genre_id, $setting);
-                $next_execution_formatted = date('Y年n月j日 H:i', $next_execution['timestamp']);
-                $test_results[] = "  次回実行予定: " . $next_execution_formatted . $next_execution['source'];
-                
-                // スケジュール詳細を表示
-                if (!empty($setting['start_execution_time'])) {
-                    $start_time = strtotime($setting['start_execution_time']);
-                    $test_results[] = "  開始実行日時: " . date('Y年n月j日 H:i', $start_time);
-                }
-                
-                $frequency_text = $this->get_frequency_text($setting['posting_frequency'], $setting['custom_frequency_days'] ?? 7);
-                $test_results[] = "  投稿頻度: " . $frequency_text;
-                
-                // 投稿作成可能数を表示
-                $max_posts_per_execution = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
-                $total_possible_posts += $max_posts_per_execution;
-                $test_results[] = "  設定上の投稿作成可能数: " . $max_posts_per_execution . " 件";
-                
-                // 実際のニュースソースから記事を取得してテスト
-                $available_articles = $this->test_news_source_availability($setting);
-                $total_available_articles += $available_articles;
-                $test_results[] = "  実際に取得可能な記事数: " . $available_articles . " 件";
-                
-                // 実際の投稿作成可能数を計算
-                $actual_possible_posts = min($max_posts_per_execution, $available_articles);
-                $test_results[] = "  実際の投稿作成可能数: " . $actual_possible_posts . " 件";
-                
-                $test_results[] = "";
-                $display_id++; // 連番をインクリメント
-            }
-        }
-        
-        if ($auto_posting_enabled === 0) {
-            wp_send_json_success("自動投稿が有効になっているジャンル設定がありません。\n\nジャンル設定で「自動投稿を有効にする」にチェックを入れてください。");
-        }
-        
-        $result = "自動投稿が有効なジャンル設定: {$auto_posting_enabled}件\n\n";
-        $result .= implode("\n", $test_results);
-        
-        $result .= "\n=== 投稿作成可能数サマリー ===\n";
-        $result .= "設定上の総投稿作成可能数: " . $total_possible_posts . " 件\n";
-        $result .= "実際に取得可能な総記事数: " . $total_available_articles . " 件\n";
-        $result .= "実際の総投稿作成可能数: " . min($total_possible_posts, $total_available_articles) . " 件\n";
-        $result .= "（設定値と実際の記事数の少ない方）\n";
-        
-        $result .= "\n=== テスト結果の説明 ===\n";
-        $result .= "・「実行可能: はい」の場合、設定されたスケジュールに従って自動投稿が実行されます\n";
-        $result .= "・「実行可能: いいえ」の場合、設定に問題があるため修正が必要です\n";
-        $result .= "・次回実行予定は、ジャンル別設定の開始実行日時と投稿頻度に基づいて計算されます\n";
-        $result .= "・実際の投稿作成可能数は、設定値と実際に取得可能な記事数の少ない方になります\n";
-        $result .= "\n=== 注意事項 ===\n";
-        $result .= "・cronの次回実行予定が過去の日時になっている場合は、プラグインの再有効化が必要です";
-        
-        wp_send_json_success($result);
-    }
+
     
     // check_auto_posting_schedule メソッドは削除（サーバーcron対応のため）
     
