@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.3)
+[![Version](https://img.shields.io/badge/version-2.2.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.4)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,15 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.2.4** (2025-09-02): Docker environment cron job configuration and timezone fixes
+  - Implemented Docker environment cron job configuration and timezone correction
+  - Fixed NewsCrawlerCronSettings class initialization issues
+  - Fixed script syntax errors and improved to PHP direct execution method
+  - Enhanced auto-posting functionality verification and stability
+  - Improved plugin stability and performance
+  - Enhanced admin interface operability and usability
+  - General maintenance and improvements
 
 - **v2.2.3** (2025-09-02): Plugin configuration simplification
   - Removed update URI to simplify plugin configuration
