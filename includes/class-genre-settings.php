@@ -693,6 +693,10 @@ class NewsCrawlerGenreSettings {
         // Cron設定クラスのインスタンスを作成してページを表示
         if (class_exists('NewsCrawlerCronSettings')) {
             $cron_settings = new NewsCrawlerCronSettings();
+            
+            // スクリプトを手動で読み込み
+            $cron_settings->enqueue_admin_scripts('news-crawler-cron-settings');
+            
             $cron_settings->admin_page();
         } else {
             echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - Cron設定</h1><p>Cron設定クラスが見つかりません。</p></div>';

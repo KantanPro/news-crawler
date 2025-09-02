@@ -600,28 +600,29 @@ class NewsCrawlerCronSettings {
         }
         
         $script_name = sanitize_text_field($_POST['script_name'] ?? 'news-crawler-cron.sh');
-        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
         
         // デバッグ情報を収集
         $debug_info = array(
             'script_name' => $script_name,
-            'script_path' => $script_path,
             'plugin_dir' => NEWS_CRAWLER_PLUGIN_DIR,
             'plugin_dir_writable' => is_writable(NEWS_CRAWLER_PLUGIN_DIR),
             'plugin_dir_exists' => is_dir(NEWS_CRAWLER_PLUGIN_DIR)
         );
         
         // プラグインディレクトリの書き込み権限をチェック
+        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
+        $use_alternative_path = false;
+        
         if (!is_writable(NEWS_CRAWLER_PLUGIN_DIR)) {
             // 代替手段として、WordPressのアップロードディレクトリを試す
             $upload_dir = wp_upload_dir();
-            $alternative_path = $upload_dir['basedir'] . '/news-crawler-cron.sh';
+            $script_path = $upload_dir['basedir'] . '/' . $script_name;
             
-            $debug_info['alternative_path'] = $alternative_path;
+            $debug_info['alternative_path'] = $script_path;
             $debug_info['upload_dir_writable'] = is_writable($upload_dir['basedir']);
             
             if (is_writable($upload_dir['basedir'])) {
-                $script_path = $alternative_path;
+                $use_alternative_path = true;
                 $debug_info['using_alternative_path'] = true;
             } else {
                 wp_send_json_error(array(
@@ -631,6 +632,9 @@ class NewsCrawlerCronSettings {
             }
         }
         
+        $debug_info['final_script_path'] = $script_path;
+        $debug_info['final_path_writable'] = is_writable(dirname($script_path));
+        
         // シェルスクリプトの内容を生成
         $script_content = $this->generate_script_content();
         
@@ -638,7 +642,12 @@ class NewsCrawlerCronSettings {
         $debug_info['script_content_length'] = strlen($script_content);
         $debug_info['script_content_preview'] = substr($script_content, 0, 200) . '...';
         
-        $result = file_put_contents($script_path, $script_content);
+        // ファイル作成前に既存ファイルを削除（存在する場合）
+        if (file_exists($script_path)) {
+            $debug_info['existing_file_removed'] = unlink($script_path);
+        }
+        
+        $result = file_put_contents($script_path, $script_content, LOCK_EX);
         
         if ($result !== false) {
             // 実行権限を設定
@@ -648,14 +657,14 @@ class NewsCrawlerCronSettings {
             $file_exists = file_exists($script_path);
             $file_readable = is_readable($script_path);
             $file_writable = is_writable($script_path);
-            $file_size = filesize($script_path);
+            $file_size = $file_exists ? filesize($script_path) : 0;
             
             // ファイルの内容を確認
-            $file_content = file_get_contents($script_path);
+            $file_content = $file_exists ? file_get_contents($script_path) : '';
             $content_matches = ($file_content === $script_content);
             
             $debug_info['file_created'] = true;
-            $debug_info['file_size'] = $result;
+            $debug_info['bytes_written'] = $result;
             $debug_info['chmod_result'] = $chmod_result;
             $debug_info['file_exists_after'] = $file_exists;
             $debug_info['file_readable'] = $file_readable;
@@ -674,6 +683,7 @@ class NewsCrawlerCronSettings {
             $debug_info['error'] = error_get_last();
             $debug_info['php_error_reporting'] = error_reporting();
             $debug_info['php_display_errors'] = ini_get('display_errors');
+            $debug_info['php_log_errors'] = ini_get('log_errors');
             
             wp_send_json_error(array(
                 'message' => 'シェルスクリプトの生成に失敗しました',
@@ -688,6 +698,8 @@ class NewsCrawlerCronSettings {
     private function generate_script_content() {
         $wp_path = ABSPATH;
         $plugin_path = NEWS_CRAWLER_PLUGIN_DIR;
+        $site_url = home_url();
+        $cron_nonce = wp_create_nonce('news_crawler_cron_nonce');
         
         return "#!/bin/bash
 # News Crawler Cron Script
@@ -715,8 +727,8 @@ if command -v wp &> /dev/null; then
     # News Crawlerの自動投稿機能を直接実行
     wp eval \"
         if (class_exists('NewsCrawlerGenreSettings')) {
-            \$genre_settings = new NewsCrawlerGenreSettings();
-            \$genre_settings->execute_auto_posting();
+            \\\$genre_settings = new NewsCrawlerGenreSettings();
+            \\\$genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {
             echo 'News CrawlerGenreSettingsクラスが見つかりません';
@@ -726,7 +738,7 @@ if command -v wp &> /dev/null; then
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
 else
     # wp-cliが利用できない場合は、HTTPリクエストでNews Crawlerを実行
-    SITE_URL=\"" . home_url() . "\"
+    SITE_URL=\"{$site_url}\"
     CRON_URL=\"\$SITE_URL/wp-admin/admin-ajax.php\"
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行中...\" >> \"\$LOG_FILE\"
@@ -734,7 +746,7 @@ else
     # News Crawlerの自動投稿機能をHTTPリクエストで実行
     curl -s -X POST \"\$CRON_URL\" \\
         -d \"action=news_crawler_cron_execute\" \\
-        -d \"nonce=" . wp_create_nonce('news_crawler_cron_nonce') . "\" \\
+        -d \"nonce={$cron_nonce}\" \\
         >> \"\$LOG_FILE\" 2>&1
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
@@ -756,8 +768,9 @@ echo \"---\" >> \"\$LOG_FILE\"
         }
         
         wp_enqueue_script('jquery');
-        ?>
-        <script type="text/javascript">
+        
+        // インラインスクリプトとして追加
+        $script = "
         jQuery(document).ready(function($) {
             $('#generate_script_btn').on('click', function() {
                 var button = $(this);
@@ -776,15 +789,14 @@ echo \"---\" >> \"\$LOG_FILE\"
                     data: {
                         action: 'generate_cron_script',
                         script_name: scriptName,
-                        nonce: '<?php echo wp_create_nonce('generate_cron_script'); ?>'
+                        nonce: '" . wp_create_nonce('generate_cron_script') . "'
                     },
                     success: function(response) {
                         if (response.success) {
-                            alert('シェルスクリプトが正常に生成されました！\\n\\nパス: ' + response.data.path);
-                            // 少し待ってからページを再読み込み（ファイルシステムの同期を待つ）
+                            // 成功時はアラートを表示せず、ページを再読み込みして「✓ スクリプトが存在します」を表示
                             setTimeout(function() {
                                 location.reload();
-                            }, 1000);
+                            }, 500);
                         } else {
                             var errorMsg = 'エラー: ' + response.data.message;
                             if (response.data.debug) {
@@ -805,8 +817,9 @@ echo \"---\" >> \"\$LOG_FILE\"
                 });
             });
         });
-        </script>
-        <?php
+        ";
+        
+        wp_add_inline_script('jquery', $script);
     }
     
     /**
