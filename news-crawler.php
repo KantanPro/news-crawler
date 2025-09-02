@@ -12,7 +12,7 @@
  * Requires at least: 5.0
  * Tested up to: 6.9.1
  * Requires PHP: 7.4
- * Update URI: https://github.com/KantanPro/news-crawler.git
+
  **/
 
 // 直接アクセスを防ぐ
