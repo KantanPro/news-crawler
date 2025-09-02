@@ -9,6 +9,7 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: news-crawler
  * Domain Path: /languages
+ * Update URI: https://github.com/KantanPro/news-crawler/releases/latest
  * Requires at least: 5.0
  * Tested up to: 6.9.1
  * Requires PHP: 7.4
@@ -120,10 +121,10 @@ function news_crawler_init_components() {
         new NewsCrawlerOGPSettings();
     }
     
-    // 更新チェッククラスを初期化
-    if (class_exists('NewsCrawlerUpdater')) {
-        new NewsCrawlerUpdater();
-    }
+    // 更新チェッククラスを初期化（WordPress標準のUpdate URIを使用するため無効化）
+    // if (class_exists('NewsCrawlerUpdater')) {
+    //     new NewsCrawlerUpdater();
+    // }
     
     // ライセンス管理クラスを初期化
     if (class_exists('NewsCrawler_License_Manager')) {

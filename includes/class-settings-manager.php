@@ -925,14 +925,14 @@ class NewsCrawlerSettingsManager {
         // キャッシュをクリア
         delete_transient('news_crawler_latest_version');
         
-        // 更新チェックを実行
-        if (class_exists('NewsCrawlerUpdater')) {
-            $updater = new NewsCrawlerUpdater();
-            $transient = get_site_transient('update_plugins');
-            if ($transient) {
-                $updater->check_for_updates($transient);
-            }
-        }
+        // 更新チェックを実行（WordPress標準のUpdate URIを使用するため無効化）
+        // if (class_exists('NewsCrawlerUpdater')) {
+        //     $updater = new NewsCrawlerUpdater();
+        //     $transient = get_site_transient('update_plugins');
+        //     if ($transient) {
+        //         $updater->check_for_updates($transient);
+        //     }
+        // }
         
         wp_send_json_success('更新チェックが完了しました。');
     }
@@ -957,14 +957,14 @@ class NewsCrawlerSettingsManager {
         delete_transient('news_crawler_latest_version');
         delete_site_transient('update_plugins');
         
-        // 更新チェックを実行
-        if (class_exists('NewsCrawlerUpdater')) {
-            $updater = new NewsCrawlerUpdater();
-            $transient = get_site_transient('update_plugins');
-            if ($transient) {
-                $updater->check_for_updates($transient);
-            }
-        }
+        // 更新チェックを実行（WordPress標準のUpdate URIを使用するため無効化）
+        // if (class_exists('NewsCrawlerUpdater')) {
+        //     $updater = new NewsCrawlerUpdater();
+        //     $transient = get_site_transient('update_plugins');
+        //     if ($transient) {
+        //         $updater->check_for_updates($transient);
+        //     }
+        // }
         
         wp_send_json_success('強制更新チェックが完了しました。');
     }

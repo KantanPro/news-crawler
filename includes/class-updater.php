@@ -306,9 +306,13 @@ class NewsCrawlerUpdater {
         // バージョン比較（デバッグ情報を追加）
         $version_comparison = version_compare($current_version, $latest_version['version'], '<');
         
-        // デバッグログ（開発環境でのみ有効）
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("News Crawler Update Check: Current: {$current_version}, Latest: {$latest_version['version']}, Has Update: " . ($version_comparison ? 'Yes' : 'No'));
+        // デバッグログ（常に出力して問題を特定しやすくする）
+        error_log("News Crawler Update Check: Current: {$current_version}, Latest: {$latest_version['version']}, Has Update: " . ($version_comparison ? 'Yes' : 'No'));
+        
+        // バージョンが同じ場合でも、強制更新チェックの場合は更新として扱う
+        if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
+            $version_comparison = true;
+            error_log("News Crawler: Force update check enabled");
         }
         
         if ($version_comparison) {
@@ -386,6 +390,11 @@ class NewsCrawlerUpdater {
      * Force update check
      */
     public function force_update_check() {
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
         if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
             delete_transient('news_crawler_latest_version');
             delete_site_transient('update_plugins');
@@ -393,7 +402,7 @@ class NewsCrawlerUpdater {
         }
         
         // 管理画面での手動更新チェック
-        if (isset($_GET['page']) && $_GET['page'] === 'news-crawler-settings') {
+        if (isset($_GET['page']) && ($_GET['page'] === 'news-crawler-settings' || $_GET['page'] === 'news-crawler-main')) {
             // 設定画面にアクセスした際にキャッシュをクリア
             delete_transient('news_crawler_latest_version');
             
@@ -406,10 +415,20 @@ class NewsCrawlerUpdater {
         
         // キャッシュクリア機能
         if (isset($_GET['clear-cache']) && $_GET['clear-cache'] === '1') {
+            // 権限チェック
+            if (!current_user_can('manage_options')) {
+                wp_die(__('You do not have sufficient permissions to access this page.', 'news-crawler'));
+            }
+            
             delete_transient('news_crawler_latest_version');
             delete_site_transient('update_plugins');
             delete_transient('news_crawler_last_check');
             wp_clean_plugins_cache();
+            
+            // 強制的に更新チェックを実行
+            $transient = new stdClass();
+            $transient = $this->ensure_transient_properties($transient);
+            $this->check_for_updates($transient);
             
             // 成功メッセージ
             add_action('admin_notices', function() {
@@ -585,8 +604,8 @@ class NewsCrawlerUpdater {
      * Admin update notice
      */
     public function admin_update_notice() {
-        // 管理者のみに表示
-        if (!current_user_can('update_plugins')) {
+        // 管理者のみに表示（update_plugins権限またはmanage_options権限）
+        if (!current_user_can('update_plugins') && !current_user_can('manage_options')) {
             return;
         }
         
@@ -604,7 +623,7 @@ class NewsCrawlerUpdater {
             );
             
             $force_check_url = add_query_arg('force-check', '1', admin_url('update-core.php'));
-            $clear_cache_url = add_query_arg('clear-cache', '1', admin_url('admin.php?page=news-crawler-settings'));
+            $clear_cache_url = add_query_arg('clear-cache', '1', admin_url('admin.php?page=news-crawler-main'));
             
             echo '<div class="notice notice-warning is-dismissible">';
             echo '<p><strong>News Crawler</strong> の新しいバージョン <strong>' . esc_html($latest_version['version']) . '</strong> が利用可能です。';
