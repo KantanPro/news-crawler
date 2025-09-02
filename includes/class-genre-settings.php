@@ -1660,7 +1660,7 @@ class NewsCrawlerGenreSettings {
             echo '<td><span class="categories-display" title="' . esc_attr(implode(', ', $categories)) . '">' . esc_html($categories_display) . '</span></td>';
             echo '<td>' . esc_html($featured_image_status) . '</td>';
             
-            // 自動投稿設定の表示
+            // 自動投稿設定の表示（サーバーcron対応）
             $auto_posting_status = '';
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
                 $frequency = isset($setting['posting_frequency']) ? $setting['posting_frequency'] : 'daily';
@@ -1672,83 +1672,30 @@ class NewsCrawlerGenreSettings {
                 );
                 $max_posts = isset($setting['max_posts_per_execution']) ? $setting['max_posts_per_execution'] : 3;
                 
-                // 実際の次回実行予定時刻を取得（次回実行予定カラムと同じロジックを使用）
-                $possible_hooks = array(
-                    'news_crawler_genre_auto_posting_' . $id,
-                    'news_crawler_auto_posting_' . $id,
-                    'genre_auto_posting_' . $id
-                );
-                
-                $actual_next_execution = false;
-                $found_hook = '';
-                
-                // 登録されているcronイベントから該当するものを探す
-                $cron_array = _get_cron_array();
-                foreach ($cron_array as $timestamp => $cron) {
-                    foreach ($cron as $hook => $events) {
-                        // ジャンルIDを含むフック名を探す
-                        if (strpos($hook, $id) !== false && strpos($hook, 'news_crawler') !== false) {
-                            $actual_next_execution = $timestamp;
-                            $found_hook = $hook;
-                            break 2;
-                        }
-                    }
-                }
-                
-                // 見つからない場合は従来の方法でチェック
-                if (!$actual_next_execution) {
-                    foreach ($possible_hooks as $hook_name) {
-                        $actual_next_execution = wp_next_scheduled($hook_name);
-                        if ($actual_next_execution) {
-                            $found_hook = $hook_name;
-                            break;
-                        }
-                    }
-                }
-                
-                // デバッグ情報
-                error_log('Auto Posting Status - Genre: ' . $setting['genre_name'] . ', ID: ' . $id);
-                error_log('Auto Posting Status - Found hook: ' . $found_hook);
-                error_log('Auto Posting Status - Next execution: ' . ($actual_next_execution ? date('Y-m-d H:i:s', $actual_next_execution) : 'false'));
-                
-                $next_time_display = '';
-                if ($actual_next_execution) {
-                    // WordPressタイムゾーンで表示
-                    $wp_time = get_date_from_gmt(date('Y-m-d H:i:s', $actual_next_execution), 'Y-m-d H:i:s');
-                    $next_time_display = '次回: ' . date('m/d H:i', strtotime($wp_time));
-                    // デバッグ用：画面にも表示
-                    $next_time_display .= '<br><small style="color: #666;">(' . date('H:i', strtotime($wp_time)) . ')</small>';
-                } elseif (!empty($setting['start_execution_time'])) {
-                    $start_time = strtotime($setting['start_execution_time']);
-                    $next_time_display = '開始: ' . date('m/d H:i', $start_time);
-                    // デバッグ用：画面にも表示
-                    $next_time_display .= '<br><small style="color: #d63638;">(開始時刻)</small>';
-                } else {
-                    $next_time_display = '<small style="color: #d63638;">未設定</small>';
-                }
-                
-                $auto_posting_status = '有効 (' . $frequency_labels[$frequency] . ', ' . $max_posts . '件)';
-                if ($next_time_display) {
-                    $auto_posting_status .= ' ' . $next_time_display;
-                }
+                $auto_posting_status = '<span style="color: #00a32a; font-weight: bold;">✓ 有効</span><br>';
+                $auto_posting_status .= '<small>頻度: ' . $frequency_labels[$frequency] . '</small><br>';
+                $auto_posting_status .= '<small>最大: ' . $max_posts . '件/回</small><br>';
+                $auto_posting_status .= '<small style="color: #0073aa;">サーバーcronで実行</small>';
             } else {
-                $auto_posting_status = '無効';
+                $auto_posting_status = '<span style="color: #d63638;">❌ 無効</span>';
             }
             
             echo '<td>' . $auto_posting_status . '</td>';
             
-            // 次回実行予定の表示（設定側で入力された値を優先、なければ計算）
+            // 次回実行予定の表示（サーバーcron対応）
             $next_execution_display = '';
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                if (!empty($setting['next_execution_display'])) {
-                    // 設定側で入力された次回実行予定の表示値をそのまま使用
-                    $next_execution_display = esc_html($setting['next_execution_display']);
-                } else {
-                    // 設定側で値が入力されていない場合は、未設定と表示
-                    $next_execution_display = '<span style="color: #d63638;">設定側で値を入力してください</span>';
+                $next_execution_display = '<span style="color: #0073aa; font-weight: bold;">サーバーcronで管理</span><br>';
+                
+                // 開始実行日時がある場合は表示
+                if (!empty($setting['start_execution_time'])) {
+                    $start_time = strtotime($setting['start_execution_time']);
+                    $next_execution_display .= '<small>開始: ' . date('m/d H:i', $start_time) . '</small><br>';
                 }
+                
+                $next_execution_display .= '<small style="color: #666;">Cron設定で確認</small>';
             } else {
-                $next_execution_display = '-';
+                $next_execution_display = '<span style="color: #666;">-</span>';
             }
             
             echo '<td>' . $next_execution_display . '</td>';
