@@ -3,17 +3,23 @@
 # 自動生成されたシェルスクリプトです
 # 生成日時: 2025-09-02 06:31:43
 
-# WordPressのパスを設定
-WP_PATH="/var/www/html/"
+# スクリプトのディレクトリを取得
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# WordPressのパスを動的に取得（プラグインディレクトリから逆算）
+WP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")/"
 
 # プラグインパスを設定
-PLUGIN_PATH="/var/www/html/wp-content/plugins/news-crawler/"
+PLUGIN_PATH="$SCRIPT_DIR/"
 
 # ログファイルのパス
-LOG_FILE="/var/www/html/wp-content/plugins/news-crawler/news-crawler-cron.log"
+LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
 
 # ログに実行開始を記録
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: $SCRIPT_DIR" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: $WP_PATH" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$LOG_FILE"
 
 # WordPressのwp-cliが利用可能かチェック
 if command -v wp &> /dev/null; then
@@ -35,9 +41,37 @@ if command -v wp &> /dev/null; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました" >> "$LOG_FILE"
 else
     # wp-cliが利用できない場合は、HTTPリクエストでNews Crawlerを実行
-    SITE_URL="http://localhost:8081"
+    # WordPressの設定からサイトURLを動的に取得
+    SITE_URL=$(cd "$WP_PATH" && php -r "
+        if (file_exists('wp-config.php')) {
+            require_once('wp-config.php');
+            echo get_option('home', 'http://localhost');
+        } else {
+            echo 'http://localhost';
+        }
+    " 2>/dev/null)
+    
+    # サイトURLが取得できない場合は、wp-config.phpから直接取得を試行
+    if [ -z "$SITE_URL" ] || [ "$SITE_URL" = "http://localhost" ]; then
+        SITE_URL=$(cd "$WP_PATH" && php -r "
+            if (file_exists('wp-config.php')) {
+                \$config = file_get_contents('wp-config.php');
+                if (preg_match('/define\s*\(\s*[\'"]WP_HOME[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/', \$config, \$matches)) {
+                    echo \$matches[1];
+                } elseif (preg_match('/define\s*\(\s*[\'"]WP_SITEURL[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/', \$config, \$matches)) {
+                    echo \$matches[1];
+                } else {
+                    echo 'http://localhost';
+                }
+            } else {
+                echo 'http://localhost';
+            }
+        " 2>/dev/null)
+    fi
+    
     CRON_URL="$SITE_URL/wp-admin/admin-ajax.php"
     
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 取得したサイトURL: $SITE_URL" >> "$LOG_FILE"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行中..." >> "$LOG_FILE"
     
     # News Crawlerの自動投稿機能をHTTPリクエストで実行
