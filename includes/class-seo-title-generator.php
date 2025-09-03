@@ -140,29 +140,91 @@ class NewsCrawlerSEOTitleGenerator {
      * News Crawlerのジャンル設定からジャンル名を取得
      */
     private function get_news_crawler_genre_name($post_id) {
+        error_log('NewsCrawlerSEOTitleGenerator: get_news_crawler_genre_name called for post_id: ' . $post_id);
+
         // 投稿に保存されているNews CrawlerジャンルIDを取得
         $genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
+        error_log('NewsCrawlerSEOTitleGenerator: Found genre_id in post meta: ' . $genre_id);
 
         if (!empty($genre_id)) {
             // ジャンル設定からジャンル名を取得
             $genre_settings = get_option('news_crawler_genre_settings', array());
+            error_log('NewsCrawlerSEOTitleGenerator: Genre settings loaded: ' . print_r($genre_settings, true));
+
             if (isset($genre_settings[$genre_id]) && isset($genre_settings[$genre_id]['genre_name'])) {
-                return $genre_settings[$genre_id]['genre_name'];
+                $genre_name = $genre_settings[$genre_id]['genre_name'];
+                error_log('NewsCrawlerSEOTitleGenerator: Found genre_name from settings: ' . $genre_name);
+                return $genre_name;
+            } else {
+                error_log('NewsCrawlerSEOTitleGenerator: Genre name not found in settings for genre_id: ' . $genre_id);
             }
+        } else {
+            error_log('NewsCrawlerSEOTitleGenerator: No genre_id found in post meta');
         }
 
         // News CrawlerのジャンルIDが見つからない場合は、WordPressカテゴリーから取得（後方互換性）
         $categories = wp_get_post_categories($post_id, array('orderby' => 'term_order'));
+        error_log('NewsCrawlerSEOTitleGenerator: Fallback to WordPress categories: ' . print_r($categories, true));
+
         if (!empty($categories) && is_array($categories)) {
             // 最初の（一番上）のカテゴリーを取得
             $first_category_id = $categories[0];
             $first_category = get_category($first_category_id);
             if ($first_category) {
-                return $first_category->name;
+                $category_name = $first_category->name;
+                error_log('NewsCrawlerSEOTitleGenerator: Using WordPress category name: ' . $category_name);
+
+                // カテゴリー名が「blog」の場合は、より適切な名前を使用
+                if (strtolower($category_name) === 'blog') {
+                    error_log('NewsCrawlerSEOTitleGenerator: Category name is "blog", trying to find better genre name');
+
+                    // 他のカテゴリーがある場合はそれを使用
+                    if (count($categories) > 1) {
+                        $second_category = get_category($categories[1]);
+                        if ($second_category) {
+                            $category_name = $second_category->name;
+                            error_log('NewsCrawlerSEOTitleGenerator: Using second category: ' . $category_name);
+                        }
+                    }
+
+                    // それでも「blog」の場合は、投稿内容からジャンルを推測
+                    if (strtolower($category_name) === 'blog') {
+                        $post = get_post($post_id);
+                        if ($post) {
+                            $content = strtolower($post->post_content . ' ' . $post->post_title);
+
+                            // キーワードに基づいてジャンルを推測
+                            if (strpos($content, 'テクノロジー') !== false || strpos($content, 'technology') !== false ||
+                                strpos($content, 'ai') !== false || strpos($content, 'ロボット') !== false ||
+                                strpos($content, 'robot') !== false) {
+                                $category_name = 'テクノロジー';
+                            } elseif (strpos($content, 'ニュース') !== false || strpos($content, 'news') !== false) {
+                                $category_name = 'ニュース';
+                            } elseif (strpos($content, 'ビジネス') !== false || strpos($content, 'business') !== false) {
+                                $category_name = 'ビジネス';
+                            } elseif (strpos($content, 'エンタメ') !== false || strpos($content, 'entertainment') !== false) {
+                                $category_name = 'エンタメ';
+                            } elseif (strpos($content, 'スポーツ') !== false || strpos($content, 'sports') !== false) {
+                                $category_name = 'スポーツ';
+                            } elseif (strpos($content, '健康') !== false || strpos($content, 'health') !== false) {
+                                $category_name = '健康';
+                            } elseif (strpos($content, '教育') !== false || strpos($content, 'education') !== false) {
+                                $category_name = '教育';
+                            } else {
+                                $category_name = 'ニュース'; // デフォルト
+                            }
+
+                            error_log('NewsCrawlerSEOTitleGenerator: Inferred genre from content: ' . $category_name);
+                        }
+                    }
+                }
+
+                return $category_name;
             }
         }
 
         // カテゴリーが設定されていない場合はデフォルト
+        error_log('NewsCrawlerSEOTitleGenerator: Using default genre name: ニュース');
         return 'ニュース';
     }
     

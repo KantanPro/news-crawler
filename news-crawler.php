@@ -2102,41 +2102,230 @@ class NewsCrawler {
     }
     
     /**
+     * 各記事の詳細な要約を生成
+     */
+    private function generate_article_summary($article) {
+        // OpenAI APIキーを取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+
+        if (empty($api_key) || empty($article['content'])) {
+            // APIキーがない場合やコンテンツが空の場合は、最初の数文を要約として使用
+            $content = $article['content'] ?: $article['description'] ?: '';
+            return wp_trim_words($content, 50, '...');
+        }
+
+        // コンテンツが短すぎる場合は簡易要約を使用
+        if (mb_strlen($article['content']) < 100) {
+            return wp_trim_words($article['content'], 30, '...');
+        }
+
+        // 要約生成前にコンテンツをさらにクリーンアップ
+        $clean_content = $this->clean_content_for_summary($article['content']);
+
+        // クリーンアップ後のコンテンツが短すぎる場合はスキップ
+        if (mb_strlen($clean_content) < 50) {
+            error_log('NewsCrawler: 記事要約生成スキップ - クリーンアップ後のコンテンツが短すぎます: ' . $article['title']);
+            return '';
+        }
+
+        try {
+            // OpenAI APIで詳細な要約を生成
+            $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $api_key,
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode(array(
+                    'model' => 'gpt-3.5-turbo',
+                    'messages' => array(
+                        array(
+                            'role' => 'system',
+                            'content' => 'あなたはニュース記事の要約を専門とするアシスタントです。記事の内容を読みやすく、わかりやすい日本語で要約してください。重要なポイントを押さえつつ、簡潔にまとめてください。ナビゲーションやメニュー、広告などの不要なテキストは完全に無視してください。'
+                        ),
+                        array(
+                            'role' => 'user',
+                            'content' => '以下のニュース記事を3-4行程度で要約してください。ナビゲーションやメニュー、広告などの不要なテキストは無視してください：' . "\n\n" . $clean_content
+                        )
+                    ),
+                    'max_tokens' => 200,
+                    'temperature' => 0.3
+                )),
+                'timeout' => 30,
+                'redirection' => 5,
+                'httpversion' => '1.1',
+                'user-agent' => 'News Crawler Plugin/1.0'
+            ));
+
+            if (!is_wp_error($response)) {
+                $response_code = wp_remote_retrieve_response_code($response);
+                if ($response_code === 200) {
+                    $body = wp_remote_retrieve_body($response);
+                    $data = json_decode($body, true);
+
+                    if (isset($data['choices'][0]['message']['content'])) {
+                        $summary = trim($data['choices'][0]['message']['content']);
+
+                        // 要約がナビゲーションやメニュー関連のテキストを含んでいる場合は除去
+                        $summary = $this->clean_summary_content($summary);
+
+                        // 要約が短すぎる場合はスキップ
+                        if (mb_strlen($summary) < 20) {
+                            error_log('NewsCrawler: 記事要約生成スキップ - 要約が短すぎます: ' . $article['title']);
+                            return '';
+                        }
+
+                        // 改行をスペースに変換して整形
+                        $summary = str_replace(array("\r\n", "\r", "\n"), ' ', $summary);
+                        return $summary;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log('NewsCrawler: 記事要約生成エラー: ' . $e->getMessage());
+        }
+
+        // API呼び出しに失敗した場合は簡易要約を使用
+        return wp_trim_words($clean_content, 50, '...');
+    }
+
+    /**
+     * 要約生成用のコンテンツをさらにクリーンアップ
+     */
+    private function clean_content_for_summary($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // 基本的なクリーンアップを実行
+        $clean_content = $this->clean_article_content($content);
+
+        // 要約生成に適さないパターンをさらに除去
+        $summary_patterns = array(
+            '/^.*?本文エリアへ.*?$/im',  // 本文エリアへのリンク
+            '/^.*?メインコンテンツ.*?$/im',  // メインコンテンツへのリンク
+            '/^.*?スキップ.*?$/im',     // スキップリンク
+            '/^.*?メニュー.*?$/im',     // メニュー関連
+            '/^.*?ナビゲーション.*?$/im', // ナビゲーション関連
+            '/^.*?広告.*?$/im',         // 広告関連
+            '/^.*?スポンサー.*?$/im',   // スポンサー関連
+            '/^.*?シェア.*?$/im',       // シェア関連
+            '/^.*?コメント.*?$/im',     // コメント関連
+            '/^.*?フッター.*?$/im',     // フッター関連
+            '/^.*?著作権.*?$/im',       // 著作権関連
+            '/^\s*$/m',                 // 空行
+        );
+
+        foreach ($summary_patterns as $pattern) {
+            $clean_content = preg_replace($pattern, '', $clean_content);
+        }
+
+        // 連続する空白を除去
+        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+        $clean_content = trim($clean_content);
+
+        return $clean_content;
+    }
+
+    /**
+     * 生成された要約をクリーンアップ
+     */
+    private function clean_summary_content($summary) {
+        if (empty($summary)) {
+            return '';
+        }
+
+        // 要約に含まれる不要なテキストを除去
+        $clean_patterns = array(
+            '/メインメニューをとばして.*?$/i',
+            '/メインコンテンツへ.*?$/i',
+            '/本文へ.*?$/i',
+            '/スキップ.*?$/i',
+            '/Skip to.*?$/i',
+            '/メニュー.*?$/i',
+            '/Menu.*?$/i',
+            '/Navigation.*?$/i',
+            '/広告.*?$/i',
+            '/スポンサー.*?$/i',
+            '/シェア.*?$/i',
+            '/Share.*?$/i',
+            '/コメント.*?$/i',
+            '/Comments.*?$/i',
+        );
+
+        foreach ($clean_patterns as $pattern) {
+            $summary = preg_replace($pattern, '', $summary);
+        }
+
+        // 連続する空白を除去
+        $summary = preg_replace('/\s+/', ' ', $summary);
+        $summary = trim($summary);
+
+        return $summary;
+    }
+
+    /**
      * ニュース記事の投稿を作成
      */
     private function create_news_summary_post($articles, $categories, $status) {
         // デバッグ: 受け取ったステータスをログに記録
         error_log('NewsCrawler: create_news_summary_post called with status: ' . $status);
-        
+
         $cat_ids = array();
         foreach ($categories as $category) {
             $cat_ids[] = $this->get_or_create_category($category);
         }
-        
+
         // キーワード情報を取得
         $options = get_option($this->option_name, array());
         $keywords = isset($options['keywords']) ? $options['keywords'] : array('ニュース');
-        
+
         $keyword_text = implode('、', array_slice($keywords, 0, 3));
         $post_title = $keyword_text . '：ニュースまとめ – ' . date_i18n('Y年n月j日');
-        
+
         $post_content = '';
-        
+        $valid_articles = array(); // 要約が生成できた記事のみを格納
+
         foreach ($articles as $article) {
+            // 記事要約を生成
+            $article_summary = $this->generate_article_summary($article);
+
+            // 要約が生成できなかった場合はスキップ
+            if (empty($article_summary)) {
+                error_log('NewsCrawler: 要約生成に失敗したため記事をスキップ: ' . $article['title']);
+                continue;
+            }
+
+            // 要約が生成できた記事を有効記事として追加
+            $valid_articles[] = $article;
+
             // 記事区切り
             $post_content .= '<!-- wp:separator -->';
             $post_content .= '<hr class="wp-block-separator has-alpha-channel-opacity"/>';
             $post_content .= '<!-- /wp:separator -->';
 
-            // 記事タイトル
-            $post_content .= '<!-- wp:heading -->';
-            $post_content .= '<h2>' . esc_html($article['title']) . '</h2>';
+            // サイトタイトル（H2）
+            $site_title = $this->extract_site_title($article['source']);
+            if (!empty($site_title)) {
+                $post_content .= '<!-- wp:heading {"level":2} -->';
+                $post_content .= '<h2>' . esc_html($site_title) . '</h2>';
+                $post_content .= '<!-- /wp:heading -->';
+            }
+
+            // 記事タイトル（H3）
+            $post_content .= '<!-- wp:heading {"level":3} -->';
+            $post_content .= '<h3>' . esc_html($article['title']) . '</h3>';
             $post_content .= '<!-- /wp:heading -->';
 
-            // 記事本文抜粋
-            if (!empty($article['content'])) {
+            // 記事要約（詳細な要約を表示）
+            $post_content .= '<!-- wp:paragraph -->';
+            $post_content .= '<p>' . esc_html($article_summary) . '</p>';
+            $post_content .= '<!-- /wp:paragraph -->';
+
+            // 記事リンク
+            if (!empty($article['url'])) {
                 $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p>' . esc_html(wp_trim_words($article['content'], 120, '...')) . '</p>';
+                $post_content .= '<p><a href="' . esc_url($article['url']) . '" target="_blank" rel="noopener noreferrer"><strong>📰 元記事を読む →</strong></a></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
 
@@ -2151,22 +2340,17 @@ class NewsCrawler {
                 $meta_info[] = '<strong>著者:</strong> ' . esc_html($article['author']);
             }
 
-            if (!empty($article['source'])) {
-                $meta_info[] = '<strong>ソース:</strong> ' . esc_html($article['source']);
-            }
-
             if (!empty($meta_info)) {
                 $post_content .= '<!-- wp:paragraph -->';
                 $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
+        }
 
-            // 元記事へのリンク
-            if (!empty($article['url'])) {
-                $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p><a href="' . esc_url($article['url']) . '" target="_blank" rel="noopener noreferrer"><strong>元記事を読む →</strong></a></p>';
-                $post_content .= '<!-- /wp:paragraph -->';
-            }
+        // 有効な記事がない場合は投稿を作成しない
+        if (empty($valid_articles)) {
+            error_log('NewsCrawler: 有効な記事（要約生成できた記事）が1件もないため投稿を作成しません');
+            return false;
         }
         
         // 設定されたステータスで直接投稿を作成
@@ -2272,34 +2456,236 @@ class NewsCrawler {
             return '';
         }
 
+        // デバッグ: 処理前のコンテンツをログに記録
+        error_log('NewsCrawler: クリーンアップ処理開始 - コンテンツ長: ' . mb_strlen($content));
+
+        // まずHTMLから本文部分を抽出
+        $content = $this->extract_main_content($content);
+
         // HTMLタグを除去
         $clean_content = wp_strip_all_tags($content);
-
-        // 余分な空白を除去
-        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
-        $clean_content = trim($clean_content);
 
         // 特殊文字をデコード
         $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // 不要な文字列を除去（広告や関連記事へのリンクなど）
+        // デバッグ: HTML除去後のコンテンツを確認
+        if (strpos($clean_content, 'メインメニューをとばして') !== false) {
+            error_log('NewsCrawler: HTML除去後もナビゲーションテキストが残っています');
+            error_log('NewsCrawler: 該当部分: ' . substr($clean_content, strpos($clean_content, 'メインメニューをとばして'), 100));
+        }
+
+        // 不要な文字列を除去（ナビゲーション、メニュー、広告など）
         $patterns_to_remove = array(
+            // ナビゲーションテキスト（より詳細なパターン）
+            '/メインメニューをとばして、このページの本文エリアへ.*?$/i',
+            '/メインメニューをとばして.*?$/i',
+            '/メインコンテンツへ.*?$/i',
+            '/本文エリアへ.*?$/i',
+            '/本文へ.*?$/i',
+            '/スキップ.*?$/i',
+            '/Skip to.*?$/i',
+            '/Skip to main content.*?$/i',
+            '/Jump to main content.*?$/i',
+
+            // メニュー関連
+            '/メニュー.*?$/i',
+            '/Menu.*?$/i',
+            '/Navigation.*?$/i',
+            '/ナビゲーション.*?$/i',
+
+            // 広告関連
             '/\[.*?\]/',  // 角括弧内のテキスト
             '/\(.*?\)/',  // 丸括弧内のテキスト（一部）
             '/続きを読む.*?$/i',  // 「続きを読む」以降
             '/関連記事.*?$/i',    // 「関連記事」以降
             '/広告.*?$/i',       // 「広告」以降
             '/スポンサーリンク.*?$/i', // 「スポンサーリンク」以降
+            '/PR.*?$/i',         // PR表記
+            '/Sponsored.*?$/i',  // スポンサー表記
+            '/Affiliate.*?$/i',  // アフィリエイト表記
+
+            // ソーシャルメディア関連
+            '/シェア.*?$/i',
+            '/Share.*?$/i',
+            '/ツイート.*?$/i',
+            '/Tweet.*?$/i',
+            '/いいね.*?$/i',
+            '/Like.*?$/i',
+            '/Facebook.*?$/i',
+            '/Twitter.*?$/i',
+            '/Instagram.*?$/i',
+
+            // コメント関連
+            '/コメント.*?$/i',
+            '/Comments.*?$/i',
+            '/Leave a comment.*?$/i',
+
+            // フッター関連
+            '/フッター.*?$/i',
+            '/Footer.*?$/i',
+            '/©.*?$/i',          // 著作権表記
+            '/Copyright.*?$/i',
+            '/All rights reserved.*?$/i',
+
+            // その他の不要なパターン
+            '/\d{1,2}\/\d{1,2}\/\d{4}.*?$/', // 日付パターン
+            '/\d{4}年\d{1,2}月\d{1,2}日.*?$/', // 日本語日付パターン
+            '/\d{1,2}:\d{2}.*?$/', // 時間パターン
+            '/\d{4}-\d{1,2}-\d{1,2}.*?$/', // 日付パターン（ハイフン）
+
+            // 一般的なナビゲーションテキスト
+            '/ホーム.*?$/i',
+            '/Home.*?$/i',
+            '/トップ.*?$/i',
+            '/Top.*?$/i',
+            '/サイトマップ.*?$/i',
+            '/Sitemap.*?$/i',
+            '/お問い合わせ.*?$/i',
+            '/Contact.*?$/i',
+            '/プライバシーポリシー.*?$/i',
+            '/Privacy Policy.*?$/i',
+            '/利用規約.*?$/i',
+            '/Terms of Service.*?$/i',
         );
 
         foreach ($patterns_to_remove as $pattern) {
             $clean_content = preg_replace($pattern, '', $clean_content);
         }
 
-        // 再度トリム
+        // 余分な空白を除去
+        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
         $clean_content = trim($clean_content);
 
+        // デバッグ: 最終結果を確認
+        if (strpos($clean_content, 'メインメニューをとばして') !== false) {
+            error_log('NewsCrawler: クリーンアップ後もナビゲーションテキストが残っています');
+            error_log('NewsCrawler: 最終コンテンツ長: ' . mb_strlen($clean_content));
+        } else {
+            error_log('NewsCrawler: ナビゲーションテキストは正常に除去されました');
+        }
+
+        // コンテンツが短すぎる場合は空文字を返す
+        if (mb_strlen($clean_content) < 50) {
+            error_log('NewsCrawler: コンテンツが短すぎるため空文字を返します');
+            return '';
+        }
+
         return $clean_content;
+    }
+
+    /**
+     * HTMLから本文部分を抽出
+     */
+    private function extract_main_content($html) {
+        if (empty($html)) {
+            return '';
+        }
+
+        // まず、明らかに不要な要素を除去
+        $html = $this->remove_unwanted_elements($html);
+
+        // 本文を抽出するためのパターンを優先順位で試す
+        $content_patterns = array(
+            // 記事本文クラス（一般的なもの）
+            '/<div[^>]*class="[^"]*article-body[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<article[^>]*>(.*?)<\/article>/si',
+
+            // より具体的なクラス名
+            '/<div[^>]*class="[^"]*article__body[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*article-content[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*news-content[^"]*"[^>]*>(.*?)<\/div>/si',
+
+            // 朝日新聞などのニュースサイト固有のパターン
+            '/<div[^>]*class="[^"]*ArticleBody[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*articleText[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*news-body[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*class="[^"]*main-content[^"]*"[^>]*>(.*?)<\/div>/si',
+
+            // IDによる抽出
+            '/<div[^>]*id="[^"]*content[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*id="[^"]*article[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*id="[^"]*main[^"]*"[^>]*>(.*?)<\/div>/si',
+            '/<div[^>]*id="[^"]*news[^"]*"[^>]*>(.*?)<\/div>/si',
+
+            // 段落の集まり（フォールバック）
+            '/<p[^>]*>.*?<\/p>(?:\s*<p[^>]*>.*?<\/p>)*/si',
+        );
+
+        foreach ($content_patterns as $pattern) {
+            if (preg_match($pattern, $html, $matches)) {
+                $extracted = $matches[1];
+                if (!empty($extracted) && mb_strlen(strip_tags($extracted)) > 100) {
+                    return $extracted;
+                }
+            }
+        }
+
+        // パターンで抽出できなかった場合は、ナビゲーション関連の要素を除去して全体を返す
+        $clean_html = $html;
+
+        // ナビゲーション要素を除去
+        $nav_patterns = array(
+            '/<nav[^>]*>.*?<\/nav>/si',
+            '/<header[^>]*>.*?<\/header>/si',
+            '/<aside[^>]*>.*?<\/aside>/si',
+            '/<footer[^>]*>.*?<\/footer>/si',
+            '/<div[^>]*class="[^"]*nav[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*menu[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*sidebar[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*widget[^"]*"[^>]*>.*?<\/div>/si',
+            '/<ul[^>]*class="[^"]*nav[^"]*"[^>]*>.*?<\/ul>/si',
+            '/<ul[^>]*class="[^"]*menu[^"]*"[^>]*>.*?<\/ul>/si',
+            '/<div[^>]*class="[^"]*header[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*footer[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*breadcrumb[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*social[^"]*"[^>]*>.*?<\/div>/si',
+            '/<div[^>]*class="[^"]*share[^"]*"[^>]*>.*?<\/div>/si',
+        );
+
+        foreach ($nav_patterns as $pattern) {
+            $clean_html = preg_replace($pattern, '', $clean_html);
+        }
+
+        return $clean_html;
+    }
+
+    /**
+     * 明らかに不要な要素を除去
+     */
+    private function remove_unwanted_elements($html) {
+        if (empty($html)) {
+            return '';
+        }
+
+        // スクリプトとスタイルを除去
+        $html = preg_replace('/<script[^>]*>.*?<\/script>/si', '', $html);
+        $html = preg_replace('/<style[^>]*>.*?<\/style>/si', '', $html);
+        $html = preg_replace('/<link[^>]*>.*?<\/link>/si', '', $html);
+
+        // コメントを除去
+        $html = preg_replace('/<!--.*?-->/si', '', $html);
+
+        // ナビゲーション関連のテキストを直接除去
+        $nav_text_patterns = array(
+            '/メインメニューをとばして、このページの本文エリアへ.*?$/i',
+            '/メインメニューをとばして.*?$/i',
+            '/メインコンテンツへ.*?$/i',
+            '/本文エリアへ.*?$/i',
+            '/本文へ.*?$/i',
+            '/スキップ.*?$/i',
+            '/Skip to.*?$/i',
+            '/Skip to main content.*?$/i',
+            '/Jump to main content.*?$/i',
+        );
+
+        foreach ($nav_text_patterns as $pattern) {
+            $html = preg_replace($pattern, '', $html);
+        }
+
+        return $html;
     }
 
     /**
@@ -2374,6 +2760,66 @@ class NewsCrawler {
         }
 
         return '';
+    }
+
+    /**
+     * サイトタイトルを抽出
+     */
+    private function extract_site_title($url) {
+        if (empty($url)) {
+            return '';
+        }
+
+        // URLからドメインを抽出
+        $parsed_url = parse_url($url);
+        if (!isset($parsed_url['host'])) {
+            return '';
+        }
+
+        $domain = $parsed_url['host'];
+
+        // www. を除去
+        $domain = preg_replace('/^www\./', '', $domain);
+
+        // 一般的なニュースサイトのタイトルを定義
+        $site_titles = array(
+            'nhk.or.jp' => 'NHKニュース',
+            'bbc.com' => 'BBC News',
+            'cnn.com' => 'CNN',
+            'reuters.com' => 'Reuters',
+            'apnews.com' => 'AP News',
+            'bloomberg.com' => 'Bloomberg',
+            'wsj.com' => 'The Wall Street Journal',
+            'nytimes.com' => 'The New York Times',
+            'washingtonpost.com' => 'The Washington Post',
+            'guardian.com' => 'The Guardian',
+            'ft.com' => 'Financial Times',
+            'japantimes.co.jp' => 'The Japan Times',
+            'asahi.com' => '朝日新聞',
+            'yomiuri.co.jp' => '読売新聞',
+            'mainichi.jp' => '毎日新聞',
+            'nikkei.com' => '日本経済新聞',
+            'sankei.com' => '産経新聞',
+            'yahoo.co.jp' => 'Yahoo!ニュース',
+            'news.yahoo.co.jp' => 'Yahoo!ニュース',
+            'google.com' => 'Google News',
+            'news.google.com' => 'Google News',
+        );
+
+        // ドメインに基づいてタイトルを検索
+        foreach ($site_titles as $site_domain => $title) {
+            if (strpos($domain, $site_domain) !== false) {
+                return $title;
+            }
+        }
+
+        // マッチしない場合はドメインの最初の部分を使用
+        $parts = explode('.', $domain);
+        if (count($parts) > 1) {
+            return ucfirst($parts[0]);
+        }
+
+        return ucfirst($domain);
     }
 
     /**
