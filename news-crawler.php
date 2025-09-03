@@ -1470,6 +1470,9 @@ class NewsCrawler {
             }
         }
 
+        // 仕上げの全体サニタイズ（念のため）
+        $post_content = $this->sanitize_post_content($post_content);
+
         // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
@@ -2110,14 +2113,23 @@ class NewsCrawler {
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
 
         if (empty($api_key) || empty($article['content'])) {
-            // APIキーがない場合やコンテンツが空の場合は、最初の数文を要約として使用
-            $content = $article['content'] ?: $article['description'] ?: '';
-            return wp_trim_words($content, 50, '...');
+            // APIキーがない場合や本文が空の場合でも、フォールバック要約にクリーンアップを適用
+            $raw = $article['content'] ?: $article['description'] ?: '';
+            $clean_fallback = $this->clean_content_for_summary($raw);
+            if (empty($clean_fallback)) {
+                return '';
+            }
+            return wp_trim_words($clean_fallback, 50, '...');
         }
 
         // コンテンツが短すぎる場合は簡易要約を使用
         if (mb_strlen($article['content']) < 100) {
-            return wp_trim_words($article['content'], 30, '...');
+            // 短文の場合もクリーンアップ済みテキストから要約
+            $clean_short = $this->clean_content_for_summary($article['content']);
+            if (empty($clean_short)) {
+                return '';
+            }
+            return wp_trim_words($clean_short, 30, '...');
         }
 
         // 要約生成前にコンテンツをさらにクリーンアップ
@@ -2202,18 +2214,19 @@ class NewsCrawler {
 
         // 要約生成に適さないパターンをさらに除去
         $summary_patterns = array(
-            '/^.*?本文エリアへ.*?$/im',  // 本文エリアへのリンク
-            '/^.*?メインコンテンツ.*?$/im',  // メインコンテンツへのリンク
-            '/^.*?スキップ.*?$/im',     // スキップリンク
-            '/^.*?メニュー.*?$/im',     // メニュー関連
-            '/^.*?ナビゲーション.*?$/im', // ナビゲーション関連
-            '/^.*?広告.*?$/im',         // 広告関連
-            '/^.*?スポンサー.*?$/im',   // スポンサー関連
-            '/^.*?シェア.*?$/im',       // シェア関連
-            '/^.*?コメント.*?$/im',     // コメント関連
-            '/^.*?フッター.*?$/im',     // フッター関連
-            '/^.*?著作権.*?$/im',       // 著作権関連
-            '/^\s*$/m',                 // 空行
+            '/本文エリアへ/iu',           // 本文エリアへのリンク
+            '/メインコンテンツ/iu',       // メインコンテンツへのリンク
+            '/スキップ/iu',               // スキップリンク
+            '/メニュー/iu',               // メニュー関連
+            '/ナビゲーション/iu',         // ナビゲーション関連
+            '/広告/iu',                   // 広告関連
+            '/スポンサー/iu',             // スポンサー関連
+            '/シェア/iu',                 // シェア関連
+            '/コメント/iu',               // コメント関連
+            '/フッター/iu',               // フッター関連
+            '/著作権/iu',                 // 著作権関連
+            '/朝日新聞：朝日新聞社のニュースサイト/iu',
+            '/朝日新聞デジタル：朝日新聞社のニュースサイト/iu',
         );
 
         foreach ($summary_patterns as $pattern) {
@@ -2237,20 +2250,22 @@ class NewsCrawler {
 
         // 要約に含まれる不要なテキストを除去
         $clean_patterns = array(
-            '/メインメニューをとばして.*?$/i',
-            '/メインコンテンツへ.*?$/i',
-            '/本文へ.*?$/i',
-            '/スキップ.*?$/i',
-            '/Skip to.*?$/i',
-            '/メニュー.*?$/i',
-            '/Menu.*?$/i',
-            '/Navigation.*?$/i',
-            '/広告.*?$/i',
-            '/スポンサー.*?$/i',
-            '/シェア.*?$/i',
-            '/Share.*?$/i',
-            '/コメント.*?$/i',
-            '/Comments.*?$/i',
+            '/メインメニューをとばして/iu',
+            '/メインコンテンツへ/iu',
+            '/本文へ/iu',
+            '/スキップ/iu',
+            '/Skip to/iu',
+            '/メニュー/iu',
+            '/Menu/iu',
+            '/Navigation/iu',
+            '/広告/iu',
+            '/スポンサー/iu',
+            '/シェア/iu',
+            '/Share/iu',
+            '/コメント/iu',
+            '/Comments/iu',
+            '/朝日新聞：朝日新聞社のニュースサイト/iu',
+            '/朝日新聞デジタル：朝日新聞社のニュースサイト/iu',
         );
 
         foreach ($clean_patterns as $pattern) {
@@ -2262,6 +2277,39 @@ class NewsCrawler {
         $summary = trim($summary);
 
         return $summary;
+    }
+
+    /**
+     * 投稿全体のHTMLテキストから不要な定型文を最終的に除去
+     * （どこかの経路で混入してもここで一掃）
+     */
+    private function sanitize_post_content($html) {
+        if (empty($html)) {
+            return '';
+        }
+
+        $patterns = array(
+            // アクセシビリティのスキップリンク類
+            '/メインメニューをとばして[、,\\s]*このページの本文エリアへ/iu',
+            '/メインメニューをとばして/iu',
+            '/メインコンテンツへ/iu',
+            '/本文エリアへ/iu',
+            '/本文へ/iu',
+            '/スキップ/iu',
+            '/Skip to(?:\\s*main\\s*content)?/iu',
+            '/Jump to\\s*main\\s*content/iu',
+
+            // 朝日新聞 固有表現
+            '/朝日新聞(?:デジタル)?[：:\\s]*朝日新聞社のニュースサイト/iu',
+        );
+
+        foreach ($patterns as $pattern) {
+            $html = preg_replace($pattern, '', $html);
+        }
+
+        // 余分な空白を整理
+        $html = preg_replace('/[ \\t\\x{3000}]{2,}/u', ' ', $html);
+        return $html;
     }
 
     /**
@@ -2353,6 +2401,9 @@ class NewsCrawler {
             return false;
         }
         
+        // 仕上げの全体サニタイズ（念のため）
+        $post_content = $this->sanitize_post_content($post_content);
+
         // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
@@ -2477,15 +2528,17 @@ class NewsCrawler {
         // 不要な文字列を除去（ナビゲーション、メニュー、広告など）
         $patterns_to_remove = array(
             // ナビゲーションテキスト（より詳細なパターン）
-            '/メインメニューをとばして、このページの本文エリアへ.*?$/i',
-            '/メインメニューをとばして.*?$/i',
-            '/メインコンテンツへ.*?$/i',
-            '/本文エリアへ.*?$/i',
-            '/本文へ.*?$/i',
-            '/スキップ.*?$/i',
-            '/Skip to.*?$/i',
-            '/Skip to main content.*?$/i',
-            '/Jump to main content.*?$/i',
+            '/メインメニューをとばして、このページの本文エリアへ/iu',
+            '/メインメニューをとばして/iu',
+            '/メインコンテンツへ/iu',
+            '/本文エリアへ/iu',
+            '/本文へ/iu',
+            '/スキップ/iu',
+            '/Skip to/iu',
+            '/Skip to main content/iu',
+            '/Jump to main content/iu',
+            '/朝日新聞：朝日新聞社のニュースサイト/iu',
+            '/朝日新聞デジタル：朝日新聞社のニュースサイト/iu',
 
             // メニュー関連
             '/メニュー.*?$/i',
@@ -2670,15 +2723,17 @@ class NewsCrawler {
 
         // ナビゲーション関連のテキストを直接除去
         $nav_text_patterns = array(
-            '/メインメニューをとばして、このページの本文エリアへ.*?$/i',
-            '/メインメニューをとばして.*?$/i',
-            '/メインコンテンツへ.*?$/i',
-            '/本文エリアへ.*?$/i',
-            '/本文へ.*?$/i',
-            '/スキップ.*?$/i',
-            '/Skip to.*?$/i',
-            '/Skip to main content.*?$/i',
-            '/Jump to main content.*?$/i',
+            '/メインメニューをとばして、このページの本文エリアへ/iu',
+            '/メインメニューをとばして/iu',
+            '/メインコンテンツへ/iu',
+            '/本文エリアへ/iu',
+            '/本文へ/iu',
+            '/スキップ/iu',
+            '/Skip to/iu',
+            '/Skip to main content/iu',
+            '/Jump to main content/iu',
+            '/朝日新聞：朝日新聞社のニュースサイト/iu',
+            '/朝日新聞デジタル：朝日新聞社のニュースサイト/iu',
         );
 
         foreach ($nav_text_patterns as $pattern) {
