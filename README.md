@@ -174,6 +174,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
   - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata
   - Added exponential backoff to OpenAI API calls and improved error messages
   - Enhanced news crawler functionality and logging
+  - Improved documentation comment formatting and removed unnecessary blank lines
 
 - **v2.2.9** (2025-09-03): Enhanced OpenAI summary processing and YouTube API quota handling
   - Enhanced OpenAI summary error handling and retry logic
