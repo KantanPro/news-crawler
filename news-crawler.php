@@ -9,11 +9,9 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: news-crawler
  * Domain Path: /languages
-
  * Requires at least: 5.0
  * Tested up to: 6.9.1
  * Requires PHP: 7.4
-
  **/
 
 // 直接アクセスを防ぐ
