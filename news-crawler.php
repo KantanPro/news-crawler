@@ -1403,8 +1403,13 @@ class NewsCrawler {
         $keywords = isset($options['keywords']) ? $options['keywords'] : array('動画');
         $embed_type = isset($options['embed_type']) ? $options['embed_type'] : 'responsive';
 
-        $keyword_text = implode('、', array_slice($keywords, 0, 3));
-        $post_title = $keyword_text . '：YouTube動画まとめ – ' . date_i18n('Y年n月j日');
+        // タイトルは一時的に【ジャンル名】以降はＡＩで生成（SEOタイトル生成で上書き）
+        $genre_name_for_title = 'ニュース';
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['genre_name']) && !empty($current_genre_setting['genre_name'])) {
+            $genre_name_for_title = $current_genre_setting['genre_name'];
+        }
+        $post_title = '【' . $genre_name_for_title . '】以降はＡＩで生成';
 
         $post_content = '';
 
@@ -2122,14 +2127,12 @@ class NewsCrawler {
             return wp_trim_words($clean_fallback, 50, '...');
         }
 
-        // コンテンツが短すぎる場合は簡易要約を使用
-        if (mb_strlen($article['content']) < 100) {
-            // 短文の場合もクリーンアップ済みテキストから要約
-            $clean_short = $this->clean_content_for_summary($article['content']);
-            if (empty($clean_short)) {
-                return '';
-            }
-            return wp_trim_words($clean_short, 30, '...');
+        // クリーンアップ後のコンテンツが短すぎる場合はスキップ（投稿自体を作成しない判定につながる）
+        $clean_short = $this->clean_content_for_summary($article['content']);
+        $min_length = 120; // 最低必要文字数（必要に応じて調整）
+        if (mb_strlen($clean_short) < $min_length) {
+            error_log('NewsCrawler: 記事要約生成スキップ - 元コンテンツが短すぎます: ' . ($article['title'] ?? ''));
+            return '';
         }
 
         // 要約生成前にコンテンツをさらにクリーンアップ
@@ -2328,8 +2331,13 @@ class NewsCrawler {
         $options = get_option($this->option_name, array());
         $keywords = isset($options['keywords']) ? $options['keywords'] : array('ニュース');
 
-        $keyword_text = implode('、', array_slice($keywords, 0, 3));
-        $post_title = $keyword_text . '：ニュースまとめ – ' . date_i18n('Y年n月j日');
+        // タイトルは一時的に【ジャンル名】以降はＡＩで生成（SEOタイトル生成で上書き）
+        $genre_name_for_title = 'ニュース';
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['genre_name']) && !empty($current_genre_setting['genre_name'])) {
+            $genre_name_for_title = $current_genre_setting['genre_name'];
+        }
+        $post_title = '【' . $genre_name_for_title . '】以降はＡＩで生成';
 
         $post_content = '';
         $valid_articles = array(); // 要約が生成できた記事のみを格納

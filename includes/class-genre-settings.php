@@ -1239,23 +1239,59 @@ class NewsCrawlerGenreSettings {
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
+                    dataType: 'json',
                     data: {
                         action: 'force_auto_posting_execution',
                         nonce: '<?php echo wp_create_nonce('auto_posting_force_nonce'); ?>'
                     },
-                                success: function(response) {
-                if (response.success) {
-                    resultContent.html('✅ 強制実行完了\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                    // レポートを更新
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                }
-            },
-                    error: function() {
-                        resultContent.html('❌ 通信エラーが発生しました');
+                    success: function(response) {
+                        if (response && response.success) {
+                            resultContent.html('✅ 強制実行完了\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                            // レポートを更新
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else if (response && response.data) {
+                            resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                        } else {
+                            resultContent.html('❌ 強制実行失敗\n\n不明な応答形式です');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        // JSONパース失敗時でも成功応答を復旧表示するフォールバック
+                        if (status === 'parsererror' && xhr && xhr.responseText) {
+                            try {
+                                var parsed = JSON.parse(xhr.responseText);
+                                if (parsed && parsed.success) {
+                                    resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                    return;
+                                } else if (parsed && parsed.data) {
+                                    resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                    return;
+                                }
+                            } catch (e) {
+                                // 成功テキストがプレーンで返ってきた場合の簡易検出
+                                if (/強制実行|完了|ログ/.test(xhr.responseText)) {
+                                    resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                    return;
+                                }
+                            }
+                        }
+                        var errorMessage = '実行中にエラーが発生しました。';
+                        if (xhr.responseJSON && xhr.responseJSON.data) {
+                            errorMessage = xhr.responseJSON.data;
+                        } else if (xhr.statusText) {
+                            errorMessage = '通信エラー: ' + xhr.statusText;
+                        } else if (error) {
+                            errorMessage = 'エラー: ' + error;
+                        }
+                        resultContent.html('❌ ' + errorMessage);
                     },
                     complete: function() {
                         button.prop('disabled', false).text('強制実行（今すぐ）');
@@ -1525,19 +1561,41 @@ class NewsCrawlerGenreSettings {
             jQuery.ajax({
                 url: ajaxurl,
                 type: 'POST',
+                dataType: 'json',
                 data: {
                     action: 'genre_settings_execute',
                     nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
                     genre_id: genreId
                 },
                 success: function(response) {
-                    if (response.success) {
+                    if (response && response.success) {
                         jQuery('#execution-result-content').html(response.data);
-                    } else {
+                    } else if (response && response.data) {
                         jQuery('#execution-result-content').html('エラー: ' + response.data);
+                    } else {
+                        jQuery('#execution-result-content').html('エラー: 不明な応答形式です');
                     }
                 },
                 error: function(xhr, status, error) {
+                    // JSONパース失敗時でも成功応答を復旧表示するフォールバック
+                    if (status === 'parsererror' && xhr && xhr.responseText) {
+                        try {
+                            var parsed = JSON.parse(xhr.responseText);
+                            if (parsed && parsed.success) {
+                                jQuery('#execution-result-content').html(parsed.data);
+                                return;
+                            } else if (parsed && parsed.data) {
+                                jQuery('#execution-result-content').html('エラー: ' + parsed.data);
+                                return;
+                            }
+                        } catch (e) {
+                            // 成功テキストがプレーンで返ってきた場合の簡易検出
+                            if (/\b投稿ID\b|\b作成しました\b/.test(xhr.responseText)) {
+                                jQuery('#execution-result-content').html(xhr.responseText);
+                                return;
+                            }
+                        }
+                    }
                     var errorMessage = '実行中にエラーが発生しました。';
                     if (xhr.responseJSON && xhr.responseJSON.data) {
                         errorMessage = xhr.responseJSON.data;
