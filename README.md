@@ -169,10 +169,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 ### Recent Updates
 
 - **v2.2.9** (2025-09-03): Enhanced OpenAI summary processing and YouTube API quota handling
-  - Improved OpenAI summary error handling and retry logic (exponential backoff)
-  - Enhanced summary generation stability and expanded debug logging
-  - Added YouTube API quota limit handling and improved error management
-  - Miscellaneous fixes around admin UI and automatic posting flow
+  - Enhanced OpenAI summary error handling and retry logic
+  - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata. Added exponential backoff to OpenAI API calls and improved error messages
+  - Enhanced news crawler functionality and logging
+  - Improved News Crawler metadata setting process with immediate post status updates. Enabled AI summary generation by default with enhanced error logging. Added option to force enable AI functionality in license management
+  - Added News Crawler Cron execution logs to record start and end messages. Enhanced detailed logging of execution status via HTTP requests
 
 - **v2.2.8** (2025-09-03): AISEO OpenAI improvements and news crawler enhancements
   - Added exponential backoff to AISEO OpenAI API calls and improved error messages
@@ -340,10 +341,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### v2.2.9 - 2025-09-03
 
-- Bumped plugin version to 2.2.9 and prepared release package
-- Improved OpenAI summary error handling and retry logic (exponential backoff)
-- Strengthened summary generation stability and expanded debug logging
-- Miscellaneous fixes around admin UI and automatic posting flow
+- Enhanced OpenAI summary error handling and retry logic
+- Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata. Added exponential backoff to OpenAI API calls and improved error messages
+- Enhanced news crawler functionality and logging
+- Improved News Crawler metadata setting process with immediate post status updates. Enabled AI summary generation by default with enhanced error logging. Added option to force enable AI functionality in license management
+- Added News Crawler Cron execution logs to record start and end messages. Enhanced detailed logging of execution status via HTTP requests
 
 ## 🆘 Support
 
