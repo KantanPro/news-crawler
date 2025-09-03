@@ -168,7 +168,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.2.8** (2025-09-03): AISEO OpenAI API improvements and news crawler enhancements
+- **v2.2.9** (2025-09-03): Enhanced OpenAI summary processing and YouTube API quota handling
+  - Improved OpenAI summary error handling and retry logic (exponential backoff)
+  - Enhanced summary generation stability and expanded debug logging
+  - Added YouTube API quota limit handling and improved error management
+  - Miscellaneous fixes around admin UI and automatic posting flow
+
+- **v2.2.8** (2025-09-03): AISEO OpenAI improvements and news crawler enhancements
   - Added exponential backoff to AISEO OpenAI API calls and improved error messages
   - Enhanced news crawler functionality and logging
   - Improved plugin stability and performance
@@ -329,6 +335,15 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
   - Production deployment ready with comprehensive testing
 - **v1.9.17**: Enhanced news source sorting and debug information
 - **v1.9.16**: Automatic cron setup and improved reliability
+
+## Changelog
+
+### v2.2.9 - 2025-09-03
+
+- Bumped plugin version to 2.2.9 and prepared release package
+- Improved OpenAI summary error handling and retry logic (exponential backoff)
+- Strengthened summary generation stability and expanded debug logging
+- Miscellaneous fixes around admin UI and automatic posting flow
 
 ## 🆘 Support
 
