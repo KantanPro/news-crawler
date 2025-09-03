@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 2.2.8
+Stable tag: 2.2.9
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -275,35 +275,6 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * アイキャッチ画像の更新時にOGPマネージャーに通知する処理を実装
 * 投稿設定のサブメニュー名を変更
 * Cronスケジュールリセット機能を追加
-
-== Installation ==
-
-1. プラグインファイルを `/wp-content/plugins/news-crawler/` ディレクトリにアップロードします
-2. WordPressの管理画面でプラグインを有効化します
-3. 設定画面で必要なAPIキーを設定します
-
-== Frequently Asked Questions ==
-
-= どのようなニュースソースに対応していますか？ =
-
-RSSフィード、YouTubeチャンネル、その他のAPI対応サービスに対応しています。
-
-= YouTube APIのクォータ制限はどのように対応していますか？ =
-
-v1.9.0から、APIクォータの使用状況を監視し、制限に達した際の適切な処理を実装しています。
-
-= X（旧Twitter）への自動投稿はどのように設定しますか？ =
-
-管理画面のSNS設定から、X APIキーを設定することで自動投稿が可能になります。
-
-== Screenshots ==
-
-1. 管理画面のメインページ
-2. ジャンル設定画面
-3. YouTubeクローラー設定
-4. アイキャッチ生成設定
-
-== Changelog ==
 
 = 2.2.8 =
 * 2025年9月3日リリース

@@ -1240,81 +1240,110 @@ class NewsCrawler {
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
         $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
         $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
-        
+
+        // 設定情報のデバッグ出力
+        error_log('NewsCrawler: YouTubeクロール開始');
+        error_log('NewsCrawler: 設定されたチャンネル: ' . implode(', ', $channels));
+        error_log('NewsCrawler: 設定されたキーワード: ' . implode(', ', $keywords));
+        error_log('NewsCrawler: 最大動画数: ' . $max_videos);
+
         if (empty($channels)) {
-            return 'YouTubeチャンネルが設定されていません。';
+            error_log('NewsCrawler: YouTubeチャンネルが設定されていません');
+            return 'YouTubeチャンネルが設定されていません。設定画面でチャンネルIDを追加してください。';
         }
-        
+
         if (empty($this->api_key)) {
-            return 'YouTube APIキーが設定されていません。';
+            error_log('NewsCrawler: YouTube APIキーが設定されていません');
+            return 'YouTube APIキーが設定されていません。Google Cloud ConsoleでAPIキーを取得して設定してください。';
         }
-        
+
         $matched_videos = array();
         $errors = array();
         $duplicates_skipped = 0;
         $debug_info = array();
-        
+
         foreach ($channels as $channel) {
             try {
+                error_log('NewsCrawler: チャンネル ' . $channel . ' から動画を取得開始');
                 $videos = $this->fetch_channel_videos($channel, 20);
+
                 if ($videos && is_array($videos)) {
                     $debug_info[] = $channel . ': ' . count($videos) . '件の動画を取得';
+                    error_log('NewsCrawler: ' . $channel . ' から ' . count($videos) . '件の動画を取得');
+
                     foreach ($videos as $video) {
+                        error_log('NewsCrawler: 動画チェック: ' . $video['title']);
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
                             $debug_info[] = '  - キーワードマッチ: ' . $video['title'];
+                            error_log('NewsCrawler: キーワードマッチ成功: ' . $video['title']);
                         } else {
                             $debug_info[] = '  - キーワードマッチなし: ' . $video['title'];
+                            error_log('NewsCrawler: キーワードマッチ失敗: ' . $video['title']);
                         }
                     }
+                } else {
+                    $debug_info[] = $channel . ': 動画を取得できませんでした';
+                    error_log('NewsCrawler: ' . $channel . ' から動画を取得できませんでした');
                 }
             } catch (Exception $e) {
-                $errors[] = $channel . ': ' . $e->getMessage();
+                $error_msg = $channel . ': ' . $e->getMessage();
+                $errors[] = $error_msg;
+                $debug_info[] = $error_msg;
+                error_log('NewsCrawler: チャンネル ' . $channel . ' の処理でエラー: ' . $e->getMessage());
             }
         }
-        
+
         $debug_info[] = "\nキーワードマッチした動画数: " . count($matched_videos);
-        
+        error_log('NewsCrawler: キーワードマッチした動画数: ' . count($matched_videos));
+
         $valid_videos = array();
         foreach ($matched_videos as $video) {
             $debug_info[] = "  - 動画: " . $video['title'];
-            
+
             if ($this->is_duplicate_video($video)) {
                 $duplicates_skipped++;
                 $debug_info[] = "    → 重複のためスキップ";
+                error_log('NewsCrawler: 重複動画をスキップ: ' . $video['title']);
                 continue;
             }
-            
+
             $debug_info[] = "    → 有効動画として追加";
             $valid_videos[] = $video;
+            error_log('NewsCrawler: 有効動画として追加: ' . $video['title']);
         }
-        
+
         $valid_videos = array_slice($valid_videos, 0, $max_videos);
-        
+        error_log('NewsCrawler: 最終的に処理する動画数: ' . count($valid_videos));
+
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_videos)) {
+            error_log('NewsCrawler: 動画投稿作成開始');
             $post_id = $this->create_video_summary_post($valid_videos, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
                 $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+                error_log('NewsCrawler: 動画投稿作成成功: 投稿ID ' . $post_id);
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
+                error_log('NewsCrawler: 動画投稿作成失敗: ' . $error_message);
             }
         } else {
             $debug_info[] = "\n有効な動画がないため投稿を作成しませんでした";
+            error_log('NewsCrawler: 有効な動画がないため投稿を作成しませんでした');
         }
-        
+
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
         $result .= "\n投稿ID: " . ($post_id ?? 'なし');
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
-        
+
         $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
-        
+
         $this->update_youtube_statistics($posts_created, $duplicates_skipped);
-        
+
         return $result;
     }
     
@@ -1370,141 +1399,147 @@ class NewsCrawler {
         foreach ($categories as $category) {
             $cat_ids[] = $this->get_or_create_category($category);
         }
-        
+
         // キーワード情報を取得
         $options = get_option($this->option_name, array());
         $keywords = isset($options['keywords']) ? $options['keywords'] : array('動画');
         $embed_type = isset($options['embed_type']) ? $options['embed_type'] : 'responsive';
-        
+
         $keyword_text = implode('、', array_slice($keywords, 0, 3));
         $post_title = $keyword_text . '：YouTube動画まとめ – ' . date_i18n('Y年n月j日');
-        
+
         $post_content = '';
-        
+
         foreach ($videos as $video) {
-            $post_content .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"20px","bottom":"20px"}}}} -->';
-            $post_content .= '<div class="wp-block-group" style="margin-top:20px;margin-bottom:20px">';
-            
-            $post_content .= '<!-- wp:heading {"level":3} -->';
-            $post_content .= '<h3>' . esc_html($video['title']) . '</h3>';
+            // 動画区切り
+            $post_content .= '<!-- wp:separator -->';
+            $post_content .= '<hr class="wp-block-separator has-alpha-channel-opacity"/>';
+            $post_content .= '<!-- /wp:separator -->';
+
+            // 動画タイトル
+            $post_content .= '<!-- wp:heading -->';
+            $post_content .= '<h2>' . esc_html($video['title']) . '</h2>';
             $post_content .= '<!-- /wp:heading -->';
-            
-            // 動画の埋め込み（ブロックエディタ対応）
+
+            // 動画の埋め込み
             $youtube_url = 'https://www.youtube.com/watch?v=' . esc_attr($video['video_id']);
-            
+
             if ($embed_type === 'responsive' || $embed_type === 'classic') {
-                // WordPress標準のYouTube埋め込みブロック
-                $post_content .= '<!-- wp:embed {"url":"' . esc_url($youtube_url) . '","type":"video","providerNameSlug":"youtube","responsive":true,"className":"wp-embed-aspect-16-9 wp-has-aspect-ratio"} -->';
-                $post_content .= '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio">';
+                // WordPress標準のYouTube埋め込みブロック（シンプル版）
+                $post_content .= '<!-- wp:embed {"url":"' . esc_url($youtube_url) . '","type":"video","providerNameSlug":"youtube","responsive":true} -->';
+                $post_content .= '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube">';
                 $post_content .= '<div class="wp-block-embed__wrapper">';
-                $post_content .= $youtube_url;
+                $post_content .= esc_url($youtube_url);
                 $post_content .= '</div></figure>';
                 $post_content .= '<!-- /wp:embed -->';
             } else {
                 // ミニマル埋め込み（リンクのみ）
                 $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">📺 YouTubeで視聴する</a></p>';
+                $post_content .= '<p><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer"><strong>📺 YouTubeで視聴する</strong></a></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
-            
+
+            // 動画説明
             if (!empty($video['description'])) {
                 $post_content .= '<!-- wp:paragraph -->';
                 $post_content .= '<p>' . esc_html(wp_trim_words($video['description'], 100, '...')) . '</p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
-            
-            $meta_info = [];
+
+            // メタ情報
+            $meta_info = array();
+
             if (!empty($video['published_at'])) {
                 $meta_info[] = '<strong>公開日:</strong> ' . esc_html($video['published_at']);
             }
+
             if (!empty($video['channel_title'])) {
                 $meta_info[] = '<strong>チャンネル:</strong> ' . esc_html($video['channel_title']);
             }
+
             if (!empty($video['duration'])) {
                 $meta_info[] = '<strong>動画時間:</strong> ' . esc_html($video['duration']);
             }
+
             if (!empty($video['view_count'])) {
                 $meta_info[] = '<strong>視聴回数:</strong> ' . esc_html(number_format($video['view_count'])) . '回';
             }
 
             if (!empty($meta_info)) {
-                $post_content .= '<!-- wp:paragraph {"fontSize":"small"} -->';
-                $post_content .= '<p class="has-small-font-size">' . implode(' | ', $meta_info) . '</p>';
+                $post_content .= '<!-- wp:paragraph -->';
+                $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
-
-            $post_content .= '</div>';
-            $post_content .= '<!-- /wp:group -->';
         }
-        
-        // News Crawler用の処理のため、最初に下書きとして投稿を作成
+
+        // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => 'draft', // 最初は下書きとして作成
+            'post_status'   => $status, // 設定されたステータスで直接作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
         );
-        
+
+        // 予約投稿の場合、日時を設定
+        if ($status === 'future') {
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $scheduled_time = isset($basic_settings['scheduled_publish_time']) ? $basic_settings['scheduled_publish_time'] : '09:00';
+
+            // 今日の日付に予約時間を設定
+            $publish_date = date('Y-m-d') . ' ' . $scheduled_time . ':00';
+            $post_data['post_date'] = $publish_date;
+            $post_data['post_date_gmt'] = get_gmt_from_date($publish_date);
+        }
+
         $post_id = wp_insert_post($post_data, true);
-        
+
         if (is_wp_error($post_id)) {
             return $post_id;
         }
-        
+
         // メタデータの保存
         update_post_meta($post_id, '_youtube_summary', true);
         update_post_meta($post_id, '_youtube_videos_count', count($videos));
         update_post_meta($post_id, '_youtube_crawled_date', current_time('mysql'));
-        
-        // XPoster連携用のメタデータを追加
         update_post_meta($post_id, '_news_crawler_created', true);
         update_post_meta($post_id, '_news_crawler_creation_method', 'youtube');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_ready', false);
-        
-        // News Crawler用のメタデータを設定
-        update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_ready', false);
-        
+        update_post_meta($post_id, '_news_crawler_ready', true); // ステータス変更不要のためtrueに設定
+
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
         if ($current_genre_setting && isset($current_genre_setting['id'])) {
             update_post_meta($post_id, '_youtube_crawler_genre_id', $current_genre_setting['id']);
         }
-        
+
         foreach ($videos as $index => $video) {
             update_post_meta($post_id, '_youtube_video_' . $index . '_title', $video['title']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_id', $video['video_id']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_channel', $video['channel_title']);
         }
-        
-        // アイキャッチ生成（ジャンル設定から呼び出された場合）
-        error_log('NewsCrawler: About to call maybe_generate_featured_image for YouTube post ' . $post_id);
+
+        // アイキャッチ生成
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
-        error_log('NewsCrawler: YouTube maybe_generate_featured_image returned: ' . ($featured_result ? 'Success (ID: ' . $featured_result . ')' : 'Failed or skipped'));
-        
-        // AI要約生成（メタデータ設定後に呼び出し）
-        error_log('NewsCrawler: About to call AI summarizer for YouTube post ' . $post_id);
+
+        // AI要約生成
         if (class_exists('NewsCrawlerOpenAISummarizer')) {
-            error_log('NewsCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
-            $summarizer = new NewsCrawlerOpenAISummarizer();
-            error_log('NewsCrawler: Calling generate_summary for post ' . $post_id);
-            $summarizer->generate_summary($post_id);
-            error_log('NewsCrawler: generate_summary completed for post ' . $post_id);
-        } else {
-            error_log('NewsCrawler: NewsCrawlerOpenAISummarizer class NOT found');
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
+
+            if ($auto_summary_enabled) {
+                error_log('NewsCrawler: AI要約生成を実行します (YouTube投稿ID: ' . $post_id . ')');
+                $summarizer = new NewsCrawlerOpenAISummarizer();
+                $summarizer->generate_summary($post_id);
+            } else {
+                error_log('NewsCrawler: AI要約生成が無効のためスキップします (YouTube投稿ID: ' . $post_id . ')');
+            }
         }
-        
-        // X（Twitter）自動シェア機能は削除済み
-        
-        // News Crawler用の処理のため、投稿ステータス変更を遅延実行
-        if ($status !== 'draft') {
-            $this->schedule_post_status_update($post_id, $status);
-        }
-        
+
+        error_log('NewsCrawler: YouTube投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
+
         return $post_id;
     }
     
@@ -1617,9 +1652,9 @@ class NewsCrawler {
             'type' => 'video',
             'maxResults' => $max_results
         );
-        
+
         $url = add_query_arg($params, $api_url);
-        
+
         // cURL設定を調整（ローカル環境用）
         $response = wp_remote_get($url, array(
             'timeout' => 60, // タイムアウトを60秒に延長
@@ -1628,26 +1663,57 @@ class NewsCrawler {
             'blocking' => true,
             'user-agent' => 'News Crawler Plugin/1.0'
         ));
-        
+
         if (is_wp_error($response)) {
             throw new Exception('APIリクエストに失敗しました: ' . $response->get_error_message());
         }
-        
+
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
-        
-        if (!$data || !isset($data['items'])) {
-            throw new Exception('APIレスポンスの解析に失敗しました');
+
+        // YouTube APIエラーのチェック
+        if (isset($data['error'])) {
+            $error_code = $data['error']['code'] ?? 0;
+            $error_message = $data['error']['message'] ?? '不明なエラー';
+
+            // クォータ超過エラーの場合
+            if ($error_code === 403) {
+                if (strpos($error_message, 'quota') !== false || strpos($error_message, 'limit') !== false) {
+                    throw new Exception('YouTube APIのクォータ（利用制限）を超過しています。24時間後に再試行してください。');
+                } elseif (strpos($error_message, 'disabled') !== false) {
+                    throw new Exception('YouTube APIが無効化されています。Google Cloud ConsoleでAPIを有効化してください。');
+                } else {
+                    throw new Exception('YouTube APIアクセスが拒否されました: ' . $error_message);
+                }
+            }
+            // APIキーが無効の場合
+            elseif ($error_code === 400) {
+                throw new Exception('YouTube APIキーが無効です。正しいAPIキーを設定してください。');
+            }
+            // その他のエラー
+            else {
+                throw new Exception('YouTube APIエラー (' . $error_code . '): ' . $error_message);
+            }
         }
-        
+
+        if (!$data || !isset($data['items'])) {
+            throw new Exception('APIレスポンスの解析に失敗しました。チャンネルIDが正しいか確認してください。');
+        }
+
         $videos = array();
         foreach ($data['items'] as $item) {
             $snippet = $item['snippet'];
             $video_id = $item['id']['videoId'];
-            
-            // 動画の詳細情報を取得
-            $video_details = $this->fetch_video_details($video_id);
-            
+
+            // 動画の詳細情報を取得（エラーハンドリング付き）
+            $video_details = array();
+            try {
+                $video_details = $this->fetch_video_details($video_id);
+            } catch (Exception $e) {
+                error_log('NewsCrawler: 動画詳細取得エラー (' . $video_id . '): ' . $e->getMessage());
+                // 詳細取得に失敗しても動画情報は保持
+            }
+
             $videos[] = array(
                 'video_id' => $video_id,
                 'title' => $snippet['title'],
@@ -1660,7 +1726,7 @@ class NewsCrawler {
                 'view_count' => $video_details['view_count'] ?? 0
             );
         }
-        
+
         return $videos;
     }
     
@@ -1849,37 +1915,74 @@ class NewsCrawler {
     }
     
     /**
-     * RSSフィードから記事を取得
+     * RSSフィードから記事を取得（詳細版）
      */
     private function fetch_rss_articles($url, $max_results = 20) {
         if (!class_exists('SimplePie')) {
             require_once(ABSPATH . WPINC . '/class-simplepie.php');
         }
-        
+
         $feed = new SimplePie();
         $feed->set_feed_url($url);
         $feed->set_cache_location(WP_CONTENT_DIR . '/cache');
         $feed->set_cache_duration(300); // 5分
+        $feed->enable_order_by_date(true);
+        $feed->enable_cache(true);
         $feed->init();
-        
+
         if ($feed->error()) {
             throw new Exception('RSSフィードの読み込みに失敗しました: ' . $feed->error());
         }
-        
+
         $items = $feed->get_items();
         $articles = array();
-        
+
         foreach (array_slice($items, 0, $max_results) as $item) {
-            $articles[] = array(
+            // 詳細なコンテンツを取得
+            $content = $item->get_content();
+            $description = $item->get_description();
+
+            // コンテンツが空の場合は説明文を使用
+            if (empty($content) && !empty($description)) {
+                $content = $description;
+            }
+
+            // HTMLタグを除去してクリーンなテキストを取得
+            $clean_content = $this->clean_article_content($content);
+
+            // カテゴリ情報を取得
+            $categories = array();
+            if ($item->get_categories()) {
+                foreach ($item->get_categories() as $category) {
+                    $categories[] = $category->get_label();
+                }
+            }
+
+            // より詳細な記事情報を取得
+            $article_data = array(
                 'title' => $item->get_title(),
-                'content' => $item->get_content(),
+                'content' => $clean_content,
+                'description' => $description,
                 'url' => $item->get_permalink(),
                 'published_at' => $item->get_date('Y-m-d H:i:s'),
                 'author' => $item->get_author() ? $item->get_author()->get_name() : '',
-                'source' => $url
+                'source' => $url,
+                'categories' => $categories,
+                'guid' => $item->get_id(),
+                'excerpt' => $item->get_description() ? wp_trim_words(strip_tags($item->get_description()), 50, '...') : ''
             );
+
+            // 記事の詳細ページから追加コンテンツを取得（可能であれば）
+            if (!empty($article_data['url'])) {
+                $additional_content = $this->fetch_additional_content($article_data['url']);
+                if (!empty($additional_content)) {
+                    $article_data['content'] = $additional_content;
+                }
+            }
+
+            $articles[] = $article_data;
         }
-        
+
         return $articles;
     }
     
@@ -2022,62 +2125,79 @@ class NewsCrawler {
         $post_content = '';
         
         foreach ($articles as $article) {
-            $post_content .= '<!-- wp:group {"style":{"spacing":{"margin":{"top":"20px","bottom":"20px"}}}} -->';
-            $post_content .= '<div class="wp-block-group" style="margin-top:20px;margin-bottom:20px">';
-            
-            $post_content .= '<!-- wp:heading {"level":3} -->';
-            $post_content .= '<h3>' . esc_html($article['title']) . '</h3>';
+            // 記事区切り
+            $post_content .= '<!-- wp:separator -->';
+            $post_content .= '<hr class="wp-block-separator has-alpha-channel-opacity"/>';
+            $post_content .= '<!-- /wp:separator -->';
+
+            // 記事タイトル
+            $post_content .= '<!-- wp:heading -->';
+            $post_content .= '<h2>' . esc_html($article['title']) . '</h2>';
             $post_content .= '<!-- /wp:heading -->';
-            
+
+            // 記事本文抜粋
             if (!empty($article['content'])) {
                 $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p>' . esc_html(wp_trim_words($article['content'], 100, '...')) . '</p>';
+                $post_content .= '<p>' . esc_html(wp_trim_words($article['content'], 120, '...')) . '</p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
-            
-            if (!empty($article['url'])) {
-                $post_content .= '<!-- wp:paragraph -->';
-                $post_content .= '<p><a href="' . esc_url($article['url']) . '" target="_blank" rel="noopener noreferrer">📰 元記事を読む</a></p>';
-                $post_content .= '<!-- /wp:paragraph -->';
-            }
-            
-            $meta_info = [];
+
+            // メタ情報（シンプルな段落形式）
+            $meta_info = array();
+
             if (!empty($article['published_at'])) {
                 $meta_info[] = '<strong>公開日:</strong> ' . esc_html($article['published_at']);
             }
+
             if (!empty($article['author'])) {
                 $meta_info[] = '<strong>著者:</strong> ' . esc_html($article['author']);
             }
+
             if (!empty($article['source'])) {
                 $meta_info[] = '<strong>ソース:</strong> ' . esc_html($article['source']);
             }
-            
+
             if (!empty($meta_info)) {
-                $post_content .= '<!-- wp:paragraph {"fontSize":"small"} -->';
-                $post_content .= '<p class="has-small-font-size">' . implode(' | ', $meta_info) . '</p>';
+                $post_content .= '<!-- wp:paragraph -->';
+                $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
-            
-            $post_content .= '</div>';
-            $post_content .= '<!-- /wp:group -->';
+
+            // 元記事へのリンク
+            if (!empty($article['url'])) {
+                $post_content .= '<!-- wp:paragraph -->';
+                $post_content .= '<p><a href="' . esc_url($article['url']) . '" target="_blank" rel="noopener noreferrer"><strong>元記事を読む →</strong></a></p>';
+                $post_content .= '<!-- /wp:paragraph -->';
+            }
         }
         
-        // News Crawler用の処理のため、最初に下書きとして投稿を作成
+        // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => 'draft', // 最初は下書きとして作成
+            'post_status'   => $status, // 設定されたステータスで直接作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
         );
-        
+
+        // 予約投稿の場合、日時を設定
+        if ($status === 'future') {
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            $scheduled_time = isset($basic_settings['scheduled_publish_time']) ? $basic_settings['scheduled_publish_time'] : '09:00';
+
+            // 今日の日付に予約時間を設定
+            $publish_date = date('Y-m-d') . ' ' . $scheduled_time . ':00';
+            $post_data['post_date'] = $publish_date;
+            $post_data['post_date_gmt'] = get_gmt_from_date($publish_date);
+        }
+
         $post_id = wp_insert_post($post_data, true);
-        
+
         if (is_wp_error($post_id)) {
             return $post_id;
         }
-        
+
         // メタデータの保存
         update_post_meta($post_id, '_news_summary', true);
         update_post_meta($post_id, '_news_articles_count', count($articles));
@@ -2086,28 +2206,28 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_crawler_creation_method', 'news');
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
-        update_post_meta($post_id, '_news_crawler_ready', false);
-        
+        update_post_meta($post_id, '_news_crawler_ready', true); // ステータス変更不要のためtrueに設定
+
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
         if ($current_genre_setting && isset($current_genre_setting['id'])) {
             update_post_meta($post_id, '_news_crawler_genre_id', $current_genre_setting['id']);
         }
-        
+
         // ソースURLを保存
         if (!empty($articles[0]['url'])) {
             update_post_meta($post_id, '_news_crawler_source_url', $articles[0]['url']);
         }
-        
+
         // アイキャッチ生成
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
-        
+
         // AI要約生成
         if (class_exists('NewsCrawlerOpenAISummarizer')) {
             // 基本設定で要約生成が有効かチェック（デフォルトで有効）
             $basic_settings = get_option('news_crawler_basic_settings', array());
             $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
-            
+
             if ($auto_summary_enabled) {
                 error_log('NewsCrawler: AI要約生成を実行します (投稿ID: ' . $post_id . ')');
                 $summarizer = new NewsCrawlerOpenAISummarizer();
@@ -2116,28 +2236,8 @@ class NewsCrawler {
                 error_log('NewsCrawler: AI要約生成が無効のためスキップします (投稿ID: ' . $post_id . ')');
             }
         }
-        
-        // 投稿ステータス変更を即座に実行（cronジョブに依存しない）
-        error_log('NewsCrawler: 投稿ステータス変更処理開始 - 現在のステータス: ' . $status . ', 投稿ID: ' . $post_id);
-        if ($status !== 'draft') {
-            // 即座にステータスを変更
-            $update_data = array(
-                'ID' => $post_id,
-                'post_status' => $status
-            );
-            
-            error_log('NewsCrawler: 投稿ステータス更新を実行 - データ: ' . print_r($update_data, true));
-            $result = wp_update_post($update_data);
-            if ($result) {
-                error_log('NewsCrawler: 投稿ステータスを即座に ' . $status . ' に更新しました (ID: ' . $post_id . ')');
-            } else {
-                error_log('NewsCrawler: 投稿ステータスの即座更新に失敗しました (ID: ' . $post_id . ')');
-                // 即座更新に失敗した場合は遅延実行をスケジュール
-                $this->schedule_post_status_update($post_id, $status);
-            }
-        } else {
-            error_log('NewsCrawler: ステータスがdraftのため、ステータス変更をスキップしました (ID: ' . $post_id . ')');
-        }
+
+        error_log('NewsCrawler: 投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
         
         return $post_id;
     }
@@ -2167,26 +2267,138 @@ class NewsCrawler {
     }
     
     /**
+     * 記事コンテンツをクリーンアップ
+     */
+    private function clean_article_content($content) {
+        if (empty($content)) {
+            return '';
+        }
+
+        // HTMLタグを除去
+        $clean_content = wp_strip_all_tags($content);
+
+        // 余分な空白を除去
+        $clean_content = preg_replace('/\s+/', ' ', $clean_content);
+        $clean_content = trim($clean_content);
+
+        // 特殊文字をデコード
+        $clean_content = html_entity_decode($clean_content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // 不要な文字列を除去（広告や関連記事へのリンクなど）
+        $patterns_to_remove = array(
+            '/\[.*?\]/',  // 角括弧内のテキスト
+            '/\(.*?\)/',  // 丸括弧内のテキスト（一部）
+            '/続きを読む.*?$/i',  // 「続きを読む」以降
+            '/関連記事.*?$/i',    // 「関連記事」以降
+            '/広告.*?$/i',       // 「広告」以降
+            '/スポンサーリンク.*?$/i', // 「スポンサーリンク」以降
+        );
+
+        foreach ($patterns_to_remove as $pattern) {
+            $clean_content = preg_replace($pattern, '', $clean_content);
+        }
+
+        // 再度トリム
+        $clean_content = trim($clean_content);
+
+        return $clean_content;
+    }
+
+    /**
+     * 記事の詳細ページから追加コンテンツを取得
+     */
+    private function fetch_additional_content($url) {
+        try {
+            $response = wp_remote_get($url, array(
+                'timeout' => 15,
+                'sslverify' => false,
+                'user_agent' => 'News Crawler Plugin/1.0',
+                'headers' => array(
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'ja,en-US;q=0.7,en;q=0.3',
+                    'Accept-Encoding' => 'gzip, deflate',
+                    'DNT' => '1',
+                    'Connection' => 'keep-alive',
+                    'Upgrade-Insecure-Requests' => '1',
+                )
+            ));
+
+            if (is_wp_error($response)) {
+                error_log('NewsCrawler: 追加コンテンツ取得エラー: ' . $response->get_error_message());
+                return '';
+            }
+
+            $body = wp_remote_retrieve_body($response);
+
+            if (empty($body)) {
+                return '';
+            }
+
+            // 記事本文を抽出するためのパターン
+            $content_patterns = array(
+                // JSON-LD構造化データから本文を取得
+                '/"articleBody"\s*:\s*"([^"]*(?:\\\\.[^"]*)*)"/s',
+                // 一般的な記事本文クラス
+                '/<div[^>]*class="[^"]*article-body[^"]*"[^>]*>(.*?)<\/div>/si',
+                '/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)<\/div>/si',
+                '/<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)<\/div>/si',
+                '/<article[^>]*>(.*?)<\/article>/si',
+                // 一般的な段落の集まり
+                '/<p[^>]*>.*?<\/p>(?:\s*<p[^>]*>.*?<\/p>)*/si',
+            );
+
+            $additional_content = '';
+
+            foreach ($content_patterns as $pattern) {
+                if (preg_match($pattern, $body, $matches)) {
+                    $extracted_content = $matches[1];
+
+                    // JSON-LDの場合はデコード
+                    if (strpos($pattern, 'articleBody') !== false) {
+                        $extracted_content = json_decode('"' . $extracted_content . '"');
+                    }
+
+                    if (!empty($extracted_content)) {
+                        $additional_content = $this->clean_article_content($extracted_content);
+                        break;
+                    }
+                }
+            }
+
+            // コンテンツが十分な長さがある場合のみ使用
+            if (mb_strlen($additional_content) > 100) {
+                error_log('NewsCrawler: 追加コンテンツ取得成功 - 長さ: ' . mb_strlen($additional_content) . '文字');
+                return $additional_content;
+            }
+
+        } catch (Exception $e) {
+            error_log('NewsCrawler: 追加コンテンツ取得例外: ' . $e->getMessage());
+        }
+
+        return '';
+    }
+
+    /**
      * タイトルの類似度を計算
      */
     private function calculate_title_similarity($title1, $title2) {
         $title1 = strtolower(trim($title1));
         $title2 = strtolower(trim($title2));
-        
+
         if ($title1 === $title2) {
             return 1.0;
         }
-        
+
         $words1 = explode(' ', $title1);
         $words2 = explode(' ', $title2);
-        
+
         $common_words = array_intersect($words1, $words2);
         $total_words = array_unique(array_merge($words1, $words2));
-        
+
         if (empty($total_words)) {
             return 0.0;
         }
-        
+
         return count($common_words) / count($total_words);
     }
 }
