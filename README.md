@@ -169,6 +169,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 ### Recent Updates
 
 - **v2.3.0** (2025-09-03): Enhanced category handling and AI processing improvements
+  - Added article summary generation feature using OpenAI API to create detailed summaries
+  - Added site title extraction from article pages
   - Improved post category retrieval method to return the first category name
   - Enhanced OpenAI summary error handling and retry logic
   - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata

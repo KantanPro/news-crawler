@@ -2,7 +2,7 @@
 Contributors: KantanPro
 Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
-Tested up to: 6.4
+Tested up to: 6.9.1
 Requires PHP: 7.4
 Stable tag: 2.3.0
 License: MIT
@@ -26,6 +26,8 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 
 **新機能（v2.3.0）:**
 * 2025年9月3日リリース
+* 記事要約生成機能を追加（OpenAI APIで詳細な要約を作成）
+* 記事ページからサイトタイトルを抽出する機能を追加
 * 投稿カテゴリーの取得方法を改善し、最初のカテゴリー名を返すように変更
 * OpenAI の要約エラー処理と再試行ロジックを強化
 * デバッグ用にAI生成を強化し、メタデータがない場合でも要約とSEOタイトル生成を続行するようにしました
