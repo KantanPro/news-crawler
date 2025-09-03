@@ -285,11 +285,7 @@ class NewsCrawlerUpdater {
      */
     public function check_for_updates($transient) {
         try {
-            // WordPress標準のUpdate URIが設定されている場合は、独自の更新チェックをスキップ
-            $plugin_data = get_plugin_data($this->plugin_file);
-            if (!empty($plugin_data['UpdateURI']) && $plugin_data['UpdateURI'] !== 'false') {
-                return $transient;
-            }
+            // 独自の更新チェックを実行
             
             // プロパティの初期化を確実に行う
             $transient = $this->ensure_transient_properties($transient);
@@ -615,11 +611,7 @@ class NewsCrawlerUpdater {
             return;
         }
         
-        // WordPress標準のUpdate URIが設定されている場合は、独自の更新通知を表示しない
-        $plugin_data = get_plugin_data($this->plugin_file);
-        if (!empty($plugin_data['UpdateURI']) && $plugin_data['UpdateURI'] !== 'false') {
-            return;
-        }
+        // 独自の更新通知を表示
         
         $latest_version = $this->get_latest_version();
         if (!$latest_version || !isset($latest_version['version'])) {

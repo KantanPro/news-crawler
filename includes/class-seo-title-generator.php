@@ -137,47 +137,21 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
-     * News Crawlerで設定されているジャンル名を取得
+     * 投稿カテゴリーで選択した最初（一番上）のカテゴリーを取得
      */
     private function get_news_crawler_genre_name($post_id) {
-        // ニュース投稿のジャンルIDを取得
-        $news_genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
-
-        // YouTube投稿のジャンルIDを取得
-        $youtube_genre_id = get_post_meta($post_id, '_youtube_crawler_genre_id', true);
-
-        $genre_id = null;
-
-        if (!empty($news_genre_id)) {
-            $genre_id = $news_genre_id;
-        } elseif (!empty($youtube_genre_id)) {
-            $genre_id = $youtube_genre_id;
-        }
-
-        if ($genre_id) {
-            // ジャンル設定からジャンル名を取得
-            $genre_settings = get_option('news_crawler_genre_settings', array());
-            if (isset($genre_settings[$genre_id]) && isset($genre_settings[$genre_id]['genre_name'])) {
-                return $genre_settings[$genre_id]['genre_name'];
-            }
-        }
-
-        // ジャンル名が取得できない場合は、カテゴリーから推測
-        $categories = wp_get_post_categories($post_id);
+        // 投稿に設定されたカテゴリーを、選択した順序で取得
+        $categories = wp_get_post_categories($post_id, array('orderby' => 'term_order'));
         if (!empty($categories) && is_array($categories)) {
-            $category_names = array();
-            foreach ($categories as $category_id) {
-                $category = get_category($category_id);
-                if ($category) {
-                    $category_names[] = $category->name;
-                }
-            }
-            if (!empty($category_names)) {
-                return $category_names[0]; // 最初のカテゴリー名を返す
+            // 最初の（一番上）のカテゴリーを取得
+            $first_category_id = $categories[0];
+            $first_category = get_category($first_category_id);
+            if ($first_category) {
+                return $first_category->name;
             }
         }
 
-        // デフォルトジャンル
+        // カテゴリーが設定されていない場合はデフォルト
         return 'ニュース';
     }
     
