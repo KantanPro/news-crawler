@@ -168,12 +168,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.3.0** (2025-09-03): Plugin stability and performance improvements
-  - Enhanced overall plugin stability and performance
-  - Improved error handling and API call reliability
-  - Enhanced logging functionality for easier debugging
-  - Optimized metadata processing for faster post creation
-  - Improved UI/UX in admin interface for better usability
+- **v2.3.0** (2025-09-03): Enhanced category handling and AI processing improvements
+  - Improved post category retrieval method to return the first category name
+  - Enhanced OpenAI summary error handling and retry logic
+  - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata
+  - Added exponential backoff to OpenAI API calls and improved error messages
+  - Enhanced news crawler functionality and logging
 
 - **v2.2.9** (2025-09-03): Enhanced OpenAI summary processing and YouTube API quota handling
   - Enhanced OpenAI summary error handling and retry logic
