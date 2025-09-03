@@ -2977,8 +2977,16 @@ class NewsCrawlerGenreSettings {
         $logs = get_option('news_crawler_auto_posting_logs', array());
         error_log('Log Auto Posting Execution - Current logs count: ' . count($logs));
         
+        // ジャンル名を取得
+        $genre_settings = $this->get_genre_settings();
+        $genre_name = 'ジャンル名不明';
+        if (isset($genre_settings[$genre_id]) && isset($genre_settings[$genre_id]['genre_name'])) {
+            $genre_name = $genre_settings[$genre_id]['genre_name'];
+        }
+        
         $new_log_entry = array(
             'genre_id' => $genre_id,
+            'genre_name' => $genre_name,
             'status' => $status,
             'message' => $message,
             'timestamp' => current_time('mysql'),
@@ -3826,12 +3834,16 @@ class NewsCrawlerGenreSettings {
      * 自動投稿ログを取得
      */
     public function get_auto_posting_logs() {
+        // 権限チェック
         if (!current_user_can('manage_options')) {
-            wp_die('権限がありません');
+            wp_send_json_error('権限がありません');
+            return;
         }
         
+        // nonceチェック
         if (!wp_verify_nonce($_POST['nonce'] ?? '', 'auto_posting_logs_nonce')) {
-            wp_die('セキュリティ検証に失敗しました');
+            wp_send_json_error('セキュリティ検証に失敗しました');
+            return;
         }
         
         try {
@@ -3857,10 +3869,15 @@ class NewsCrawlerGenreSettings {
                 // 最新の10件のログを表示
                 $recent_logs = array_slice(array_reverse($logs), 0, 10);
                 foreach ($recent_logs as $log) {
-                    $output .= "[" . $log['timestamp'] . "] ";
-                    $output .= "ジャンル: " . $log['genre_name'] . " ";
-                    $output .= "ステータス: " . $log['status'] . " ";
-                    $output .= "メッセージ: " . $log['message'] . "\n";
+                    $genre_name = isset($log['genre_name']) ? $log['genre_name'] : 'ジャンル名不明';
+                    $timestamp = isset($log['timestamp']) ? $log['timestamp'] : '時刻不明';
+                    $status = isset($log['status']) ? $log['status'] : 'ステータス不明';
+                    $message = isset($log['message']) ? $log['message'] : 'メッセージなし';
+                    
+                    $output .= "[" . $timestamp . "] ";
+                    $output .= "ジャンル: " . $genre_name . " ";
+                    $output .= "ステータス: " . $status . " ";
+                    $output .= "メッセージ: " . $message . "\n";
                 }
                 $output .= "\n";
             }
@@ -3894,6 +3911,10 @@ class NewsCrawlerGenreSettings {
             error_log('Get Auto Posting Logs - Fatal Error: ' . $e->getMessage());
             error_log('Get Auto Posting Logs - Error trace: ' . $e->getTraceAsString());
             wp_send_json_error('致命的なエラーが発生しました: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            error_log('Get Auto Posting Logs - Throwable Error: ' . $e->getMessage());
+            error_log('Get Auto Posting Logs - Throwable trace: ' . $e->getTraceAsString());
+            wp_send_json_error('予期しないエラーが発生しました: ' . $e->getMessage());
         }
     }
     
