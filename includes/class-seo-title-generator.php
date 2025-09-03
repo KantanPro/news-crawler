@@ -59,9 +59,11 @@ class NewsCrawlerSEOTitleGenerator {
         // ニュースまたはYouTube投稿かどうかを確認
         $is_news_summary = get_post_meta($post_id, '_news_summary', true);
         $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-        
+
+        // デバッグ用: News Crawlerメタデータがない場合もSEOタイトル生成を実行
         if (!$is_news_summary && !$is_youtube_summary) {
-            return;
+            error_log('NewsCrawlerSEOTitleGenerator: News Crawlerメタデータが見つかりませんでしたが、デバッグ用にSEOタイトル生成を続行します');
+            // ここでreturnせず、SEOタイトル生成を続行
         }
         
         // 基本設定でSEOタイトル生成が無効になっている場合はスキップ
@@ -140,18 +142,18 @@ class NewsCrawlerSEOTitleGenerator {
     private function get_news_crawler_genre_name($post_id) {
         // ニュース投稿のジャンルIDを取得
         $news_genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
-        
+
         // YouTube投稿のジャンルIDを取得
         $youtube_genre_id = get_post_meta($post_id, '_youtube_crawler_genre_id', true);
-        
+
         $genre_id = null;
-        
+
         if (!empty($news_genre_id)) {
             $genre_id = $news_genre_id;
         } elseif (!empty($youtube_genre_id)) {
             $genre_id = $youtube_genre_id;
         }
-        
+
         if ($genre_id) {
             // ジャンル設定からジャンル名を取得
             $genre_settings = get_option('news_crawler_genre_settings', array());
@@ -159,13 +161,22 @@ class NewsCrawlerSEOTitleGenerator {
                 return $genre_settings[$genre_id]['genre_name'];
             }
         }
-        
+
         // ジャンル名が取得できない場合は、カテゴリーから推測
-        $categories = get_the_category($post_id);
-        if (!empty($categories)) {
-            return $categories[0]->name;
+        $categories = wp_get_post_categories($post_id);
+        if (!empty($categories) && is_array($categories)) {
+            $category_names = array();
+            foreach ($categories as $category_id) {
+                $category = get_category($category_id);
+                if ($category) {
+                    $category_names[] = $category->name;
+                }
+            }
+            if (!empty($category_names)) {
+                return $category_names[0]; // 最初のカテゴリー名を返す
+            }
         }
-        
+
         // デフォルトジャンル
         return 'ニュース';
     }
@@ -221,11 +232,15 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
-     * OpenAI APIを呼び出し
+     * OpenAI APIを呼び出し（指数バックオフ付き）
      */
     private function call_openai_api($prompt) {
+        error_log('NewsCrawlerSEOTitleGenerator: OpenAI API呼び出し開始');
+
         $url = 'https://api.openai.com/v1/chat/completions';
-        
+        $max_retries = 3;
+        $base_delay = 1; // 基本待機時間（秒）
+
         $data = array(
             'model' => $this->model,
             'messages' => array(
@@ -241,33 +256,107 @@ class NewsCrawlerSEOTitleGenerator {
             'max_tokens' => 100,
             'temperature' => 0.7
         );
-        
-        $response = wp_remote_post($url, array(
-            'headers' => array(
-                'Authorization' => 'Bearer ' . $this->api_key,
-                'Content-Type' => 'application/json'
-            ),
-            'body' => json_encode($data),
-            'timeout' => 30
-        ));
-        
-        if (is_wp_error($response)) {
-            return array('error' => 'OpenAI APIへの通信に失敗しました: ' . $response->get_error_message());
+
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            error_log('NewsCrawlerSEOTitleGenerator: 試行回数 ' . $attempt . '/' . $max_retries);
+
+            // リクエスト間の待機（2回目以降）
+            if ($attempt > 1) {
+                $delay = $base_delay * pow(2, $attempt - 2); // 指数バックオフ
+                $jitter = mt_rand(0, 1000) / 1000; // ジッターを追加（0-1秒）
+                $total_delay = $delay + $jitter;
+
+                error_log('NewsCrawlerSEOTitleGenerator: レート制限対策で ' . round($total_delay, 2) . '秒待機します');
+                usleep($total_delay * 1000000); // マイクロ秒に変換
+            }
+
+            $response = wp_remote_post($url, array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $this->api_key,
+                    'Content-Type' => 'application/json'
+                ),
+                'body' => json_encode($data),
+                'timeout' => 30
+            ));
+
+            if (is_wp_error($response)) {
+                $error_message = 'OpenAI APIへの通信に失敗しました: ' . $response->get_error_message();
+                error_log('NewsCrawlerSEOTitleGenerator: 試行' . $attempt . ' - ' . $error_message);
+
+                // ネットワークエラーの場合は再試行
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+                return array('error' => $error_message);
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            error_log('NewsCrawlerSEOTitleGenerator: 試行' . $attempt . ' - APIレスポンスコード: ' . $response_code);
+
+            // 429エラー（レート制限）の場合
+            if ($response_code === 429) {
+                error_log('NewsCrawlerSEOTitleGenerator: レート制限エラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                if ($attempt < $max_retries) {
+                    // より長い待機時間を設定
+                    $rate_limit_delay = $base_delay * pow(2, $attempt);
+                    error_log('NewsCrawlerSEOTitleGenerator: レート制限対策で ' . $rate_limit_delay . '秒待機します');
+                    sleep($rate_limit_delay);
+                    continue;
+                } else {
+                    // 最大再試行回数に達した場合
+                    $user_friendly_message = 'OpenAI APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。';
+                    error_log('NewsCrawlerSEOTitleGenerator: レート制限エラー - 最大再試行回数に達しました');
+                    return array('error' => $user_friendly_message);
+                }
+            }
+
+            // 5xxエラー（サーバーエラー）の場合も再試行
+            if ($response_code >= 500 && $response_code < 600) {
+                error_log('NewsCrawlerSEOTitleGenerator: サーバーエラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+            }
+
+            // 成功または4xxエラーの場合はループを抜ける
+            break;
         }
-        
-        $body = wp_remote_retrieve_body($response);
+
+        error_log('NewsCrawlerSEOTitleGenerator: APIレスポンス本文（先頭200文字）: ' . substr($body, 0, 200));
+
         $result = json_decode($body, true);
-        
+
         if (isset($result['choices'][0]['message']['content'])) {
-            return trim($result['choices'][0]['message']['content']);
+            $title = trim($result['choices'][0]['message']['content']);
+            error_log('NewsCrawlerSEOTitleGenerator: 生成されたタイトル: ' . $title);
+            return $title;
         }
-        
+
         // APIレスポンスの解析に失敗した場合
         if (isset($result['error'])) {
-            return array('error' => 'OpenAI APIエラー: ' . $result['error']['message']);
+            $error_message = isset($result['error']['message']) ? $result['error']['message'] : '不明なAPIエラー';
+
+            // 課金制限エラーの場合、よりわかりやすいメッセージを表示
+            if (strpos($error_message, 'exceeded your current quota') !== false ||
+                strpos($error_message, 'insufficient_quota') !== false) {
+                $user_friendly_message = 'OpenAIの課金制限に達しました。アカウントのクレジットを追加してください。' .
+                                       'OpenAIプラットフォーム（https://platform.openai.com/account/billing）で確認・追加できます。';
+                error_log('NewsCrawlerSEOTitleGenerator: 課金制限エラー: ' . $error_message);
+                return array('error' => $user_friendly_message);
+            }
+
+            $full_error_message = 'OpenAI APIエラー: ' . $error_message;
+            error_log('NewsCrawlerSEOTitleGenerator: ' . $full_error_message);
+            return array('error' => $full_error_message);
         }
-        
-        return array('error' => 'OpenAI APIからの応答が不正です。しばらく時間をおいてから再試行してください。');
+
+        $error_message = 'OpenAI APIからの応答が不正です。レスポンスコード: ' . $response_code . ', 本文: ' . substr($body, 0, 100);
+        error_log('NewsCrawlerSEOTitleGenerator: ' . $error_message);
+        return array('error' => $error_message);
     }
     
     /**
@@ -390,29 +479,40 @@ class NewsCrawlerSEOTitleGenerator {
      * AJAXハンドラー: SEOタイトル生成
      */
     public function ajax_generate_seo_title() {
+        error_log('NewsCrawlerSEOTitleGenerator: AJAXハンドラー開始 - POSTデータ: ' . print_r($_POST, true));
+
         // セキュリティチェック
         if (!wp_verify_nonce($_POST['nonce'], 'generate_seo_title_nonce')) {
+            error_log('NewsCrawlerSEOTitleGenerator: セキュリティチェック失敗');
             wp_die('セキュリティチェックに失敗しました');
         }
-        
+
         $post_id = intval($_POST['post_id']);
-        
+        error_log('NewsCrawlerSEOTitleGenerator: 処理対象投稿ID: ' . $post_id);
+
         if (!$post_id) {
+            error_log('NewsCrawlerSEOTitleGenerator: 投稿IDが無効');
             wp_send_json_error('投稿IDが無効です');
         }
-        
+
         // 権限チェック
         if (!current_user_can('edit_post', $post_id)) {
+            error_log('NewsCrawlerSEOTitleGenerator: 権限チェック失敗');
             wp_send_json_error('権限がありません');
         }
-        
+
+        error_log('NewsCrawlerSEOTitleGenerator: SEOタイトル生成開始');
         $result = $this->generate_seo_title($post_id);
-        
+        error_log('NewsCrawlerSEOTitleGenerator: SEOタイトル生成結果: ' . print_r($result, true));
+
         if (is_array($result) && isset($result['error'])) {
+            error_log('NewsCrawlerSEOTitleGenerator: エラー結果を返却: ' . $result['error']);
             wp_send_json_error($result['error']);
         } elseif ($result === true) {
+            error_log('NewsCrawlerSEOTitleGenerator: 成功結果を返却');
             wp_send_json_success('SEOタイトルが正常に生成されました');
         } else {
+            error_log('NewsCrawlerSEOTitleGenerator: 不明なエラー結果を返却');
             wp_send_json_error('SEOタイトルの生成に失敗しました');
         }
     }

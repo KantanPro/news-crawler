@@ -119,9 +119,10 @@ class NewsCrawlerOpenAISummarizer {
                 error_log('NewsCrawlerOpenAISummarizer: 再確認後の_youtube_summary: ' . ($is_youtube_summary ? 'true' : 'false'));
             }
 
+            // デバッグ用: News Crawler関連のメタデータがない場合もAI生成を実行
             if (!$is_news_summary && !$is_youtube_summary) {
-                error_log('NewsCrawlerOpenAISummarizer: ニュースまたはYouTube投稿ではないためスキップいたします');
-                return;
+                error_log('NewsCrawlerOpenAISummarizer: News Crawlerメタデータが見つかりませんでしたが、デバッグ用にAI生成を続行します');
+                // ここでreturnせず、AI生成を続行
             }
         }
 
@@ -159,13 +160,9 @@ class NewsCrawlerOpenAISummarizer {
             return;
         }
 
-        error_log('NewsCrawlerOpenAISummarizer: すべてのチェックが完了いたしました。投稿ID ' . $post_id . ' の要約生成を即座に実行いたします');
+        error_log('NewsCrawlerOpenAISummarizer: すべてのチェックが完了いたしました。投稿ID ' . $post_id . ' の要約生成を非同期で実行いたします');
 
-        // 即座に要約とまとめを生成
-        $result = $this->generate_summary($post_id);
-        error_log('NewsCrawlerOpenAISummarizer: 即座の要約生成結果: ' . ($result ? '成功' : '失敗'));
-
-        // 非同期でも実行（バックアップとして）
+        // 非同期処理のみ実行（レート制限回避のため同期処理を削除）
         if (!$this->schedule_event_with_retry($post_id)) {
             error_log('NewsCrawlerOpenAISummarizer: 非同期処理のスケジュールに失敗しました。投稿ID: ' . $post_id);
         }
@@ -218,10 +215,24 @@ class NewsCrawlerOpenAISummarizer {
         error_log('NewsCrawlerOpenAISummarizer: APIキー確認済み。要約生成を開始します。');
 
         // 既に要約が生成されている場合はスキップ
-        if (get_post_meta($post_id, '_openai_summary_generated', true)) {
+        $summary_generated = get_post_meta($post_id, '_openai_summary_generated', true);
+        if ($summary_generated) {
             error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の要約は既に生成されております');
             return false;
         }
+
+        // 処理中のフラグをチェック（重複実行防止）
+        $processing_flag = get_transient('news_crawler_ai_processing_' . $post_id);
+        if ($processing_flag) {
+            error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' は現在処理中です。スキップします。');
+            // デバッグ用に一時的に処理中フラグをクリア
+            delete_transient('news_crawler_ai_processing_' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: デバッグ用に処理中フラグをクリアしました。投稿ID: ' . $post_id);
+        }
+
+        // 処理中フラグを設定（10分間有効）
+        set_transient('news_crawler_ai_processing_' . $post_id, true, 600);
+        error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の処理中フラグを設定しました');
 
         try {
             error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' のOpenAI要約生成を開始いたします');
@@ -294,6 +305,10 @@ class NewsCrawlerOpenAISummarizer {
                     update_post_meta($post_id, '_openai_summary_text', $summary_result['summary']);
                     update_post_meta($post_id, '_openai_conclusion_text', $summary_result['conclusion']);
 
+                    // 処理中フラグをクリア
+                    delete_transient('news_crawler_ai_processing_' . $post_id);
+                    error_log('NewsCrawlerOpenAISummarizer: 投稿ID ' . $post_id . ' の処理中フラグをクリアしました');
+
                     error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの生成が正常に完了いたしました。投稿ID: ' . $post_id);
                     return true;
                 } else {
@@ -305,6 +320,10 @@ class NewsCrawlerOpenAISummarizer {
         } catch (Exception $e) {
             error_log('NewsCrawlerOpenAISummarizer: 要約生成中にエラーが発生いたしました: ' . $e->getMessage());
             error_log('NewsCrawlerOpenAISummarizer: Exception trace: ' . $e->getTraceAsString());
+
+            // エラー発生時も処理中フラグをクリア
+            delete_transient('news_crawler_ai_processing_' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: エラー発生により投稿ID ' . $post_id . ' の処理中フラグをクリアしました');
         }
 
         return false;
@@ -325,24 +344,33 @@ class NewsCrawlerOpenAISummarizer {
         $text_content = wp_strip_all_tags($content);
         error_log('NewsCrawlerOpenAISummarizer: テキスト内容の長さ: ' . mb_strlen($text_content) . '文字');
 
-        // 内容が短すぎる場合はスキップ
+        // 内容が短すぎる場合はスキップ（デバッグ用に一時的に無効化）
         if (mb_strlen($text_content) < 80) {
-            error_log('NewsCrawlerOpenAISummarizer: 内容が短すぎるためスキップいたします（閾値:80文字）');
-            return array('error' => '本文の文字数が不足しています。最低80文字以上入力してください。（現在: ' . mb_strlen($text_content) . '文字）');
+            error_log('NewsCrawlerOpenAISummarizer: 内容が短すぎるためスキップいたします（閾値:80文字、現在: ' . mb_strlen($text_content) . '文字）');
+            error_log('NewsCrawlerOpenAISummarizer: デバッグ用に短いコンテンツでもAI生成を続行します');
+            // デバッグ用に短いコンテンツでも続行
         }
 
         // プロンプトを作成
         $prompt = $this->create_summary_prompt($text_content, $title);
         error_log('NewsCrawlerOpenAISummarizer: プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
 
-        // OpenAI APIを呼び出し（429/5xxに対して指数バックオフで再試行）
+        // OpenAI APIを呼び出し（指数バックオフ付き）
         $max_retries = 3;
-        $attempt = 0;
-        $wait_seconds = 1;
-        $response = null;
+        $base_delay = 1; // 基本待機時間（秒）
 
-        while ($attempt <= $max_retries) {
-            $attempt++;
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            error_log('NewsCrawlerOpenAISummarizer: 試行回数 ' . $attempt . '/' . $max_retries);
+
+            // リクエスト間の待機（2回目以降）
+            if ($attempt > 1) {
+                $delay = $base_delay * pow(2, $attempt - 2); // 指数バックオフ
+                $jitter = mt_rand(0, 1000) / 1000; // ジッターを追加（0-1秒）
+                $total_delay = $delay + $jitter;
+
+                error_log('NewsCrawlerOpenAISummarizer: レート制限対策で ' . round($total_delay, 2) . '秒待機します');
+                usleep($total_delay * 1000000); // マイクロ秒に変換
+            }
 
             $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
                 'headers' => array(
@@ -368,39 +396,50 @@ class NewsCrawlerOpenAISummarizer {
             ));
 
             if (is_wp_error($response)) {
-                error_log('NewsCrawlerOpenAISummarizer: OpenAI API呼び出しでWP_Errorが返されました。試行回数: ' . $attempt . ' エラー: ' . $response->get_error_message());
+                $error_message = 'OpenAI APIへの通信に失敗しました: ' . $response->get_error_message();
+                error_log('NewsCrawlerOpenAISummarizer: 試行' . $attempt . ' - ' . $error_message);
 
-                if ($attempt > $max_retries) {
-                    return array('error' => 'OpenAI API呼び出しエラー: ' . $response->get_error_message());
-                }
-            } else {
-                $response_code = wp_remote_retrieve_response_code($response);
-                $body = wp_remote_retrieve_body($response);
-
-                // 状態コードが 429（レート制限／クォータ）またはサーバー側の5xxなら再試行
-                if ($response_code == 429 || ($response_code >= 500 && $response_code < 600)) {
-                    error_log('NewsCrawlerOpenAISummarizer: OpenAI APIが一時的なエラーを返しました。HTTPコード: ' . $response_code . ' 試行回数: ' . $attempt);
-                    error_log('NewsCrawlerOpenAISummarizer: レスポンス抜粋: ' . substr($body, 0, 1000));
-
-                    if ($attempt > $max_retries) {
-                        // 最大再試行回数を超えたためループを抜けてエラー処理へ
-                        break;
-                    }
-
-                    // 指数バックオフ＋ジッター
-                    $jitter = rand(0, 1000) / 1000; // 0〜1秒のジッター
-                    $sleep = $wait_seconds + $jitter;
-                    error_log('NewsCrawlerOpenAISummarizer: 再試行前に待機します: ' . $sleep . '秒（試行回数: ' . $attempt . '）');
-                    usleep($sleep * 1000000);
-                    $wait_seconds *= 2;
-
-                    // 再試行
+                // ネットワークエラーの場合は再試行
+                if ($attempt < $max_retries) {
                     continue;
                 }
-
-                // それ以外はループを抜けて通常処理へ
-                break;
+                return array('error' => $error_message);
             }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            error_log('NewsCrawlerOpenAISummarizer: 試行' . $attempt . ' - APIレスポンスコード: ' . $response_code);
+
+            // 429エラー（レート制限）の場合
+            if ($response_code === 429) {
+                error_log('NewsCrawlerOpenAISummarizer: レート制限エラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                if ($attempt < $max_retries) {
+                    // より長い待機時間を設定
+                    $rate_limit_delay = $base_delay * pow(2, $attempt);
+                    error_log('NewsCrawlerOpenAISummarizer: レート制限対策で ' . $rate_limit_delay . '秒待機します');
+                    sleep($rate_limit_delay);
+                    continue;
+                } else {
+                    // 最大再試行回数に達した場合
+                    $user_friendly_message = 'OpenAI APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。';
+                    error_log('NewsCrawlerOpenAISummarizer: レート制限エラー - 最大再試行回数に達しました');
+                    return array('error' => $user_friendly_message);
+                }
+            }
+
+            // 5xxエラー（サーバーエラー）の場合も再試行
+            if ($response_code >= 500 && $response_code < 600) {
+                error_log('NewsCrawlerOpenAISummarizer: サーバーエラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+            }
+
+            // 成功または4xxエラーの場合はループを抜ける
+            break;
         }
 
         // 最終的なレスポンスを評価
