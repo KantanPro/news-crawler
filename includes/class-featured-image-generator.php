@@ -157,56 +157,178 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
-     * AI画像生成（OpenAI DALL-E使用）
+     * AI画像生成（OpenAI DALL-E使用）- 強化版通信エラーハンドリング
      */
     private function generate_ai_image($post_id, $title, $keywords, $settings) {
         // 基本設定からAPIキーを取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
-        
+
         if (empty($api_key)) {
             return array('error' => 'OpenAI APIキーが設定されていません。基本設定でAPIキーを設定してください。');
         }
-        
+
+        // APIキーの形式検証
+        if (!is_string($api_key) || strlen($api_key) < 20) {
+            return array('error' => 'OpenAI APIキーの形式が無効です。正しいAPIキーを設定してください。');
+        }
+
         // プロンプト生成
         $prompt = $this->create_ai_prompt($title, $keywords, $settings);
-        
-        // OpenAI API呼び出し
-        $response = wp_remote_post('https://api.openai.com/v1/images/generations', array(
-            'headers' => array(
-                'Authorization' => 'Bearer ' . $api_key,
-                'Content-Type' => 'application/json',
-            ),
-            'body' => json_encode(array(
-                'model' => 'dall-e-3',
-                'prompt' => $prompt,
-                'n' => 1,
-                'size' => '1024x1024',
-                'quality' => 'standard',
-                'response_format' => 'url'
-            )),
-            'timeout' => 60
-        ));
-        
-        if (is_wp_error($response)) {
-            return array('error' => 'OpenAI DALL-E APIへの通信に失敗しました: ' . $response->get_error_message());
+
+        // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
+        $max_retries = 3;
+        $base_delay = 2;
+        $max_delay = 60;
+
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            error_log('NewsCrawlerFeaturedImageGenerator: DALL-E API試行回数 ' . $attempt . '/' . $max_retries);
+
+            // リクエスト間の待機（2回目以降）
+            if ($attempt > 1) {
+                $delay = min($base_delay * pow(2, $attempt - 2), $max_delay);
+                $jitter = mt_rand(0, 1000) / 1000;
+                $total_delay = $delay + $jitter;
+
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-E通信エラー対策で ' . round($total_delay, 2) . '秒待機します');
+                usleep($total_delay * 1000000);
+            }
+
+            // タイムアウトを動的に設定
+            $timeout = 60 + ($attempt * 15); // 60秒から開始、試行ごとに15秒延ばす
+            $timeout = min($timeout, 180); // 最大180秒
+
+            $response = wp_remote_post('https://api.openai.com/v1/images/generations', array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $api_key,
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode(array(
+                    'model' => 'dall-e-3',
+                    'prompt' => $prompt,
+                    'n' => 1,
+                    'size' => '1024x1024',
+                    'quality' => 'standard',
+                    'response_format' => 'url'
+                )),
+                'timeout' => $timeout,
+                'redirection' => 5,
+                'httpversion' => '1.1',
+                'user-agent' => 'NewsCrawler/1.0'
+            ));
+
+            // ネットワークエラーの詳細な処理
+            if (is_wp_error($response)) {
+                $error_code = $response->get_error_code();
+                $error_message = $response->get_error_message();
+
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-E試行' . $attempt . ' - ネットワークエラー: ' . $error_code . ' - ' . $error_message);
+
+                // エラーの種類に応じた処理
+                if (strpos($error_message, 'timed out') !== false || strpos($error_message, 'timeout') !== false) {
+                    $user_message = 'OpenAI DALL-E APIとの通信がタイムアウトしました。インターネット接続を確認してください。';
+                } elseif (strpos($error_message, 'could not resolve host') !== false) {
+                    $user_message = 'OpenAI DALL-E APIサーバーに接続できません。DNSまたはネットワーク設定を確認してください。';
+                } elseif (strpos($error_message, 'SSL') !== false) {
+                    $user_message = 'SSL接続エラーが発生しました。証明書の有効性を確認してください。';
+                } else {
+                    $user_message = 'OpenAI DALL-E APIへの通信に失敗しました: ' . $error_message;
+                }
+
+                // ネットワークエラーの場合は再試行
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+                return array('error' => $user_message);
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            error_log('NewsCrawlerFeaturedImageGenerator: DALL-E試行' . $attempt . ' - APIレスポンスコード: ' . $response_code);
+
+            // HTTPステータスコードに応じた処理
+            if ($response_code === 429) {
+                // レート制限エラー
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-Eレート制限エラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                // レスポンスヘッダーからリトライ時間を取得
+                $retry_after = wp_remote_retrieve_header($response, 'retry-after');
+                if ($retry_after) {
+                    $wait_time = min(intval($retry_after), $max_delay);
+                    error_log('NewsCrawlerFeaturedImageGenerator: DALL-E Retry-Afterヘッダーに従い ' . $wait_time . '秒待機します');
+                    sleep($wait_time);
+                } elseif ($attempt < $max_retries) {
+                    // 指数バックオフ
+                    $rate_limit_delay = min($base_delay * pow(2, $attempt), $max_delay);
+                    error_log('NewsCrawlerFeaturedImageGenerator: DALL-Eレート制限対策で ' . $rate_limit_delay . '秒待機します');
+                    sleep($rate_limit_delay);
+                    continue;
+                }
+
+                if ($attempt >= $max_retries) {
+                    $user_friendly_message = 'OpenAI DALL-E APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。';
+                    error_log('NewsCrawlerFeaturedImageGenerator: DALL-Eレート制限エラー - 最大再試行回数に達しました');
+                    return array('error' => $user_friendly_message);
+                }
+            } elseif ($response_code === 401) {
+                // 認証エラー
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-E APIキー認証エラー');
+                return array('error' => 'OpenAI DALL-E APIキーが無効です。正しいAPIキーを設定してください。');
+            } elseif ($response_code === 403) {
+                // アクセス拒否
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-E APIアクセス拒否エラー');
+                return array('error' => 'OpenAI DALL-E APIへのアクセスが拒否されました。アカウントの状態を確認してください。');
+            } elseif ($response_code >= 500 && $response_code < 600) {
+                // サーバーエラー
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-Eサーバーエラー: ' . $response_code);
+
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+
+                $user_message = 'OpenAI DALL-Eサーバーで一時的なエラーが発生しています。しばらく時間をおいてから再度お試しください。';
+                return array('error' => $user_message);
+            } elseif ($response_code >= 400 && $response_code < 500) {
+                // クライアントエラー（429以外）
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-Eクライアントエラー: ' . $response_code);
+                break; // 再試行せず終了
+            }
+
+            // 成功または4xxエラーの場合はループを抜ける
+            if ($response_code === 200 || ($response_code >= 400 && $response_code < 500)) {
+                break;
+            }
         }
-        
+
+        // 最終的なレスポンスを評価
+        if (is_wp_error($response)) {
+            return array('error' => 'OpenAI DALL-E API呼び出しエラー: ' . $response->get_error_message());
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+
         $data = json_decode($body, true);
-        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $json_error = json_last_error_msg();
+            error_log('NewsCrawlerFeaturedImageGenerator: DALL-E JSONデコードエラー: ' . $json_error);
+            return array('error' => 'OpenAI DALL-E APIからの応答が不正です。JSONデコードエラー: ' . $json_error);
+        }
+
         if (isset($data['data'][0]['url'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: DALL-E画像生成成功 - URL: ' . $data['data'][0]['url']);
             return $this->download_and_attach_image($data['data'][0]['url'], $post_id, $title);
         }
-        
+
         // APIレスポンスの解析に失敗した場合
         if (isset($data['error'])) {
             $error_message = $data['error']['message'];
             $error_type = isset($data['error']['type']) ? $data['error']['type'] : 'unknown';
-            
+
             // 課金制限エラーの場合は詳細な情報を提供
-            if (strpos($error_message, 'billing') !== false || strpos($error_message, 'limit') !== false) {
-                error_log('OpenAI DALL-E API課金制限エラー: ' . $error_message);
+            if (strpos($error_message, 'billing') !== false || strpos($error_message, 'limit') !== false || strpos($error_message, 'quota') !== false) {
+                error_log('NewsCrawlerFeaturedImageGenerator: DALL-E課金制限エラー: ' . $error_message);
                 return array(
                     'error' => 'OpenAI DALL-E APIの課金制限に達しました。',
                     'details' => 'エラー詳細: ' . $error_message,
@@ -218,31 +340,31 @@ class NewsCrawlerFeaturedImageGenerator {
                                    '5. クレジットカードの有効期限が切れていないか'
                 );
             }
-            
+
             return array('error' => 'OpenAI DALL-E APIエラー: ' . $error_message);
         }
-        
+
         return array('error' => 'OpenAI DALL-E APIからの応答が不正です。しばらく時間をおいてから再試行してください。');
     }
     
     /**
-     * Unsplash画像取得
+     * Unsplash画像取得 - 強化版通信エラーハンドリング
      */
     private function fetch_unsplash_image($post_id, $title, $keywords, $settings) {
         // 複数の設定からAccess Keyを取得（優先順位付き）
         $access_key = '';
-        
+
         // 1. 基本設定から取得（最優先）
         $basic_settings = get_option('news_crawler_basic_settings', array());
         if (!empty($basic_settings['unsplash_access_key'])) {
             $access_key = $basic_settings['unsplash_access_key'];
         }
-        
+
         // 2. フィーチャー画像設定から取得
         if (empty($access_key) && !empty($settings['unsplash_access_key'])) {
             $access_key = $settings['unsplash_access_key'];
         }
-        
+
         // 3. ジャンル設定から取得
         if (empty($access_key)) {
             $genre_settings = get_option('news_crawler_genre_settings', array());
@@ -253,50 +375,176 @@ class NewsCrawlerFeaturedImageGenerator {
                 }
             }
         }
-        
+
         if (empty($access_key)) {
             return array('error' => 'Unsplash Access Keyが設定されていません。基本設定、フィーチャー画像設定、またはジャンル設定でAccess Keyを設定してください。');
         }
-        
+
+        // Access Keyの形式検証
+        if (!is_string($access_key) || strlen($access_key) < 20) {
+            return array('error' => 'Unsplash Access Keyの形式が無効です。正しいAccess Keyを設定してください。');
+        }
+
         // 検索キーワード生成
         $search_query = $this->create_unsplash_query($title, $keywords);
-        
-        // Unsplash API呼び出し
-        $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
-            'query' => $search_query,
-            'per_page' => 1,
-            'orientation' => 'landscape',
-            'content_filter' => 'high'
-        ));
-        
-        $response = wp_remote_get($api_url, array(
-            'headers' => array(
-                'Authorization' => 'Client-ID ' . $access_key,
-            ),
-            'timeout' => 30
-        ));
-        
-        if (is_wp_error($response)) {
-            return array('error' => 'Unsplash APIへの通信に失敗しました: ' . $response->get_error_message());
+
+        // Unsplash API呼び出し（強化版指数バックオフ付き）
+        $max_retries = 3;
+        $base_delay = 2;
+        $max_delay = 30;
+
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash API試行回数 ' . $attempt . '/' . $max_retries);
+
+            // リクエスト間の待機（2回目以降）
+            if ($attempt > 1) {
+                $delay = min($base_delay * pow(2, $attempt - 2), $max_delay);
+                $jitter = mt_rand(0, 1000) / 1000;
+                $total_delay = $delay + $jitter;
+
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash通信エラー対策で ' . round($total_delay, 2) . '秒待機します');
+                usleep($total_delay * 1000000);
+            }
+
+            // タイムアウトを動的に設定
+            $timeout = 20 + ($attempt * 10); // 20秒から開始、試行ごとに10秒延ばす
+            $timeout = min($timeout, 60); // 最大60秒
+
+            $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
+                'query' => $search_query,
+                'per_page' => 1,
+                'orientation' => 'landscape',
+                'content_filter' => 'high'
+            ));
+
+            $response = wp_remote_get($api_url, array(
+                'headers' => array(
+                    'Authorization' => 'Client-ID ' . $access_key,
+                    'User-Agent' => 'NewsCrawler/1.0'
+                ),
+                'timeout' => $timeout,
+                'redirection' => 5,
+                'httpversion' => '1.1'
+            ));
+
+            // ネットワークエラーの詳細な処理
+            if (is_wp_error($response)) {
+                $error_code = $response->get_error_code();
+                $error_message = $response->get_error_message();
+
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash試行' . $attempt . ' - ネットワークエラー: ' . $error_code . ' - ' . $error_message);
+
+                // エラーの種類に応じた処理
+                if (strpos($error_message, 'timed out') !== false || strpos($error_message, 'timeout') !== false) {
+                    $user_message = 'Unsplash APIとの通信がタイムアウトしました。インターネット接続を確認してください。';
+                } elseif (strpos($error_message, 'could not resolve host') !== false) {
+                    $user_message = 'Unsplash APIサーバーに接続できません。DNSまたはネットワーク設定を確認してください。';
+                } elseif (strpos($error_message, 'SSL') !== false) {
+                    $user_message = 'SSL接続エラーが発生しました。証明書の有効性を確認してください。';
+                } else {
+                    $user_message = 'Unsplash APIへの通信に失敗しました: ' . $error_message;
+                }
+
+                // ネットワークエラーの場合は再試行
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+                return array('error' => $user_message);
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash試行' . $attempt . ' - APIレスポンスコード: ' . $response_code);
+
+            // HTTPステータスコードに応じた処理
+            if ($response_code === 429) {
+                // レート制限エラー
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限エラーが発生しました。試行' . $attempt . '/' . $max_retries);
+
+                // レスポンスヘッダーからリトライ時間を取得
+                $retry_after = wp_remote_retrieve_header($response, 'retry-after');
+                if ($retry_after) {
+                    $wait_time = min(intval($retry_after), $max_delay);
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash Retry-Afterヘッダーに従い ' . $wait_time . '秒待機します');
+                    sleep($wait_time);
+                } elseif ($attempt < $max_retries) {
+                    // 指数バックオフ
+                    $rate_limit_delay = min($base_delay * pow(2, $attempt), $max_delay);
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限対策で ' . $rate_limit_delay . '秒待機します');
+                    sleep($rate_limit_delay);
+                    continue;
+                }
+
+                if ($attempt >= $max_retries) {
+                    $user_friendly_message = 'Unsplash APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。';
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限エラー - 最大再試行回数に達しました');
+                    return array('error' => $user_friendly_message);
+                }
+            } elseif ($response_code === 401) {
+                // 認証エラー
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIキー認証エラー');
+                return array('error' => 'Unsplash Access Keyが無効です。正しいAccess Keyを設定してください。');
+            } elseif ($response_code === 403) {
+                // アクセス拒否
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIアクセス拒否エラー');
+                return array('error' => 'Unsplash APIへのアクセスが拒否されました。アカウントの状態を確認してください。');
+            } elseif ($response_code >= 500 && $response_code < 600) {
+                // サーバーエラー
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashサーバーエラー: ' . $response_code);
+
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+
+                $user_message = 'Unsplashサーバーで一時的なエラーが発生しています。しばらく時間をおいてから再度お試しください。';
+                return array('error' => $user_message);
+            } elseif ($response_code >= 400 && $response_code < 500) {
+                // クライアントエラー（429以外）
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashクライアントエラー: ' . $response_code);
+                break; // 再試行せず終了
+            }
+
+            // 成功または4xxエラーの場合はループを抜ける
+            if ($response_code === 200 || ($response_code >= 400 && $response_code < 500)) {
+                break;
+            }
         }
-        
+
+        // 最終的なレスポンスを評価
+        if (is_wp_error($response)) {
+            return array('error' => 'Unsplash API呼び出しエラー: ' . $response->get_error_message());
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+
         $data = json_decode($body, true);
-        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $json_error = json_last_error_msg();
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash JSONデコードエラー: ' . $json_error);
+            return array('error' => 'Unsplash APIからの応答が不正です。JSONデコードエラー: ' . $json_error);
+        }
+
         if (isset($data['results']) && is_array($data['results']) && !empty($data['results'])) {
             if (isset($data['results'][0]['urls']['regular'])) {
                 $image_url = $data['results'][0]['urls']['regular'];
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得成功 - URL: ' . $image_url);
                 return $this->download_and_attach_image($image_url, $post_id, $title);
             }
         }
-        
+
         // APIレスポンスの解析に失敗した場合
         if (isset($data['errors'])) {
-            return array('error' => 'Unsplash APIエラー: ' . implode(', ', $data['errors']));
+            $error_messages = is_array($data['errors']) ? implode(', ', $data['errors']) : $data['errors'];
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIエラー: ' . $error_messages);
+            return array('error' => 'Unsplash APIエラー: ' . $error_messages);
         }
-        
+
+        // 画像が見つからない場合
+        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashで画像が見つからない - 検索クエリ: ' . $search_query);
         return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。別のキーワードを試してください。');
-    }    
+    }
     
 /**
      * グラデーション背景を作成
@@ -1460,36 +1708,171 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
-     * 外部画像をダウンロードして添付ファイルとして保存
+     * 外部画像をダウンロードして添付ファイルとして保存 - 強化版通信エラーハンドリング
      */
     private function download_and_attach_image($image_url, $post_id, $title) {
-        // 画像をダウンロード
-        $response = wp_remote_get($image_url, array('timeout' => 30));
-        
-        if (is_wp_error($response)) {
-            return false;
+        // URLの検証
+        if (empty($image_url) || !filter_var($image_url, FILTER_VALIDATE_URL)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 無効な画像URL: ' . $image_url);
+            return array('error' => '無効な画像URLです');
         }
-        
+
+        // 画像ダウンロード（強化版指数バックオフ付き）
+        $max_retries = 3;
+        $base_delay = 2;
+        $max_delay = 30;
+
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード試行回数 ' . $attempt . '/' . $max_retries . ' - URL: ' . $image_url);
+
+            // リクエスト間の待機（2回目以降）
+            if ($attempt > 1) {
+                $delay = min($base_delay * pow(2, $attempt - 2), $max_delay);
+                $jitter = mt_rand(0, 1000) / 1000;
+                $total_delay = $delay + $jitter;
+
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード通信エラー対策で ' . round($total_delay, 2) . '秒待機します');
+                usleep($total_delay * 1000000);
+            }
+
+            // タイムアウトを動的に設定
+            $timeout = 30 + ($attempt * 15); // 30秒から開始、試行ごとに15秒延ばす
+            $timeout = min($timeout, 90); // 最大90秒
+
+            $response = wp_remote_get($image_url, array(
+                'timeout' => $timeout,
+                'redirection' => 5,
+                'httpversion' => '1.1',
+                'user-agent' => 'NewsCrawler/1.0',
+                'headers' => array(
+                    'Accept' => 'image/*',
+                    'Referer' => get_site_url()
+                )
+            ));
+
+            // ネットワークエラーの詳細な処理
+            if (is_wp_error($response)) {
+                $error_code = $response->get_error_code();
+                $error_message = $response->get_error_message();
+
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード試行' . $attempt . ' - ネットワークエラー: ' . $error_code . ' - ' . $error_message);
+
+                // エラーの種類に応じた処理
+                if (strpos($error_message, 'timed out') !== false || strpos($error_message, 'timeout') !== false) {
+                    $user_message = '画像のダウンロードがタイムアウトしました。インターネット接続を確認してください。';
+                } elseif (strpos($error_message, 'could not resolve host') !== false) {
+                    $user_message = '画像サーバーに接続できません。DNSまたはネットワーク設定を確認してください。';
+                } elseif (strpos($error_message, 'SSL') !== false) {
+                    $user_message = 'SSL接続エラーが発生しました。証明書の有効性を確認してください。';
+                } else {
+                    $user_message = '画像のダウンロードに失敗しました: ' . $error_message;
+                }
+
+                // ネットワークエラーの場合は再試行
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+                return array('error' => $user_message);
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード試行' . $attempt . ' - レスポンスコード: ' . $response_code);
+
+            // HTTPステータスコードに応じた処理
+            if ($response_code === 404) {
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像が見つかりません (404) - URL: ' . $image_url);
+                return array('error' => '指定された画像が見つかりません。画像が削除された可能性があります。');
+            } elseif ($response_code === 403) {
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像へのアクセスが拒否されました (403) - URL: ' . $image_url);
+                return array('error' => '画像へのアクセスが拒否されました。アクセス権限を確認してください。');
+            } elseif ($response_code >= 500 && $response_code < 600) {
+                // サーバーエラー
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像サーバーエラー: ' . $response_code . ' - URL: ' . $image_url);
+
+                if ($attempt < $max_retries) {
+                    continue;
+                }
+
+                $user_message = '画像サーバーで一時的なエラーが発生しています。しばらく時間をおいてから再度お試しください。';
+                return array('error' => $user_message);
+            } elseif ($response_code >= 400 && $response_code < 500) {
+                // クライアントエラー（404,403以外）
+                error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロードクライアントエラー: ' . $response_code . ' - URL: ' . $image_url);
+                break; // 再試行せず終了
+            }
+
+            // 成功または4xxエラーの場合はループを抜ける
+            if ($response_code === 200 || ($response_code >= 400 && $response_code < 500)) {
+                break;
+            }
+        }
+
+        // 最終的なレスポンスを評価
+        if (is_wp_error($response)) {
+            return array('error' => '画像ダウンロードエラー: ' . $response->get_error_message());
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
         $image_data = wp_remote_retrieve_body($response);
         $content_type = wp_remote_retrieve_header($response, 'content-type');
-        
+
+        // 画像データの検証
+        if (empty($image_data)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: ダウンロードした画像データが空です - URL: ' . $image_url);
+            return array('error' => 'ダウンロードした画像データが空です。画像が破損している可能性があります。');
+        }
+
+        // 画像サイズの検証（最小サイズチェック）
+        $image_size = strlen($image_data);
+        if ($image_size < 1000) { // 1KB未満は不正とみなす
+            error_log('NewsCrawlerFeaturedImageGenerator: ダウンロードした画像サイズが小さすぎます: ' . $image_size . ' bytes - URL: ' . $image_url);
+            return array('error' => 'ダウンロードした画像のサイズが小さすぎます。有効な画像ではない可能性があります。');
+        }
+
+        // コンテンツタイプの検証
+        if (empty($content_type) || !preg_match('/^image\//', $content_type)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 無効なコンテンツタイプ: ' . $content_type . ' - URL: ' . $image_url);
+            return array('error' => 'ダウンロードしたファイルは画像ではありません。');
+        }
+
         // ファイル拡張子を決定
         $extension = 'jpg';
         if (strpos($content_type, 'png') !== false) {
             $extension = 'png';
         } elseif (strpos($content_type, 'gif') !== false) {
             $extension = 'gif';
+        } elseif (strpos($content_type, 'webp') !== false) {
+            $extension = 'webp';
         }
-        
+
         // 一時ファイル作成
         $upload_dir = wp_upload_dir();
+        if (!wp_mkdir_p($upload_dir['path'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: アップロードディレクトリの作成に失敗しました: ' . $upload_dir['path']);
+            return array('error' => 'アップロードディレクトリの作成に失敗しました。権限を確認してください。');
+        }
+
         $filename = 'featured-image-' . $post_id . '-' . time() . '.' . $extension;
         $filepath = $upload_dir['path'] . '/' . $filename;
-        
+
+        // ファイル書き込みのエラーハンドリング
         if (!file_put_contents($filepath, $image_data)) {
-            return false;
+            error_log('NewsCrawlerFeaturedImageGenerator: 画像ファイルの保存に失敗しました: ' . $filepath);
+            return array('error' => '画像ファイルの保存に失敗しました。ディスク容量や権限を確認してください。');
         }
-        
+
+        // ファイルサイズの再確認
+        $saved_size = filesize($filepath);
+        if ($saved_size !== $image_size) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 保存されたファイルサイズが一致しません。期待: ' . $image_size . ' bytes, 実際: ' . $saved_size . ' bytes');
+            @unlink($filepath); // ファイルを削除
+            return array('error' => '画像ファイルの保存に失敗しました。ファイルが破損している可能性があります。');
+        }
+
+        error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード成功 - サイズ: ' . $saved_size . ' bytes, タイプ: ' . $content_type);
+
         // WordPressの添付ファイルとして登録
         $attachment = array(
             'guid' => $upload_dir['url'] . '/' . $filename,
@@ -1498,27 +1881,40 @@ class NewsCrawlerFeaturedImageGenerator {
             'post_content' => '',
             'post_status' => 'inherit'
         );
-        
+
         $attachment_id = wp_insert_attachment($attachment, $filepath, $post_id);
-        
+
         if (is_wp_error($attachment_id)) {
-            return false;
+            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
+            @unlink($filepath); // ファイルを削除
+            return array('error' => '添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
         }
-        
+
         // 添付ファイルのメタデータを生成
         require_once(ABSPATH . 'wp-admin/includes/image.php');
         $attachment_data = wp_generate_attachment_metadata($attachment_id, $filepath);
-        wp_update_attachment_metadata($attachment_id, $attachment_data);
-        
+        if (is_wp_error($attachment_data)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルメタデータの生成に失敗しました: ' . $attachment_data->get_error_message());
+            // メタデータ生成失敗でも続行
+        } else {
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
+        }
+
         // 投稿のアイキャッチに設定
-        set_post_thumbnail($post_id, $attachment_id);
-        
+        $thumbnail_result = set_post_thumbnail($post_id, $attachment_id);
+        if (!$thumbnail_result) {
+            error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ画像の設定に失敗しました - 投稿ID: ' . $post_id . ', 添付ファイルID: ' . $attachment_id);
+            // 添付ファイルは残すが、エラーを返す
+            return array('error' => 'アイキャッチ画像の設定に失敗しました。');
+        }
+
         // OGPマネージャーに通知（存在する場合）
         if (class_exists('NewsCrawlerOGPManager')) {
             $ogp_manager = new NewsCrawlerOGPManager();
             $ogp_manager->update_featured_image_meta($post_id, $attachment_id);
         }
-        
+
+        error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロードと設定が完了しました - 添付ファイルID: ' . $attachment_id);
         return $attachment_id;
     }
     
@@ -1725,20 +2121,26 @@ class NewsCrawlerFeaturedImageGenerator {
         ?>
         <script>
         jQuery(document).ready(function($) {
+            // ajaxurlが定義されていない場合は定義する
+            if (typeof ajaxurl === 'undefined') {
+                ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+            }
+
             // アイキャッチ生成
             $('#generate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured_image_method').val();
                 var keywords = $('#featured-image-keywords').val();
-                
+
                 button.prop('disabled', true).text('生成中...');
                 statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を生成中です...</div>').show();
-                
+
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
+                    timeout: 60000, // 60秒タイムアウト
                     data: {
                         action: 'generate_featured_image',
                         nonce: '<?php echo wp_create_nonce('generate_featured_image_nonce'); ?>',
@@ -1749,38 +2151,54 @@ class NewsCrawlerFeaturedImageGenerator {
                     success: function(response) {
                         if (response.success) {
                             statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の生成と設定が完了しました！</div>');
-                            
+
                             // ページをリロードして更新された内容を表示
                             setTimeout(function() {
                                 location.reload();
                             }, 2000);
                         } else {
-                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + response.data + '</div>');
+                            var errorMessage = response.data || '不明なエラーが発生しました';
+                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + errorMessage + '</div>');
                         }
                     },
-                    error: function() {
-                        statusDiv.html('<div style="color: #d63638;">❌ 通信エラーが発生しました</div>');
+                    error: function(xhr, status, error) {
+                        var errorMessage = '通信エラーが発生しました';
+                        if (status === 'timeout') {
+                            errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                        } else if (status === 'error') {
+                            errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                        } else if (status === 'abort') {
+                            errorMessage = 'リクエストが中断されました。';
+                        }
+
+                        statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                        console.error('AJAX Error:', {
+                            status: status,
+                            error: error,
+                            xhr: xhr
+                        });
                     },
                     complete: function() {
                         button.prop('disabled', false).text('アイキャッチを生成');
                     }
                 });
             });
-            
+
             // アイキャッチ再生成
             $('#regenerate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured_image_method').val();
                 var keywords = $('#featured-image-keywords').val();
-                
+
                 button.prop('disabled', true).text('再生成中...');
                 statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を再生成中です...</div>').show();
-                
+
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
+                    timeout: 60000, // 60秒タイムアウト
                     data: {
                         action: 'regenerate_featured_image',
                         nonce: '<?php echo wp_create_nonce('regenerate_featured_image_nonce'); ?>',
@@ -1791,17 +2209,32 @@ class NewsCrawlerFeaturedImageGenerator {
                     success: function(response) {
                         if (response.success) {
                             statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の再生成と設定が完了しました！</div>');
-                            
+
                             // ページをリロードして更新された内容を表示
                             setTimeout(function() {
                                 location.reload();
                             }, 2000);
                         } else {
-                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + response.data + '</div>');
+                            var errorMessage = response.data || '不明なエラーが発生しました';
+                            statusDiv.html('<div style="color: #d63638;">❌ エラー: ' + errorMessage + '</div>');
                         }
                     },
-                    error: function() {
-                        statusDiv.html('<div style="color: #d63638;">❌ 通信エラーが発生しました</div>');
+                    error: function(xhr, status, error) {
+                        var errorMessage = '通信エラーが発生しました';
+                        if (status === 'timeout') {
+                            errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                        } else if (status === 'error') {
+                            errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                        } else if (status === 'abort') {
+                            errorMessage = 'リクエストが中断されました。';
+                        }
+
+                        statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                        console.error('AJAX Error:', {
+                            status: status,
+                            error: error,
+                            xhr: xhr
+                        });
                     },
                     complete: function() {
                         button.prop('disabled', false).text('アイキャッチを再生成');
