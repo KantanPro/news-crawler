@@ -27,11 +27,11 @@ if command -v wp &> /dev/null; then
     cd "$WP_PATH"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
     
-    # News Crawlerの自動投稿機能を直接実行
-    wp eval "
+    # WordPressのパスを明示的に指定
+    wp --path="$WP_PATH" eval "
         if (class_exists('NewsCrawlerGenreSettings')) {
-            \$genre_settings = new NewsCrawlerGenreSettings();
-            \$genre_settings->execute_auto_posting();
+            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {
             echo 'News CrawlerGenreSettingsクラスが見つかりません';
@@ -44,17 +44,28 @@ else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
     
     cd "$WP_PATH"
-    php -r "
-        require_once('wp-config.php');
-        require_once('wp-includes/pluggable.php');
-        if (class_exists('NewsCrawlerGenreSettings')) {
-            \$genre_settings = new NewsCrawlerGenreSettings();
-            \$genre_settings->execute_auto_posting();
-            echo 'News Crawler自動投稿を実行しました';
-        } else {
-            echo 'News CrawlerGenreSettingsクラスが見つかりません';
-        }
-    " >> "$LOG_FILE" 2>&1
+    
+    # PHPのフルパスを指定
+PHP_CMD="$(which php)"
+
+# PHPコマンドが見つからない場合のエラーハンドリング
+if [ -z "$PHP_CMD" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンドが見つかりません。スクリプトを終了します。" >> "$LOG_FILE"
+    exit 1
+fi
+
+# PHPコマンドを使用して実行
+$PHP_CMD -r "
+    require_once('wp-config.php');
+    require_once('wp-includes/pluggable.php');
+    if (class_exists('NewsCrawlerGenreSettings')) {
+        $genre_settings = new NewsCrawlerGenreSettings();
+        $genre_settings->execute_auto_posting();
+        echo 'News Crawler自動投稿を実行しました';
+    } else {
+        echo 'News CrawlerGenreSettingsクラスが見つかりません';
+    }
+" >> "$LOG_FILE" 2>&1
     
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
     
@@ -97,7 +108,7 @@ else
     CRON_URL="$SITE_URL/wp-admin/admin-ajax.php"
     
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 取得したサイトURL: $SITE_URL" >> "$LOG_FILE"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行中..." >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S")] HTTPリクエスト経由でNews Crawlerを実行中..." >> "$LOG_FILE"
     
     # News Crawlerの自動投稿機能をHTTPリクエストで実行
     # 正しいnonceを動的に生成
@@ -113,8 +124,19 @@ else
         -d "action=news_crawler_cron_execute" \
         -d "nonce=$CRON_NONCE" \
         >> "$LOG_FILE" 2>&1
-    
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HTTPリクエスト経由でNews Crawlerを実行しました" >> "$LOG_FILE"
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S")] HTTPリクエスト経由でNews Crawlerを実行しました" >> "$LOG_FILE"
+
+    # PHPコード内の変数をエスケープ
+    wp --path="$WP_PATH" eval "
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            \$genre_settings = new NewsCrawlerGenreSettings();
+            \$genre_settings->execute_auto_posting();
+            echo 'News Crawler自動投稿を実行しました';
+        } else {
+            echo 'News CrawlerGenreSettingsクラスが見つかりません';
+        }
+    " >> "$LOG_FILE" 2>&1
 fi
 
 # ログに実行終了を記録

@@ -111,3 +111,189 @@ Security check failed. Please try again.[2025-09-02 11:32:04] HTTPリクエス�
 [2025-09-02 19:00:01] HTTPリクエスト経由でNews Crawlerを実行しました
 [2025-09-02 19:00:01] News Crawler Cron 実行終了
 ---
+[2025-09-03 10:43:17] News Crawler Cron 実行開始
+[2025-09-03 10:43:17] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:43:17] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:43:17] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:44:08] News Crawler Cron 実行開始
+[2025-09-03 10:44:08] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:44:08] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:44:08] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:44:34] News Crawler Cron 実行開始
+[2025-09-03 10:44:34] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:44:34] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:44:34] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:44:34] wp-cli経由でNews Crawlerを実行中...
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DeclareAbstractBaseCommand (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFrameworkAutoloader (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\ConfigureRunner (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeRequestsAutoloader (0.021s)
+Debug (bootstrap): Setting RequestsLibrary::$version to v2 (0.021s)
+Debug (bootstrap): Setting RequestsLibrary::$source to wp-cli (0.021s)
+Debug (bootstrap): Setting RequestsLibrary::$class_name to \WpOrg\Requests\Requests (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeColorization (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeLogger (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DefineProtectedCommands (0.021s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadExecCommand (0.022s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadRequiredCommand (0.022s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludePackageAutoloader (0.023s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFallbackAutoloader (0.024s)
+Debug (bootstrap): Fallback autoloader paths: phar://wp-cli.phar/vendor/autoload.php (0.024s)
+Debug (bootstrap): Loading detected autoloader: phar://wp-cli.phar/vendor/autoload.php (0.024s)
+Debug (commands): Adding command: config (0.03s)
+Debug (commands): Adding command: core (0.032s)
+Debug (commands): Adding command: eval (0.032s)
+Debug (commands): Adding command: eval-file (0.032s)
+Debug (commands): Adding command: cache (0.033s)
+Debug (commands): Adding command: transient (0.033s)
+Debug (commands): Adding command: verify-checksums in core Namespace (0.034s)
+Debug (commands): Adding command: plugin (0.034s)
+Debug (commands): Adding command: verify-checksums in plugin Namespace (0.035s)
+Debug (commands): Adding command: cron (0.035s)
+Debug (commands): Adding command: event in cron Namespace (0.037s)
+Debug (commands): Adding command: schedule in cron Namespace (0.037s)
+Debug (commands): Adding command: db (0.039s)
+Debug (commands): Adding command: embed (0.039s)
+Debug (commands): Adding command: fetch in embed Namespace (0.04s)
+Debug (commands): Adding command: provider in embed Namespace (0.04s)
+Debug (commands): Adding command: handler in embed Namespace (0.041s)
+Debug (commands): Adding command: cache in embed Namespace (0.041s)
+Debug (commands): Adding command: comment (0.043s)
+Debug (commands): Adding command: meta in comment Namespace (0.044s)
+Debug (commands): Adding command: menu (0.044s)
+Debug (commands): Adding command: item in menu Namespace (0.045s)
+Debug (commands): Adding command: location in menu Namespace (0.045s)
+Debug (commands): Deferring command: network meta (0.045s)
+Debug (commands): Adding command: option (0.046s)
+Debug (commands): Adding command: post (0.047s)
+Debug (commands): Adding command: meta in post Namespace (0.048s)
+Debug (commands): Adding command: term in post Namespace (0.048s)
+Debug (commands): Adding command: post-type (0.049s)
+Debug (commands): Adding command: site (0.05s)
+Debug (commands): Adding command: meta in site Namespace (0.051s)
+Debug (commands): Adding command: option in site Namespace (0.051s)
+Debug (commands): Adding command: taxonomy (0.052s)
+Debug (commands): Adding command: term (0.053s)
+Debug (commands): Adding command: meta in term Namespace (0.054s)
+Debug (commands): Adding command: user (0.055s)
+Debug (commands): Adding command: application-password in user Namespace (0.055s)
+Debug (commands): Adding command: meta in user Namespace (0.056s)
+Debug (commands): Adding command: session in user Namespace (0.056s)
+Debug (commands): Adding command: term in user Namespace (0.056s)
+Debug (commands): Adding command: network (0.057s)
+Debug (hooks): Processing hook "after_add_command:network" with 1 callbacks (0.057s)
+Debug (hooks): On hook "after_add_command:network": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.057s)
+Debug (commands): Adding command: meta in network Namespace (0.057s)
+Debug (commands): Adding command: export (0.057s)
+Debug (commands): Adding command: plugin (0.061s)
+Debug (commands): Adding command: auto-updates in plugin Namespace (0.061s)
+Debug (commands): Adding command: theme (0.062s)
+Debug (commands): Adding command: auto-updates in theme Namespace (0.063s)
+Debug (commands): Adding command: mod in theme Namespace (0.063s)
+Debug (commands): Adding command: i18n (0.063s)
+Debug (commands): Adding command: make-pot in i18n Namespace (0.064s)
+Debug (commands): Adding command: make-json in i18n Namespace (0.065s)
+Debug (commands): Adding command: make-mo in i18n Namespace (0.065s)
+Debug (commands): Adding command: update-po in i18n Namespace (0.066s)
+Debug (commands): Adding command: import (0.066s)
+Debug (commands): Deferring command: language core (0.067s)
+Debug (commands): Deferring command: language plugin (0.068s)
+Debug (commands): Deferring command: language theme (0.068s)
+Debug (hooks): Immediately invoking on passed hook "after_add_command:site": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/language-command/language-command.php at line 39 (0.068s)
+Debug (commands): Adding command: switch-language in site Namespace (0.068s)
+Debug (commands): Adding command: language (0.069s)
+Debug (hooks): Processing hook "after_add_command:language" with 3 callbacks (0.069s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.069s)
+Debug (commands): Adding command: core in language Namespace (0.069s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.069s)
+Debug (commands): Adding command: plugin in language Namespace (0.069s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.069s)
+Debug (commands): Adding command: theme in language Namespace (0.069s)
+Debug (commands): Adding command: maintenance-mode (0.07s)
+Debug (commands): Adding command: media (0.071s)
+Debug (commands): Adding command: package (0.073s)
+Debug (commands): Adding command: rewrite (0.073s)
+Debug (commands): Adding command: rewrite (0.074s)
+Debug (commands): Adding command: cap (0.074s)
+Debug (commands): Adding command: role (0.075s)
+Debug (commands): Adding command: scaffold (0.076s)
+Debug (commands): Adding command: search-replace (0.078s)
+Debug (commands): Adding command: server (0.078s)
+Debug (commands): Adding command: shell (0.079s)
+Debug (commands): Adding command: super-admin (0.079s)
+Debug (commands): Adding command: widget (0.08s)
+Debug (commands): Adding command: sidebar (0.08s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterFrameworkCommands (0.08s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/cli.php (0.08s)
+Debug (commands): Adding command: cli (0.082s)
+Debug (commands): Adding command: cache in cli Namespace (0.083s)
+Debug (commands): Adding command: alias in cli Namespace (0.083s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/help.php (0.083s)
+Debug (commands): Adding command: help (0.085s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterDeferredCommands (0.085s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeContexts (0.085s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LaunchRunner (0.087s)
+Debug (bootstrap): No readable global config found (0.087s)
+Debug (bootstrap): Using project config: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-cli.yml (0.087s)
+Debug (bootstrap): argv: /usr/local/bin/wp eval 
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings->execute_auto_posting();
+            echo 'News Crawler自動投稿を実行しました';
+        } else {
+            echo 'News CrawlerGenreSettingsクラスが見つかりません';
+        }
+     (0.087s)
+Debug (bootstrap): ABSPATH defined: /var/www/html/ (0.087s)
+Debug (bootstrap): Set URL: http://localhost:8080 (0.087s)
+Debug (hooks): Processing hook "before_run_command" with 1 callbacks (0.087s)
+Debug (hooks): On hook "before_run_command": WP_CLI\Bootstrap\RegisterDeferredCommands->add_deferred_commands() (0.087s)
+Debug (bootstrap): Running command: eval (0.088s)
+Debug (context): Using context 'cli' (0.091s)
+Debug (bootstrap): Begin WordPress load (0.091s)
+Error: This does not seem to be a WordPress installation.
+The used path is: /var/www/html/
+Pass --path=`path/to/wordpress` or run `wp core download`.
+[2025-09-03 10:44:35] wp-cli経由でNews Crawlerを実行しました
+[2025-09-03 10:44:35] News Crawler Cron 実行終了
+---
+[2025-09-03 10:45:12] News Crawler Cron 実行開始
+[2025-09-03 10:45:12] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:45:12] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:45:12] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:45:34] News Crawler Cron 実行開始
+[2025-09-03 10:45:34] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:45:34] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:45:34] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:46:18] News Crawler Cron 実行開始
+[2025-09-03 10:46:18] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:46:18] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:46:18] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:46:41] News Crawler Cron 実行開始
+[2025-09-03 10:46:41] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:46:41] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:46:41] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:47:04] News Crawler Cron 実行開始
+[2025-09-03 10:47:04] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:47:04] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:47:04] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:47:28] News Crawler Cron 実行開始
+[2025-09-03 10:47:28] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:47:28] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:47:28] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:47:53] News Crawler Cron 実行開始
+[2025-09-03 10:47:53] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:47:53] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:47:53] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:48:24] News Crawler Cron 実行開始
+[2025-09-03 10:48:24] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:48:24] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:48:24] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:49:52] News Crawler Cron 実行開始
+[2025-09-03 10:49:52] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:49:52] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:49:52] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-03 10:50:23] News Crawler Cron 実行開始
+[2025-09-03 10:50:23] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-03 10:50:23] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-03 10:50:23] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/

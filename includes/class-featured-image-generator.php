@@ -102,7 +102,10 @@ class NewsCrawlerFeaturedImageGenerator {
             }
             
             // カテゴリーを復元
-            wp_set_post_categories($post_id, $saved_categories);
+            if (!empty($saved_categories)) {
+                wp_set_post_categories($post_id, $saved_categories);
+                error_log('NewsCrawlerFeaturedImageGenerator: カテゴリーを復元しました。投稿ID: ' . $post_id);
+            }
         }
         
         return $result;
@@ -630,22 +633,6 @@ class NewsCrawlerFeaturedImageGenerator {
             );
             
             imagedestroy($temp_img);
-        }
-    }
-    
-    /**
-     * 指定領域の色を置換
-     */
-    private function replace_color($image, $x, $y, $width, $height, $old_color, $new_color) {
-        for ($px = $x; $px < $x + $width; $px++) {
-            for ($py = $y; $py < $y + $height; $py++) {
-                if ($px >= 0 && $py >= 0 && $px < imagesx($image) && $py < imagesy($image)) {
-                    $current_color = imagecolorat($image, $px, $py);
-                    if ($current_color == $old_color) {
-                        imagesetpixel($image, $px, $py, $new_color);
-                    }
-                }
-            }
         }
     }
     
@@ -1742,7 +1729,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $('#generate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
-                var method = $('#featured-image-method').val();
+                var method = $('#featured_image_method').val();
                 var keywords = $('#featured-image-keywords').val();
                 
                 button.prop('disabled', true).text('生成中...');
@@ -1784,7 +1771,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $('#regenerate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
-                var method = $('#featured-image-method').val();
+                var method = $('#featured_image_method').val();
                 var keywords = $('#featured-image-keywords').val();
                 
                 button.prop('disabled', true).text('再生成中...');
