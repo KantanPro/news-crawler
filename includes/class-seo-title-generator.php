@@ -137,10 +137,21 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
-     * 投稿カテゴリーで選択した最初（一番上）のカテゴリーを取得
+     * News Crawlerのジャンル設定からジャンル名を取得
      */
     private function get_news_crawler_genre_name($post_id) {
-        // 投稿に設定されたカテゴリーを、選択した順序で取得
+        // 投稿に保存されているNews CrawlerジャンルIDを取得
+        $genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
+
+        if (!empty($genre_id)) {
+            // ジャンル設定からジャンル名を取得
+            $genre_settings = get_option('news_crawler_genre_settings', array());
+            if (isset($genre_settings[$genre_id]) && isset($genre_settings[$genre_id]['genre_name'])) {
+                return $genre_settings[$genre_id]['genre_name'];
+            }
+        }
+
+        // News CrawlerのジャンルIDが見つからない場合は、WordPressカテゴリーから取得（後方互換性）
         $categories = wp_get_post_categories($post_id, array('orderby' => 'term_order'));
         if (!empty($categories) && is_array($categories)) {
             // 最初の（一番上）のカテゴリーを取得
