@@ -1699,6 +1699,7 @@ class NewsCrawlerGenreSettings {
         echo '<th>アイキャッチ</th>';
         echo '<th>自動投稿</th>';
         echo '<th>次回実行予定</th>';
+        echo '<th>投稿可能数</th>';
         echo '<th>公開設定</th>';
         echo '<th>操作</th>';
         echo '</tr>';
@@ -1792,6 +1793,45 @@ class NewsCrawlerGenreSettings {
             }
             
             echo '<td>' . $next_execution_display . '</td>';
+
+            // 投稿可能数の表示（実際に候補を調査して算出）
+            $genre_id_for_count = isset($setting['id']) ? $setting['id'] : $id;
+
+            // 直近24時間の作成数から空きを算出（自動投稿の有無に関わらず計算）
+            $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+            $existing_posts = $this->count_recent_posts_by_genre($genre_id_for_count);
+            $slots = max(0, $max_posts - $existing_posts);
+
+            // 候補件数の取得（キャッシュ5分）
+            $cache_key = 'news_crawler_available_count_' . $genre_id_for_count;
+            $available_candidates = get_transient($cache_key);
+            if ($available_candidates === false) {
+                $available_candidates = 0;
+                try {
+                    // コンテンツタイプに応じて実際の取得可能件数を簡易調査
+                    $available_candidates = intval($this->test_news_source_availability($setting));
+                    if ($available_candidates < 0) {
+                        $available_candidates = 0;
+                    }
+                } catch (Exception $e) {
+                    $available_candidates = 0;
+                }
+                set_transient($cache_key, $available_candidates, 5 * MINUTE_IN_SECONDS);
+            }
+
+            // 1回の実行での上限（ジャンル設定の取得数上限も考慮）
+            $per_crawl_cap = ($setting['content_type'] === 'youtube')
+                ? (isset($setting['max_videos']) ? intval($setting['max_videos']) : 5)
+                : (isset($setting['max_articles']) ? intval($setting['max_articles']) : 10);
+
+            // 実際に「今」投稿できる最大件数
+            $possible_posts = min($slots, $available_candidates, $per_crawl_cap);
+            $possible_posts = max(0, intval($possible_posts));
+
+            $available_posts_display = '<span style="font-weight: bold;">' . esc_html($possible_posts) . ' 件</span><br>'
+                . '<small>候補: ' . esc_html($available_candidates) . ' / 空き: ' . esc_html($slots) . '</small>';
+
+            echo '<td>' . $available_posts_display . '</td>';
             
             // 公開設定の表示
             $post_status = isset($setting['post_status']) ? $setting['post_status'] : 'draft';
