@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.9-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.2.9)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.0)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,12 +168,19 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.3.0** (2025-09-03): Plugin stability and performance improvements
+  - Enhanced overall plugin stability and performance
+  - Improved error handling and API call reliability
+  - Enhanced logging functionality for easier debugging
+  - Optimized metadata processing for faster post creation
+  - Improved UI/UX in admin interface for better usability
+
 - **v2.2.9** (2025-09-03): Enhanced OpenAI summary processing and YouTube API quota handling
   - Enhanced OpenAI summary error handling and retry logic
-  - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata. Added exponential backoff to OpenAI API calls and improved error messages
+  - Strengthened AI generation for debugging, allowing summary and SEO title generation to continue even without metadata
   - Enhanced news crawler functionality and logging
-  - Improved News Crawler metadata setting process with immediate post status updates. Enabled AI summary generation by default with enhanced error logging. Added option to force enable AI functionality in license management
-  - Added News Crawler Cron execution logs to record start and end messages. Enhanced detailed logging of execution status via HTTP requests
+  - Improved News Crawler metadata setting process with immediate post status updates
+  - Added News Crawler Cron execution logs to record start and end messages
 
 - **v2.2.8** (2025-09-03): AISEO OpenAI improvements and news crawler enhancements
   - Added exponential backoff to AISEO OpenAI API calls and improved error messages
@@ -338,6 +345,14 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.0 - 2025-09-03
+
+- Enhanced overall plugin stability and performance
+- Improved error handling and API call reliability
+- Enhanced logging functionality for easier debugging
+- Optimized metadata processing for faster post creation
+- Improved UI/UX in admin interface for better usability
 
 ### v2.2.9 - 2025-09-03
 
