@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.0)
+[![Version](https://img.shields.io/badge/version-2.3.1-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.1)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -348,6 +348,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.1 - 2025-09-03
+
+- Enhanced AJAX response error handling with fallback processing for success responses
+- Improved content length checking during article summary generation and updated title generation logic
+- Added default message handling for unknown nonce values
+- Enhanced post content sanitization and strengthened functionality to remove unnecessary text before summary generation
 
 ### v2.3.0 - 2025-09-03
 
