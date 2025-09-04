@@ -1016,14 +1016,22 @@ class NewsCrawlerGenreSettings {
             
 
             
-            // コンテンツタイプ変更時の設定表示切り替え
-            $('#content-type').change(function() {
-                var contentType = $(this).val();
-                $('#youtube-settings').hide();
-                if (contentType === 'youtube') {
-                    $('#youtube-settings').show();
-                }
-            });
+/**
+ * コンテンツタイプ変更時の設定表示切り替え
+ * - デフォルト: ニュース記事（news）を表示
+ * - YouTube選択時: YouTube設定を表示し、ニュース設定を非表示
+ */
+$('#content-type').change(function() {
+    var contentType = $(this).val();
+    if (contentType === 'youtube') {
+        $('#youtube-settings').show();
+        $('#news-settings').hide();
+    } else {
+        // デフォルト（ニュース記事）
+        $('#youtube-settings').hide();
+        $('#news-settings').show();
+    }
+});
             
             // アイキャッチ自動生成チェックボックス変更時の設定表示切り替え
             $('#auto-featured-image').change(function() {
@@ -1136,8 +1144,16 @@ class NewsCrawlerGenreSettings {
             // 初期表示時にアイキャッチ設定を表示
             $('#featured-image-settings').show();
             
-            // 初期表示時にニュース設定を表示
-            $('#news-settings').show();
+/** 初期表示設定 */
+// 初期表示時にニュース設定を表示
+$('#news-settings').show();
+
+// 新規追加時のデフォルト: コンテンツタイプ=ニュース記事
+if (!$('#genre-id').val()) {
+    $('#content-type').val('news');
+}
+// 変更イベントを発火して表示状態を同期
+$('#content-type').trigger('change');
             
             // フォーム送信
             $('#genre-settings-form').submit(function(e) {
@@ -1202,14 +1218,16 @@ class NewsCrawlerGenreSettings {
                 });
             });
             
-            // キャンセルボタン
-            $('#cancel-edit').click(function() {
-                $('#genre-settings-form')[0].reset();
-                $('#genre-id').val('');
-                $('#cancel-edit').hide();
-                $('#youtube-settings').hide();
+/** キャンセルボタン */
+$('#cancel-edit').click(function() {
+    $('#genre-settings-form')[0].reset();
+    $('#genre-id').val('');
+    $('#cancel-edit').hide();
+    $('#youtube-settings').hide();
+    // デフォルトのコンテンツタイプをニュース記事に戻す
+    $('#content-type').val('news').trigger('change');
                 
-                // 開始実行日時を現在時刻にリセット
+    // 開始実行日時を現在時刻にリセット
                 var now = new Date();
                 var nowString = now.getFullYear() + '-' + 
                                (now.getMonth() + 1).toString().padStart(2, '0') + '-' + 
@@ -1877,6 +1895,8 @@ class NewsCrawlerGenreSettings {
         $genre_name = sanitize_text_field($_POST['genre_name']);
         $content_type = sanitize_text_field($_POST['content_type']);
         $keywords = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['keywords']))));
+        // 重複除去（順序維持）
+        $keywords = $this->normalize_and_unique_lines($keywords, 'text');
         
         if (empty($genre_name) || empty($content_type) || empty($keywords)) {
             wp_send_json_error('必須項目が入力されていません');
@@ -1929,9 +1949,13 @@ class NewsCrawlerGenreSettings {
         
         if ($content_type === 'news') {
             $setting['news_sources'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['news_sources']))));
+            // 重複除去（順序維持）
+            $setting['news_sources'] = $this->normalize_and_unique_lines($setting['news_sources'], 'url');
             $setting['max_articles'] = intval($_POST['max_articles']);
         } elseif ($content_type === 'youtube') {
             $setting['youtube_channels'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['youtube_channels']))));
+            // 重複除去（順序維持）
+            $setting['youtube_channels'] = $this->normalize_and_unique_lines($setting['youtube_channels'], 'text');
             $setting['max_videos'] = intval($_POST['max_videos']);
             $setting['embed_type'] = sanitize_text_field($_POST['embed_type']);
         }
@@ -2342,6 +2366,31 @@ class NewsCrawlerGenreSettings {
     
     private function get_genre_settings() {
         return get_option($this->option_name, array());
+    }
+    
+    /**
+     * 行リスト（キーワード/URL/IDなど）をトリムし、空行を除去して順序を維持したまま重複を除去
+     */
+    private function normalize_and_unique_lines($items, $type = 'text') {
+        if (!is_array($items)) {
+            return array();
+        }
+        $clean = array();
+        foreach ($items as $raw) {
+            $item = trim($raw);
+            if ($item === '') {
+                continue;
+            }
+            // URLの簡易サニタイズ（必要最低限）
+            if ($type === 'url') {
+                // 余分な空白の除去
+                $item = preg_replace('/\s+/', '', $item);
+            }
+            if (!in_array($item, $clean, true)) {
+                $clean[] = $item;
+            }
+        }
+        return $clean;
     }
     
     /**
