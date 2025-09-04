@@ -1570,6 +1570,10 @@ class NewsCrawlerGenreSettings {
                 success: function(response) {
                     if (response && response.success) {
                         jQuery('#execution-result-content').html(response.data);
+                        // 実行結果表示後に一覧を最新状態へ更新（投稿可能数などを即時反映）
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1200);
                     } else if (response && response.data) {
                         jQuery('#execution-result-content').html('エラー: ' + response.data);
                     } else {
@@ -2074,6 +2078,9 @@ class NewsCrawlerGenreSettings {
             
             // デバッグ情報を結果に追加
             $final_result = implode("\n", $debug_info) . "\n\n" . $result;
+            
+            // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
+            delete_transient('news_crawler_available_count_' . $setting['id']);
             
             wp_send_json_success($final_result);
         } catch (Exception $e) {

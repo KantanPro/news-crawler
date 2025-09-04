@@ -663,11 +663,8 @@ class NewsCrawler {
             $sanitized['post_categories'] = isset($existing_options['post_categories']) ? $existing_options['post_categories'] : array('blog');
         }
         
-        if (isset($input['post_status'])) {
-            if (is_string($input['post_status']) && !empty(trim($input['post_status']))) {
-                $sanitized['post_status'] = sanitize_text_field($input['post_status']);
-                $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
-            }
+        if (isset($input['post_status']) && is_string($input['post_status']) && !empty(trim($input['post_status']))) {
+            $sanitized['post_status'] = sanitize_text_field($input['post_status']);
         } else {
             $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
         }
@@ -1478,12 +1475,25 @@ class NewsCrawler {
         // 仕上げの全体サニタイズ（念のため）
         $post_content = $this->sanitize_post_content($post_content);
 
+        // 投稿作成者を決定（基本設定のデフォルト投稿者を優先）
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $author_id = 0;
+        if (isset($basic_settings['default_post_author'])) {
+            $candidate = intval($basic_settings['default_post_author']);
+            if ($candidate > 0 && get_user_by('id', $candidate)) {
+                $author_id = $candidate;
+            }
+        }
+        if (!$author_id) {
+            $author_id = get_current_user_id() ?: 1;
+        }
+
         // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
             'post_status'   => $status, // 設定されたステータスで直接作成
-            'post_author'   => get_current_user_id() ?: 1,
+            'post_author'   => $author_id,
             'post_type'     => 'post',
             'post_category' => $cat_ids
         );
@@ -2129,8 +2139,22 @@ class NewsCrawler {
 
         // クリーンアップ後のコンテンツが短すぎる場合はスキップ（投稿自体を作成しない判定につながる）
         $clean_short = $this->clean_content_for_summary($article['content']);
-        $min_length = 120; // 最低必要文字数（必要に応じて調整）
+        // 最低必要文字数を緩和し、フォールバックを試みる
+        $min_length = 20;
         if (mb_strlen($clean_short) < $min_length) {
+            // description や 詳細ページからの追加コンテンツでフォールバックを試す
+            $fallback_raw = $article['description'] ?? '';
+            if (!empty($article['url']) && mb_strlen($fallback_raw) < $min_length) {
+                $additional = $this->fetch_additional_content($article['url']);
+                if (!empty($additional)) {
+                    $fallback_raw = $additional;
+                }
+            }
+            $fallback_clean = $this->clean_content_for_summary($fallback_raw);
+            if (mb_strlen($fallback_clean) >= 20) {
+                // フォールバックが十分なら簡易要約を返却
+                return wp_trim_words($fallback_clean, 70, '...');
+            }
             error_log('NewsCrawler: 記事要約生成スキップ - 元コンテンツが短すぎます: ' . ($article['title'] ?? ''));
             return '';
         }
@@ -2139,7 +2163,7 @@ class NewsCrawler {
         $clean_content = $this->clean_content_for_summary($article['content']);
 
         // クリーンアップ後のコンテンツが短すぎる場合はスキップ
-        if (mb_strlen($clean_content) < 50) {
+        if (mb_strlen($clean_content) < 20) {
             error_log('NewsCrawler: 記事要約生成スキップ - クリーンアップ後のコンテンツが短すぎます: ' . $article['title']);
             return '';
         }
@@ -2403,21 +2427,36 @@ class NewsCrawler {
             }
         }
 
-        // 有効な記事がない場合は投稿を作成しない
+        // 有効な記事がない場合は投稿を作成しない（上位に明確なエラーを返す）
         if (empty($valid_articles)) {
-            error_log('NewsCrawler: 有効な記事（要約生成できた記事）が1件もないため投稿を作成しません');
-            return false;
+            $original_count = is_array($articles) ? count($articles) : 0;
+            $message = '要約生成できた記事がありませんでした（元記事数: ' . $original_count . '）。設定や要約閾値を見直してください。';
+            error_log('NewsCrawler: ' . $message);
+            return new WP_Error('no_valid_articles', $message);
         }
         
         // 仕上げの全体サニタイズ（念のため）
         $post_content = $this->sanitize_post_content($post_content);
+
+        // 投稿作成者を決定（基本設定のデフォルト投稿者を優先）
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $author_id = 0;
+        if (isset($basic_settings['default_post_author'])) {
+            $candidate = intval($basic_settings['default_post_author']);
+            if ($candidate > 0 && get_user_by('id', $candidate)) {
+                $author_id = $candidate;
+            }
+        }
+        if (!$author_id) {
+            $author_id = get_current_user_id() ?: 1;
+        }
 
         // 設定されたステータスで直接投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
             'post_status'   => $status, // 設定されたステータスで直接作成
-            'post_author'   => get_current_user_id() ?: 1,
+            'post_author'   => $author_id,
             'post_type'     => 'post',
             'post_category' => $cat_ids
         );
@@ -2455,9 +2494,16 @@ class NewsCrawler {
             update_post_meta($post_id, '_news_crawler_genre_id', $current_genre_setting['id']);
         }
 
-        // ソースURLを保存
-        if (!empty($articles[0]['url'])) {
-            update_post_meta($post_id, '_news_crawler_source_url', $articles[0]['url']);
+        // ソースURLを保存（数値キーの有無にかかわらず最初のURLを安全に取得）
+        $first_article_url = '';
+        foreach ($articles as $art) {
+            if (is_array($art) && !empty($art['url'])) {
+                $first_article_url = $art['url'];
+                break;
+            }
+        }
+        if (!empty($first_article_url)) {
+            update_post_meta($post_id, '_news_crawler_source_url', $first_article_url);
         }
 
         // アイキャッチ生成
@@ -2625,8 +2671,8 @@ class NewsCrawler {
             error_log('NewsCrawler: ナビゲーションテキストは正常に除去されました');
         }
 
-        // コンテンツが短すぎる場合は空文字を返す
-        if (mb_strlen($clean_content) < 50) {
+        // コンテンツが短すぎる場合は空文字を返す（閾値緩和）
+        if (mb_strlen($clean_content) < 20) {
             error_log('NewsCrawler: コンテンツが短すぎるため空文字を返します');
             return '';
         }
