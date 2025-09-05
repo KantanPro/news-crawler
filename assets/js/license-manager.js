@@ -48,6 +48,18 @@
                 e.preventDefault();
                 NewsCrawlerLicenseManager.recheckLicense();
             });
+
+            // ライセンスクリア
+            $(document).on('click', 'input[name="clear_license"]', function(e) {
+                e.preventDefault();
+                NewsCrawlerLicenseManager.clearLicense();
+            });
+
+            // ライセンスキーフィールドのクリアボタン
+            $(document).on('click', '#clear-license-field', function(e) {
+                e.preventDefault();
+                $('#news_crawler_license_key').val('').focus();
+            });
         },
 
         /**
@@ -328,13 +340,23 @@
             var licenseKey = $licenseKey.val().trim();
             
             if (!licenseKey) {
-                alert('ライセンスキーを入力してください。');
+                this.showError('ライセンスキーを入力してください。');
+                $licenseKey.focus();
+                return;
+            }
+
+            // ライセンスキーの形式チェック（緩和版）
+            if (!this.validateLicenseKeyFormat(licenseKey)) {
+                this.showError('ライセンスキーの形式が正しくありません。NCRL-で始まる形式のライセンスキーを入力してください。');
                 $licenseKey.focus();
                 return;
             }
 
             // ボタンを無効化
             $submitButton.prop('disabled', true).val('認証中...');
+
+            // ローディング表示
+            this.showLoading('ライセンスを認証中...');
 
             $.ajax({
                 url: news_crawler_license_ajax.ajaxurl,
@@ -344,21 +366,70 @@
                     license_key: licenseKey,
                     nonce: news_crawler_license_ajax.nonce
                 },
+                timeout: 60000, // 60秒のタイムアウト
                 success: function(response) {
+                    console.log('License verification response:', response);
+                    
                     if (response.success) {
-                        alert('ライセンスが正常に認証されました。');
+                        NewsCrawlerLicenseManager.showSuccess('ライセンスが正常に認証されました。');
                         // ページをリロードしてステータスを更新
-                        location.reload();
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1500);
                     } else {
-                        alert('ライセンスの認証に失敗しました: ' + (response.data ? response.data.message : '不明なエラー'));
+                        var errorMessage = 'ライセンスの認証に失敗しました。';
+                        
+                        if (response.data && response.data.message) {
+                            errorMessage = response.data.message;
+                        } else if (response.message) {
+                            errorMessage = response.message;
+                        }
+                        
+                        // デバッグ情報がある場合は表示
+                        if (response.data && response.data.debug_info) {
+                            console.log('Debug info:', response.data.debug_info);
+                        }
+                        
+                        NewsCrawlerLicenseManager.showError(errorMessage);
                     }
                 },
-                error: function() {
-                    alert('通信エラーが発生しました。');
+                error: function(xhr, status, error) {
+                    console.error('License verification error:', xhr, status, error);
+                    
+                    var errorMessage = '通信エラーが発生しました。';
+                    
+                    // 詳細なエラー情報を取得
+                    if (xhr.responseText) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response && response.data && response.data.message) {
+                                errorMessage = response.data.message;
+                            } else if (response && response.message) {
+                                errorMessage = response.message;
+                            }
+                        } catch (e) {
+                            // JSON解析に失敗した場合
+                            if (xhr.status === 0) {
+                                errorMessage = 'ネットワーク接続エラーが発生しました。インターネット接続を確認してください。';
+                            } else if (xhr.status === 404) {
+                                errorMessage = 'ライセンスサーバーが見つかりません。しばらく時間をおいてから再試行してください。';
+                            } else if (xhr.status === 500) {
+                                errorMessage = 'ライセンスサーバーでエラーが発生しました。しばらく時間をおいてから再試行してください。';
+                            } else if (xhr.status === 503) {
+                                errorMessage = 'ライセンスサーバーが一時的に利用できません。しばらく時間をおいてから再試行してください。';
+                            } else {
+                                errorMessage = 'サーバーエラーが発生しました。(' + xhr.status + ')';
+                            }
+                        }
+                    }
+                    
+                    NewsCrawlerLicenseManager.showError(errorMessage);
                 },
                 complete: function() {
                     // ボタンを有効化
                     $submitButton.prop('disabled', false).val('ライセンスを認証');
+                    // ローディングを非表示
+                    NewsCrawlerLicenseManager.hideLoading();
                 }
             });
         },
@@ -394,6 +465,47 @@
                 complete: function() {
                     // ボタンを有効化
                     $button.prop('disabled', false).val('ライセンス状態を再確認');
+                }
+            });
+        },
+
+        /**
+         * ライセンスのクリア
+         */
+        clearLicense: function() {
+            if (!confirm('ライセンス情報をクリアしますか？この操作は元に戻せません。')) {
+                return;
+            }
+
+            var $button = $('input[name="clear_license"]');
+            
+            // ボタンを無効化
+            $button.prop('disabled', true).val('クリア中...');
+
+            $.ajax({
+                url: news_crawler_license_ajax.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'news_crawler_clear_license',
+                    nonce: news_crawler_license_ajax.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        this.showSuccess('ライセンス情報がクリアされました。');
+                        // ページをリロードしてステータスを更新
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        this.showError('ライセンスのクリアに失敗しました: ' + (response.data ? response.data.message : '不明なエラー'));
+                    }
+                }.bind(this),
+                error: function() {
+                    this.showError('通信エラーが発生しました。');
+                }.bind(this),
+                complete: function() {
+                    // ボタンを有効化
+                    $button.prop('disabled', false).val('ライセンスをクリア');
                 }
             });
         },
@@ -439,8 +551,82 @@
         showSuccess: function(message) {
             // 成功メッセージを表示する処理
             if (typeof message === 'string' && message.length > 0) {
-                alert(message);
+                this.showNotification(message, 'success');
             }
+        },
+
+        /**
+         * ライセンスキーの形式を検証
+         */
+        validateLicenseKeyFormat: function(licenseKey) {
+            // 実際のライセンスキー形式: NCRL-080940-RXKL,[F}-4725
+            // NCRL-で始まり、ハイフンで区切られた形式（より柔軟）
+            var pattern = /^NCRL-.+$/;
+            
+            // デバッグ用ログ
+            console.log('Validating license key:', licenseKey);
+            console.log('Pattern test result:', pattern.test(licenseKey));
+            
+            return pattern.test(licenseKey);
+        },
+
+        /**
+         * ローディング表示
+         */
+        showLoading: function(message) {
+            // 既存のローディングを削除
+            this.hideLoading();
+            
+            var loadingHtml = '<div id="news-crawler-loading" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 5px; z-index: 9999; text-align: center;">' +
+                '<div class="spinner is-active" style="float: none; margin: 0 auto 10px;"></div>' +
+                '<div>' + (message || '処理中...') + '</div>' +
+                '</div>';
+            
+            $('body').append(loadingHtml);
+        },
+
+        /**
+         * ローディング非表示
+         */
+        hideLoading: function() {
+            $('#news-crawler-loading').remove();
+        },
+
+        /**
+         * 通知メッセージの表示
+         */
+        showNotification: function(message, type) {
+            // 既存の通知を削除
+            $('.news-crawler-notification').remove();
+            
+            var typeClass = type === 'success' ? 'notice-success' : 'notice-error';
+            var icon = type === 'success' ? 'dashicons-yes-alt' : 'dashicons-warning';
+            
+            var notificationHtml = '<div class="news-crawler-notification notice ' + typeClass + ' is-dismissible" style="position: fixed; top: 32px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">' +
+                '<p style="margin: 10px 0;">' +
+                '<span class="dashicons ' + icon + '" style="margin-right: 5px;"></span>' +
+                message +
+                '</p>' +
+                '<button type="button" class="notice-dismiss" style="position: absolute; top: 0; right: 1px; border: none; padding: 9px; background: 0 0; color: #787c82; cursor: pointer;">' +
+                '<span class="screen-reader-text">この通知を非表示にする</span>' +
+                '</button>' +
+                '</div>';
+            
+            $('body').append(notificationHtml);
+            
+            // 自動で非表示にする（5秒後）
+            setTimeout(function() {
+                $('.news-crawler-notification').fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }, 5000);
+            
+            // 手動で非表示にする
+            $('.news-crawler-notification .notice-dismiss').on('click', function() {
+                $(this).parent().fadeOut(300, function() {
+                    $(this).remove();
+                });
+            });
         }
     };
 

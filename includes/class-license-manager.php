@@ -75,6 +75,7 @@ class NewsCrawler_License_Manager {
         add_action( 'admin_init', array( $this, 'handle_license_activation' ) );
         add_action( 'wp_ajax_news_crawler_verify_license', array( $this, 'ajax_verify_license' ) );
         add_action( 'wp_ajax_news_crawler_get_license_info', array( $this, 'ajax_get_license_info' ) );
+        add_action( 'wp_ajax_news_crawler_clear_license', array( $this, 'ajax_clear_license' ) );
         
         // AJAXハンドラーの登録をinitフックで実行
         add_action( 'init', array( $this, 'register_ajax_handlers' ) );
@@ -131,22 +132,43 @@ class NewsCrawler_License_Manager {
      * @since 2.1.5
      */
     public function handle_license_activation() {
-        if ( ! isset( $_POST['news_crawler_license_activation'] ) || ! wp_verify_nonce( $_POST['news_crawler_license_nonce'], 'news_crawler_license_activation' ) ) {
+        error_log( 'NewsCrawler License: handle_license_activation called' );
+        error_log( 'NewsCrawler License: POST data: ' . print_r( $_POST, true ) );
+        
+        if ( ! isset( $_POST['news_crawler_license_activation'] ) ) {
+            error_log( 'NewsCrawler License: news_crawler_license_activation not set in POST' );
+            return;
+        }
+        
+        if ( ! isset( $_POST['news_crawler_license_nonce'] ) ) {
+            error_log( 'NewsCrawler License: news_crawler_license_nonce not set in POST' );
+            return;
+        }
+        
+        if ( ! wp_verify_nonce( $_POST['news_crawler_license_nonce'], 'news_crawler_license_activation' ) ) {
+            error_log( 'NewsCrawler License: Nonce verification failed' );
+            error_log( 'NewsCrawler License: Expected nonce: ' . wp_create_nonce( 'news_crawler_license_activation' ) );
+            error_log( 'NewsCrawler License: Received nonce: ' . $_POST['news_crawler_license_nonce'] );
             return;
         }
 
         if ( ! current_user_can( 'manage_options' ) ) {
+            error_log( 'NewsCrawler License: User does not have manage_options capability' );
             wp_die( __( 'この操作を実行する権限がありません。', 'news-crawler' ) );
         }
 
         $license_key = sanitize_text_field( $_POST['news_crawler_license_key'] ?? '' );
+        error_log( 'NewsCrawler License: License key received: ' . substr( $license_key, 0, 8 ) . '...' );
         
         if ( empty( $license_key ) ) {
+            error_log( 'NewsCrawler License: Empty license key provided' );
             add_settings_error( 'news_crawler_license', 'empty_key', __( 'ライセンスキーを入力してください。', 'news-crawler' ), 'error' );
             return;
         }
 
+        error_log( 'NewsCrawler License: Starting license verification' );
         $result = $this->verify_license( $license_key );
+        error_log( 'NewsCrawler License: Verification result: ' . json_encode( $result ) );
         
         if ( $result['success'] ) {
             // Save license key
@@ -155,8 +177,10 @@ class NewsCrawler_License_Manager {
             update_option( 'news_crawler_license_info', $result['data'] );
             update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
             
-            add_settings_error( 'news_crawler_license', 'activation_success', __( 'ライセンスが正常に認証されました。', 'news-crawler' ), 'success' );
+            error_log( 'NewsCrawler License: License activated successfully' );
+            add_settings_error( 'news_crawler_license', 'activation_success', $result['message'], 'success' );
         } else {
+            error_log( 'NewsCrawler License: License activation failed: ' . $result['message'] );
             add_settings_error( 'news_crawler_license', 'activation_failed', $result['message'], 'error' );
         }
     }
@@ -204,12 +228,26 @@ class NewsCrawler_License_Manager {
 
         $site_url = get_site_url();
         
+        // KLMプラグインのAPIエンドポイントを使用
+        $klm_api_url = get_site_url() . '/wp-json/ktp-license/v1/verify';
+        
         // APIエンドポイントの接続テスト
-        error_log( 'NewsCrawler License: Attempting to connect to ' . get_site_url() . $this->api_endpoints['verify'] );
+        error_log( 'NewsCrawler License: Attempting to connect to ' . $klm_api_url );
         error_log( 'NewsCrawler License: Site URL: ' . $site_url );
         error_log( 'NewsCrawler License: License key: ' . substr( $license_key, 0, 8 ) . '...' );
+        error_log( 'NewsCrawler License: Plugin version: ' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) );
         
-        $response = wp_remote_post( get_site_url() . $this->api_endpoints['verify'], array(
+        // KLMプラグインの存在確認
+        error_log( 'NewsCrawler License: Checking for KLM plugin...' );
+        error_log( 'NewsCrawler License: KTP_License_Manager class exists: ' . ( class_exists( 'KTP_License_Manager' ) ? 'YES' : 'NO' ) );
+        
+        // KLMプラグインが存在する場合、直接KLMのメソッドを呼び出す
+        if ( class_exists( 'KTP_License_Manager' ) ) {
+            error_log( 'NewsCrawler License: KLM plugin found, using direct method call' );
+            return $this->verify_license_with_klm_direct( $license_key );
+        }
+        
+        $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'User-Agent'   => 'NewsCrawler/' . NEWS_CRAWLER_VERSION
@@ -217,6 +255,7 @@ class NewsCrawler_License_Manager {
             'body' => json_encode( array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
                 'plugin_slug' => 'news-crawler'
             ) ),
             'timeout' => 30,
@@ -264,20 +303,43 @@ class NewsCrawler_License_Manager {
         } else {
             // エラーメッセージの詳細な処理
             $error_message = '';
+            $error_code = '';
+            
+            // レスポンスデータの詳細ログ
+            error_log( 'NewsCrawler License: Full response data: ' . json_encode( $data ) );
+            
             if ( isset( $data['message'] ) && ! empty( $data['message'] ) ) {
                 $error_message = $data['message'];
             } elseif ( isset( $data['error'] ) && ! empty( $data['error'] ) ) {
                 $error_message = $data['error'];
+            } elseif ( isset( $data['error_message'] ) && ! empty( $data['error_message'] ) ) {
+                $error_message = $data['error_message'];
             } elseif ( isset( $data['code'] ) && ! empty( $data['code'] ) ) {
                 $error_message = 'エラーコード: ' . $data['code'];
+                $error_code = $data['code'];
             } else {
                 $error_message = __( 'ライセンスの認証に失敗しました。', 'news-crawler' );
             }
             
-            error_log( 'NewsCrawler License: Verification failed - Response: ' . json_encode( $data ) . ', Error: ' . $error_message );
+            // エラーコードの取得
+            if ( isset( $data['error_code'] ) && ! empty( $data['error_code'] ) ) {
+                $error_code = $data['error_code'];
+            } elseif ( isset( $data['code'] ) && ! empty( $data['code'] ) ) {
+                $error_code = $data['code'];
+            }
+            
+            error_log( 'NewsCrawler License: Verification failed - Error code: ' . $error_code . ', Error message: ' . $error_message );
+            
             return array(
                 'success' => false,
-                'message' => $error_message
+                'message' => $error_message,
+                'error_code' => $error_code,
+                'debug_info' => array(
+                    'response_data' => $data,
+                    'api_url' => $klm_api_url,
+                    'site_url' => $site_url,
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                )
             );
         }
     }
@@ -548,23 +610,50 @@ class NewsCrawler_License_Manager {
      * @since 2.1.5
      */
     public function ajax_verify_license() {
-        check_ajax_referer( 'news_crawler_license_nonce', 'nonce' );
+        error_log( 'NewsCrawler License: ajax_verify_license called' );
+        error_log( 'NewsCrawler License: AJAX POST data: ' . print_r( $_POST, true ) );
+        
+        // nonce検証をより詳細にログ出力
+        if ( ! isset( $_POST['nonce'] ) ) {
+            error_log( 'NewsCrawler License: AJAX nonce not set in POST' );
+            wp_send_json_error( array( 'message' => __( 'セキュリティチェックに失敗しました。', 'news-crawler' ) ) );
+        }
+        
+        if ( ! wp_verify_nonce( $_POST['nonce'], 'news_crawler_license_nonce' ) ) {
+            error_log( 'NewsCrawler License: AJAX nonce verification failed' );
+            error_log( 'NewsCrawler License: Expected AJAX nonce: ' . wp_create_nonce( 'news_crawler_license_nonce' ) );
+            error_log( 'NewsCrawler License: Received AJAX nonce: ' . $_POST['nonce'] );
+            wp_send_json_error( array( 'message' => __( 'セキュリティチェックに失敗しました。', 'news-crawler' ) ) );
+        }
         
         if ( ! current_user_can( 'manage_options' ) ) {
+            error_log( 'NewsCrawler License: User does not have manage_options capability for AJAX' );
             wp_send_json_error( array( 'message' => __( '権限がありません。', 'news-crawler' ) ) );
         }
         
         $license_key = sanitize_text_field( $_POST['license_key'] ?? '' );
+        error_log( 'NewsCrawler License: AJAX license key received: ' . substr( $license_key, 0, 8 ) . '...' );
         
         if ( empty( $license_key ) ) {
+            error_log( 'NewsCrawler License: Empty license key in AJAX request' );
             wp_send_json_error( array( 'message' => __( 'ライセンスキーを入力してください。', 'news-crawler' ) ) );
         }
         
+        error_log( 'NewsCrawler License: Starting AJAX license verification' );
         $result = $this->verify_license( $license_key );
+        error_log( 'NewsCrawler License: AJAX verification result: ' . json_encode( $result ) );
         
         if ( $result['success'] ) {
+            // ライセンス情報を保存
+            update_option( 'news_crawler_license_key', $license_key );
+            update_option( 'news_crawler_license_status', 'active' );
+            update_option( 'news_crawler_license_info', $result['data'] );
+            update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+            
+            error_log( 'NewsCrawler License: AJAX license activated successfully' );
             wp_send_json_success( array( 'message' => $result['message'] ) );
         } else {
+            error_log( 'NewsCrawler License: AJAX license activation failed: ' . $result['message'] );
             wp_send_json_error( array( 'message' => $result['message'] ) );
         }
     }
@@ -589,6 +678,36 @@ class NewsCrawler_License_Manager {
         
         $result = $this->get_license_info( $license_key );
         wp_send_json( $result );
+    }
+
+    /**
+     * AJAX: Clear license
+     *
+     * @since 2.1.5
+     */
+    public function ajax_clear_license() {
+        error_log( 'NewsCrawler License: ajax_clear_license called' );
+        
+        if ( ! isset( $_POST['nonce'] ) ) {
+            error_log( 'NewsCrawler License: AJAX clear nonce not set in POST' );
+            wp_send_json_error( array( 'message' => __( 'セキュリティチェックに失敗しました。', 'news-crawler' ) ) );
+        }
+        
+        if ( ! wp_verify_nonce( $_POST['nonce'], 'news_crawler_license_nonce' ) ) {
+            error_log( 'NewsCrawler License: AJAX clear nonce verification failed' );
+            wp_send_json_error( array( 'message' => __( 'セキュリティチェックに失敗しました。', 'news-crawler' ) ) );
+        }
+        
+        if ( ! current_user_can( 'manage_options' ) ) {
+            error_log( 'NewsCrawler License: User does not have manage_options capability for AJAX clear' );
+            wp_send_json_error( array( 'message' => __( '権限がありません。', 'news-crawler' ) ) );
+        }
+        
+        // ライセンス情報をクリア
+        $this->deactivate_license();
+        
+        error_log( 'NewsCrawler License: AJAX license cleared successfully' );
+        wp_send_json_success( array( 'message' => __( 'ライセンス情報がクリアされました。', 'news-crawler' ) ) );
     }
 
     /**
@@ -870,6 +989,106 @@ class NewsCrawler_License_Manager {
             return $this->get_development_license_key();
         }
         return '';
+    }
+
+    /**
+     * Verify license with KLM plugin directly
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to verify
+     * @return array Verification result
+     */
+    private function verify_license_with_klm_direct( $license_key ) {
+        error_log( 'NewsCrawler License: verify_license_with_klm_direct called' );
+        
+        try {
+            // KLMプラグインのインスタンスを取得
+            $klm_manager = KTP_License_Manager::get_instance();
+            
+            if ( ! $klm_manager ) {
+                error_log( 'NewsCrawler License: Failed to get KLM manager instance' );
+                return array(
+                    'success' => false,
+                    'message' => __( 'KLMプラグインのインスタンスを取得できませんでした。', 'news-crawler' )
+                );
+            }
+            
+            error_log( 'NewsCrawler License: KLM manager instance obtained' );
+            
+            // KLMのライセンス検証メソッドを呼び出し
+            $result = $klm_manager->verify_license( $license_key, 'news-crawler' );
+            
+            error_log( 'NewsCrawler License: KLM verification result: ' . json_encode( $result ) );
+            
+            if ( $result && isset( $result['success'] ) && $result['success'] ) {
+                return array(
+                    'success' => true,
+                    'data'    => $result['data'] ?? array(),
+                    'message' => $result['message'] ?? __( 'ライセンスが正常に認証されました。', 'news-crawler' )
+                );
+            } else {
+                return array(
+                    'success' => false,
+                    'message' => $result['message'] ?? __( 'ライセンスの認証に失敗しました。', 'news-crawler' )
+                );
+            }
+            
+        } catch ( Exception $e ) {
+            error_log( 'NewsCrawler License: Exception in KLM direct verification: ' . $e->getMessage() );
+            return array(
+                'success' => false,
+                'message' => __( 'KLMプラグインとの連携でエラーが発生しました。', 'news-crawler' ) . ' ' . $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * Handle license verification without KLM plugin
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to verify
+     * @return array Verification result
+     */
+    private function handle_license_verification_without_klm( $license_key ) {
+        error_log( 'NewsCrawler License: Handling license verification without KLM plugin' );
+        
+        // 開発環境の場合は開発用ライセンスを許可
+        if ( $this->is_development_environment() ) {
+            $dev_license_key = $this->get_development_license_key();
+            if ( $license_key === $dev_license_key ) {
+                error_log( 'NewsCrawler License: Development license key accepted (no KLM)' );
+                return array(
+                    'success' => true,
+                    'data'    => array(
+                        'user_email' => 'dev@localhost',
+                        'start_date' => date('Y-m-d'),
+                        'end_date'   => date('Y-m-d', strtotime('+1 year')),
+                        'remaining_days' => 365
+                    ),
+                    'message' => __( '開発環境用ライセンスが認証されました。（KLMなし）', 'news-crawler' )
+                );
+            }
+        }
+        
+        // 本番環境でKLMがない場合は、ライセンスキーの基本形式チェックのみ
+        if ( strpos( $license_key, 'NCRL-' ) === 0 ) {
+            error_log( 'NewsCrawler License: NCRL license key format detected, accepting without KLM verification' );
+            return array(
+                'success' => true,
+                'data'    => array(
+                    'user_email' => 'unknown@kantanpro.com',
+                    'start_date' => date('Y-m-d'),
+                    'end_date'   => date('Y-m-d', strtotime('+1 year')),
+                    'remaining_days' => 365
+                ),
+                'message' => __( 'ライセンスキーが認証されました。（KLMなし、形式チェックのみ）', 'news-crawler' )
+            );
+        }
+        
+        return array(
+            'success' => false,
+            'message' => __( 'KLMプラグインが見つかりません。KLMプラグインをインストールするか、開発環境ではテスト用ライセンスキー「DEV-TEST-KEY-12345」を使用してください。', 'news-crawler' )
+        );
     }
 }
 
