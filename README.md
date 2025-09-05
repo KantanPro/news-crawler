@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.13-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.13)
+[![Version](https://img.shields.io/badge/version-2.3.14-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.14)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,11 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.14** (2025-09-06): License key validation improvements and API verification enhancements
+  - Simplified license key format checking and added API verification for NCRL- prefixed keys
+  - Improved development environment validation logic with fallback processing for API connection failures
+  - Enhanced license management stability and user experience
 
 - **v2.3.13** (2025-09-06): License management menu display improvements
   - Fixed menu display to show even when license is not set
@@ -423,6 +428,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.14 - 2025-09-06
+
+- Simplified license key format checking and added API verification for NCRL- prefixed keys
+- Improved development environment validation logic with fallback processing for API connection failures
+- Enhanced license management stability and user experience
 
 ### v2.3.13 - 2025-09-06
 
