@@ -2956,18 +2956,14 @@ $('#cancel-edit').click(function() {
         $result = array('can_execute' => true, 'reason' => '');
         $genre_id = $setting['id'];
         
-        error_log('Pre Execution Check - Starting check for genre: ' . $setting['genre_name']);
-        
         // 基本設定のチェック
         if ($setting['content_type'] === 'youtube') {
             $basic_settings = get_option('news_crawler_basic_settings', array());
             if (empty($basic_settings['youtube_api_key'])) {
                 $result['can_execute'] = false;
                 $result['reason'] = 'YouTube APIキーが設定されていません';
-                error_log('Pre Execution Check - YouTube API key not set');
                 return $result;
             }
-            error_log('Pre Execution Check - YouTube API key check passed');
         }
         
         // ニュースソースのチェック
@@ -2975,10 +2971,8 @@ $('#cancel-edit').click(function() {
             if (empty($setting['news_sources'])) {
                 $result['can_execute'] = false;
                 $result['reason'] = 'ニュースソースが設定されていません';
-                error_log('Pre Execution Check - News sources not set for news content type');
                 return $result;
             }
-            error_log('Pre Execution Check - News sources check passed: ' . implode(', ', $setting['news_sources']));
         }
         
         // YouTubeチャンネルのチェック
@@ -2986,20 +2980,16 @@ $('#cancel-edit').click(function() {
             if (empty($setting['youtube_channels'])) {
                 $result['can_execute'] = false;
                 $result['reason'] = 'YouTubeチャンネルが設定されていません';
-                error_log('Pre Execution Check - YouTube channels not set for YouTube content type');
                 return $result;
             }
-            error_log('Pre Execution Check - YouTube channels check passed: ' . implode(', ', $setting['youtube_channels']));
         }
         
         // キーワードのチェック
         if (empty($setting['keywords'])) {
             $result['can_execute'] = false;
             $result['reason'] = 'キーワードが設定されていません';
-            error_log('Pre Execution Check - Keywords not set');
             return $result;
         }
-        error_log('Pre Execution Check - Keywords check passed: ' . implode(', ', $setting['keywords']));
         
         // 24時間制限のチェック
         $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
@@ -3008,10 +2998,8 @@ $('#cancel-edit').click(function() {
         if ($existing_posts >= $max_posts) {
             $result['can_execute'] = false;
             $result['reason'] = "24時間制限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）";
-            error_log('Pre Execution Check - 24 hour limit reached: ' . $existing_posts . '/' . $max_posts);
             return $result;
         }
-        error_log('Pre Execution Check - 24 hour limit check passed: ' . $existing_posts . '/' . $max_posts);
         
         // 候補数のチェック
         $cache_key = 'news_crawler_available_count_' . $genre_id;
@@ -3032,10 +3020,8 @@ $('#cancel-edit').click(function() {
         if ($available_candidates <= 0) {
             $result['can_execute'] = false;
             $result['reason'] = '候補がありません';
-            error_log('Pre Execution Check - No candidates available: ' . $available_candidates);
             return $result;
         }
-        error_log('Pre Execution Check - Candidates check passed: ' . $available_candidates);
         
         // 取得上限のチェック
         $per_crawl_cap = ($setting['content_type'] === 'youtube')
@@ -3045,12 +3031,9 @@ $('#cancel-edit').click(function() {
         if ($per_crawl_cap <= 0) {
             $result['can_execute'] = false;
             $result['reason'] = '取得上限が設定されていません';
-            error_log('Pre Execution Check - Crawl cap not set: ' . $per_crawl_cap);
             return $result;
         }
-        error_log('Pre Execution Check - Crawl cap check passed: ' . $per_crawl_cap);
         
-        error_log('Pre Execution Check - All checks passed for genre: ' . $setting['genre_name']);
         return $result;
     }
     
@@ -3693,15 +3676,11 @@ $('#cancel-edit').click(function() {
         ob_start();
         
         try {
-            // デバッグ情報を記録
-            error_log('Force Auto Posting Execution - Starting...');
-            
             // 強制実行用の自動投稿処理を実行
             $this->execute_auto_posting_forced();
             
             // 実行後のログ確認
             $logs = get_option('news_crawler_auto_posting_logs', array());
-            error_log('Force Auto Posting Execution - Logs after execution: ' . print_r($logs, true));
             
             $result = "自動投稿の強制実行が完了しました。\n\n";
             $result .= "実行結果は自動投稿実行レポートで確認できます。\n";
@@ -3716,7 +3695,6 @@ $('#cancel-edit').click(function() {
             // 出力バッファをクリア
             ob_end_clean();
             
-            error_log('Force Auto Posting Execution - Error: ' . $e->getMessage());
             wp_send_json_error('強制実行中にエラーが発生しました: ' . $e->getMessage());
         }
     }
@@ -3725,8 +3703,6 @@ $('#cancel-edit').click(function() {
      * 強制実行用の自動投稿処理（開始実行日時の制限を無視、既存の自動投稿設定のスケジュールを復元・維持）
      */
     private function execute_auto_posting_forced() {
-        error_log('Force Auto Posting Execution - Starting forced execution...');
-        
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
@@ -3737,7 +3713,6 @@ $('#cancel-edit').click(function() {
         $genres_with_candidates = $this->get_genres_with_candidates();
         
         if (empty($genres_with_candidates)) {
-            error_log('Force Auto Posting Execution - No genres with candidates available');
             $this->log_auto_posting_execution('global', 'skipped', "候補があるジャンルがありません");
             return;
         }
@@ -3747,7 +3722,6 @@ $('#cancel-edit').click(function() {
         $global_max_posts = count($genres_with_candidates); // 候補があるジャンル数が上限
         
         if ($total_recent_posts >= $global_max_posts) {
-            error_log('Force Auto Posting Execution - Global post limit reached: ' . $total_recent_posts . '/' . $global_max_posts);
             $this->log_auto_posting_execution('global', 'skipped', "グローバル投稿数上限に達しています（既存: {$total_recent_posts}件、上限: {$global_max_posts}件）");
             return;
         }
@@ -3757,7 +3731,6 @@ $('#cancel-edit').click(function() {
             $check_result = $this->pre_execution_check($setting);
             
             if (!$check_result['can_execute']) {
-                error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' skipped: ' . $check_result['reason']);
                 $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
                 $skipped_count++;
                 continue;
@@ -3771,8 +3744,6 @@ $('#cancel-edit').click(function() {
             // 強制実行時は既存の自動投稿設定に基づいて正しいスケジュールを復元・維持
             $this->update_next_execution_time_forced($genre_id, $setting);
         }
-        
-        error_log('Force Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
     }
     
     /**
@@ -3780,8 +3751,6 @@ $('#cancel-edit').click(function() {
      */
     private function update_next_execution_time_forced($genre_id, $setting) {
         // 強制実行時は既存の自動投稿設定に基づいて正しいスケジュールを復元・維持
-        error_log('Force Auto Posting Execution - Restoring schedule based on existing auto posting settings for genre ' . $genre_id);
-        
         $now = current_time('timestamp');
         $next_execution_time = $now;
         
@@ -3792,22 +3761,17 @@ $('#cancel-edit').click(function() {
             // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
             if ($start_time > $now) {
                 $next_execution_time = $start_time;
-                error_log('Force Auto Posting Execution - Using start_execution_time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
             } else {
                 // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
                 $next_execution_time = $this->calculate_next_execution_from_start_time($setting, $start_time);
-                error_log('Force Auto Posting Execution - Calculated from start_time for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
             }
         } else {
             // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度に基づいて計算
             $next_execution_time = $this->calculate_next_execution_from_now($setting, $now);
-            error_log('Force Auto Posting Execution - Calculated from now for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
         }
         
         // 正しいスケジュールを設定
         update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
-        
-        error_log('Force Auto Posting Execution - Restored correct schedule for genre ' . $genre_id . ': ' . date('Y-m-d H:i:s', $next_execution_time));
     }
     
 
