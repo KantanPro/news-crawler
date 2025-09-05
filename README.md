@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.8-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.8)
+[![Version](https://img.shields.io/badge/version-2.3.9-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.9)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,13 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.9** (2025-09-05): License authentication page improvements and UI simplification
+  - Removed unnecessary messages from license authentication page for simplified UI
+  - Removed functional limitation descriptions to improve user experience
+  - Removed license key-based functional limitation messages
+  - Implemented dynamic version retrieval for admin page titles
+  - Resolved license authentication page title display issues
 
 - **v2.3.8** (2025-09-05): Development environment detection improvements
   - Enhanced development environment detection logic with more rigorous condition checking
@@ -392,6 +399,14 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.9 - 2025-09-05
+
+- Removed unnecessary messages from license authentication page for simplified UI
+- Removed functional limitation descriptions to improve user experience
+- Removed license key-based functional limitation messages
+- Implemented dynamic version retrieval for admin page titles
+- Resolved license authentication page title display issues
 
 ### v2.3.8 - 2025-09-05
 
