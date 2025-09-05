@@ -59,8 +59,8 @@ class NewsCrawlerSettingsManager {
             ));
         }
         
-        // ライセンス設定ページでもスクリプトを読み込み
-        if ($hook === 'news-crawler_page_news-crawler-license') {
+        // News Crawler関連のページでスクリプトを読み込み
+        if (strpos($hook, 'news-crawler') !== false) {
             wp_enqueue_script(
                 'news-crawler-license-manager',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
@@ -70,9 +70,14 @@ class NewsCrawlerSettingsManager {
             );
             
             // AJAX用のデータをローカライズ
+            $nonce = wp_create_nonce('news_crawler_license_nonce');
+            error_log('NewsCrawler Settings: Generated nonce for license manager: ' . $nonce);
+            
             wp_localize_script('news-crawler-license-manager', 'news_crawler_license_ajax', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
-                'nonce'   => wp_create_nonce('news_crawler_license_nonce'),
+                'nonce'   => $nonce,
+                'dev_license_key' => class_exists('NewsCrawler_License_Manager') ? NewsCrawler_License_Manager::get_instance()->get_display_dev_license_key() : '',
+                'is_development' => class_exists('NewsCrawler_License_Manager') ? NewsCrawler_License_Manager::get_instance()->is_development_environment() : false,
                 'strings' => array(
                     'verifying' => __( '認証中...', 'news-crawler' ),
                     'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),

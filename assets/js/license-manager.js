@@ -85,31 +85,229 @@
             var $button = $('#toggle-dev-license');
             var $spinner = $button.siblings('.spinner');
             
+            // デバッグ情報を出力
+            console.log('NewsCrawler License: toggleDevLicense called');
+            console.log('NewsCrawler License: news_crawler_license_ajax =', typeof news_crawler_license_ajax !== 'undefined' ? news_crawler_license_ajax : 'undefined');
+            if (typeof news_crawler_license_ajax !== 'undefined') {
+                console.log('NewsCrawler License: AJAX URL =', news_crawler_license_ajax.ajaxurl);
+            }
+            
+            if (typeof news_crawler_license_ajax === 'undefined') {
+                alert('エラー: AJAX設定が読み込まれていません。ページを再読み込みしてください。');
+                return;
+            }
+            
+            // 直接的なAJAX処理を実行（WordPressのAJAX処理をバイパス）
+            this.performDirectToggle($button, $spinner);
+        },
+
+        /**
+         * 直接的なライセンス切り替え処理
+         */
+        performDirectToggle: function($button, $spinner) {
             // スピナーを表示
             $spinner.show();
             $button.prop('disabled', true);
 
+            var requestData = {
+                action: 'news_crawler_direct_toggle'
+            };
+
+            console.log('NewsCrawler License: Sending direct AJAX request with data:', requestData);
+
             $.ajax({
-                url: news_crawler_license_ajax.ajaxurl,
+                url: window.location.href, // 現在のページにリクエスト
                 type: 'POST',
-                data: {
-                    action: 'news_crawler_toggle_dev_license',
-                    nonce: news_crawler_license_ajax.nonce
-                },
+                data: requestData,
+                dataType: 'json',
                 success: function(response) {
-                    if (response.success) {
+                    console.log('AJAX Response:', response);
+                    if (response && response.success) {
                         // ボタンテキストを更新
                         var newText = response.data.new_status ? '開発用ライセンスを無効化' : '開発用ライセンスを有効化';
                         $button.text(newText);
                         
+                        // 成功メッセージを表示
+                        alert(response.data.message || '開発用ライセンスの状態が変更されました。');
+                        
                         // ページをリロードしてステータスを更新
                         location.reload();
                     } else {
-                        alert('エラーが発生しました: ' + (response.data ? response.data.message : '不明なエラー'));
+                        console.error('AJAX Error Response:', response);
+                        var errorMessage = '不明なエラー';
+                        if (response && response.data && response.data.message) {
+                            errorMessage = response.data.message;
+                        } else if (response && response.message) {
+                            errorMessage = response.message;
+                        }
+                        alert('エラーが発生しました: ' + errorMessage);
                     }
                 },
-                error: function() {
-                    alert('通信エラーが発生しました。');
+                error: function(xhr, status, error) {
+                    console.error('AJAX Request Error:', xhr, status, error);
+                    console.error('Response Text:', xhr.responseText);
+                    
+                    var errorMessage = '通信エラーが発生しました: ' + error;
+                    
+                    // レスポンステキストからエラーメッセージを抽出
+                    if (xhr.responseText) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response && response.data && response.data.message) {
+                                errorMessage = response.data.message;
+                            } else if (response && response.message) {
+                                errorMessage = response.message;
+                            }
+                        } catch (e) {
+                            // JSON解析に失敗した場合は、プレーンテキストとして処理
+                            console.log('Response is not JSON, treating as plain text');
+                            if (xhr.responseText && xhr.responseText.trim() !== '') {
+                                errorMessage = xhr.responseText.trim();
+                            }
+                        }
+                    }
+                    
+                    alert(errorMessage);
+                },
+                complete: function() {
+                    // スピナーを非表示
+                    $spinner.hide();
+                    $button.prop('disabled', false);
+                }
+            });
+        },
+
+        /**
+         * AJAX接続テスト
+         */
+        testAjaxConnection: function(callback) {
+            console.log('NewsCrawler License: Testing AJAX connection...');
+            
+            // まず最も基本的なテストを実行
+            this.testSimpleAjax(function() {
+                // 基本的なテストが成功した場合、より詳細なテストを実行
+                NewsCrawlerLicenseManager.testDetailedAjax(callback);
+            });
+        },
+
+        /**
+         * 基本的なAJAXテスト
+         */
+        testSimpleAjax: function(callback) {
+            console.log('NewsCrawler License: Testing simple AJAX...');
+            
+            $.ajax({
+                url: news_crawler_license_ajax.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'news_crawler_simple_test'
+                },
+                dataType: 'json',
+                success: function(response) {
+                    console.log('NewsCrawler License: Simple test success:', response);
+                    if (callback) callback();
+                },
+                error: function(xhr, status, error) {
+                    console.error('NewsCrawler License: Simple test failed:', xhr, status, error);
+                    console.error('Response text:', xhr.responseText);
+                    alert('基本的なAJAXテストに失敗しました: ' + error);
+                }
+            });
+        },
+
+        /**
+         * 詳細なAJAXテスト
+         */
+        testDetailedAjax: function(callback) {
+            console.log('NewsCrawler License: Testing detailed AJAX...');
+            
+            $.ajax({
+                url: news_crawler_license_ajax.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'news_crawler_test_ajax'
+                },
+                dataType: 'json',
+                success: function(response) {
+                    console.log('NewsCrawler License: Detailed test success:', response);
+                    if (callback) callback();
+                },
+                error: function(xhr, status, error) {
+                    console.error('NewsCrawler License: Detailed test failed:', xhr, status, error);
+                    console.error('Response text:', xhr.responseText);
+                    alert('詳細なAJAXテストに失敗しました: ' + error);
+                }
+            });
+        },
+
+        /**
+         * 実際のライセンス切り替え処理
+         */
+        performToggleDevLicense: function($button, $spinner) {
+            // スピナーを表示
+            $spinner.show();
+            $button.prop('disabled', true);
+
+            var requestData = {
+                action: 'news_crawler_toggle_dev_license',
+                nonce: news_crawler_license_ajax.nonce
+            };
+
+            console.log('NewsCrawler License: Sending AJAX request with data:', requestData);
+
+            $.ajax({
+                url: news_crawler_license_ajax.ajaxurl,
+                type: 'POST',
+                data: requestData,
+                dataType: 'json',
+                success: function(response) {
+                    console.log('AJAX Response:', response);
+                    if (response && response.success) {
+                        // ボタンテキストを更新
+                        var newText = response.data.new_status ? '開発用ライセンスを無効化' : '開発用ライセンスを有効化';
+                        $button.text(newText);
+                        
+                        // 成功メッセージを表示
+                        alert('開発用ライセンスの状態が変更されました。');
+                        
+                        // ページをリロードしてステータスを更新
+                        location.reload();
+                    } else {
+                        console.error('AJAX Error Response:', response);
+                        var errorMessage = '不明なエラー';
+                        if (response && response.data && response.data.message) {
+                            errorMessage = response.data.message;
+                        } else if (response && response.message) {
+                            errorMessage = response.message;
+                        }
+                        alert('エラーが発生しました: ' + errorMessage);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX Request Error:', xhr, status, error);
+                    console.error('Response Text:', xhr.responseText);
+                    
+                    var errorMessage = '通信エラーが発生しました: ' + error;
+                    
+                    // レスポンステキストからエラーメッセージを抽出
+                    if (xhr.responseText) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response && response.data && response.data.message) {
+                                errorMessage = response.data.message;
+                            } else if (response && response.message) {
+                                errorMessage = response.message;
+                            }
+                        } catch (e) {
+                            // JSON解析に失敗した場合は、プレーンテキストとして処理
+                            console.log('Response is not JSON, treating as plain text');
+                            if (xhr.responseText && xhr.responseText.trim() !== '') {
+                                errorMessage = xhr.responseText.trim();
+                            }
+                        }
+                    }
+                    
+                    alert(errorMessage);
                 },
                 complete: function() {
                     // スピナーを非表示

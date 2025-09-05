@@ -4215,7 +4215,7 @@ $('#cancel-edit').click(function() {
                     <!-- ライセンス情報 -->
                     <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
                         <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
-                        <p><?php echo esc_html__( 'News Crawlerプラグインの一部の機能を利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
+                        <p><?php echo esc_html__( 'News Crawlerプラグインを利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
 
 
                         <ul style="margin-left: 20px;">
@@ -4337,8 +4337,8 @@ $('#cancel-edit').click(function() {
      * ライセンス管理用スクリプトの読み込み
      */
     public function enqueue_license_scripts($hook) {
-        // ライセンス設定ページでのみ読み込み
-        if ($hook === 'news-crawler_page_news-crawler-license') {
+        // News Crawler関連のページで読み込み
+        if (strpos($hook, 'news-crawler') !== false) {
             wp_enqueue_script(
                 'news-crawler-license-manager',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
