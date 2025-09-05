@@ -67,7 +67,7 @@ class NewsCrawlerGenreSettings {
         // 投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - 投稿設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - 投稿設定',
             '投稿設定',
             'manage_options',
             'news-crawler-main',
@@ -709,7 +709,7 @@ class NewsCrawlerGenreSettings {
         $genre_settings = $this->get_genre_settings();
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - 投稿設定</h1>
+            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 投稿設定</h1>
             
             <!-- デバッグ情報表示エリア -->
             <div id="debug-info" style="margin-bottom: 20px; display: none;">
@@ -4508,5 +4508,19 @@ $('#cancel-edit').click(function() {
             error_log('Get Cron Log - Exception: ' . $e->getMessage());
             return "Cron実行ログの取得中にエラーが発生しました: " . $e->getMessage() . "\n";
         }
+    }
+    
+    /**
+     * プラグインのバージョンを動的に取得
+     */
+    private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
 }
