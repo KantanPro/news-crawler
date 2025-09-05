@@ -2025,21 +2025,42 @@ class NewsCrawler {
             $article_links = $this->extract_article_links($source_url, $max_results);
             
             if (empty($article_links)) {
+                error_log('NewsCrawler: 記事リンクが見つかりませんでした: ' . $source_url);
                 return $articles;
             }
             
-            // 各記事ページから詳細コンテンツを取得
-            foreach ($article_links as $link) {
+            error_log('NewsCrawler: ' . count($article_links) . '件の記事リンクを取得しました');
+            
+            // 各記事ページから詳細コンテンツを取得（並列処理を避けて順次処理）
+            $processed_count = 0;
+            foreach ($article_links as $index => $link) {
+                // 処理時間をチェック（4分を超えたら中断）
+                if (time() - $_SERVER['REQUEST_TIME'] > 240) {
+                    error_log('NewsCrawler: 処理時間制限に達したため中断: ' . $processed_count . '件処理済み');
+                    break;
+                }
+                
+                error_log('NewsCrawler: 記事処理中 (' . ($index + 1) . '/' . count($article_links) . '): ' . $link);
+                
                 $article_data = $this->fetch_individual_article($link);
                 if ($article_data) {
                     $articles[] = $article_data;
+                    $processed_count++;
+                    error_log('NewsCrawler: 記事取得成功: ' . $article_data['title']);
+                } else {
+                    error_log('NewsCrawler: 記事取得失敗: ' . $link);
                 }
                 
                 // 最大記事数に達したら終了
                 if (count($articles) >= $max_results) {
                     break;
                 }
+                
+                // 処理間隔を空ける（サーバー負荷軽減）
+                usleep(500000); // 0.5秒待機
             }
+            
+            error_log('NewsCrawler: 深層クロール完了: ' . count($articles) . '件の記事を取得');
             
         } catch (Exception $e) {
             error_log('NewsCrawler: 深層クロールエラー: ' . $e->getMessage());
@@ -2053,12 +2074,15 @@ class NewsCrawler {
      */
     private function extract_article_links($source_url, $max_links = 20) {
         $response = wp_remote_get($source_url, array(
-            'timeout' => 30,
+            'timeout' => 20, // タイムアウトを短縮
             'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0'
+            'user-agent' => 'News Crawler Plugin/1.0',
+            'redirection' => 3, // リダイレクト回数を制限
+            'httpversion' => '1.1'
         ));
         
         if (is_wp_error($response)) {
+            error_log('NewsCrawler: ソースページ取得エラー: ' . $response->get_error_message() . ' - ' . $source_url);
             throw new Exception('ニュースソースページの取得に失敗しました: ' . $response->get_error_message());
         }
         
@@ -2204,12 +2228,15 @@ class NewsCrawler {
      */
     private function fetch_individual_article($article_url) {
         $response = wp_remote_get($article_url, array(
-            'timeout' => 30,
+            'timeout' => 15, // タイムアウトを短縮
             'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0'
+            'user-agent' => 'News Crawler Plugin/1.0',
+            'redirection' => 3, // リダイレクト回数を制限
+            'httpversion' => '1.1'
         ));
         
         if (is_wp_error($response)) {
+            error_log('NewsCrawler: 記事取得エラー: ' . $response->get_error_message() . ' - ' . $article_url);
             return null;
         }
         

@@ -1199,7 +1199,9 @@ $('#content-type').trigger('change');
                     data: formData,
                     success: function(response) {
                         if (response.success) {
-                            location.reload();
+                            // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                            // location.reload();
+                            alert('設定が保存されました');
                         } else {
                             alert('エラー: ' + response.data);
                         }
@@ -1286,11 +1288,12 @@ $('#cancel-edit').click(function() {
                     },
                     success: function(response) {
                         if (response && response.success) {
-                            resultContent.html('✅ 強制実行完了\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                            // レポートを更新
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
+                            var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                            resultContent.html(successMessage);
+                            // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                            // setTimeout(function() {
+                            //     location.reload();
+                            // }, 2000);
                         } else if (response && response.data) {
                             resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
                         } else {
@@ -1304,9 +1307,10 @@ $('#cancel-edit').click(function() {
                                 var parsed = JSON.parse(xhr.responseText);
                                 if (parsed && parsed.success) {
                                     resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                                    setTimeout(function() {
-                                        location.reload();
-                                    }, 2000);
+                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                    // setTimeout(function() {
+                                    //     location.reload();
+                                    // }, 2000);
                                     return;
                                 } else if (parsed && parsed.data) {
                                     resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
@@ -1316,9 +1320,10 @@ $('#cancel-edit').click(function() {
                                 // 成功テキストがプレーンで返ってきた場合の簡易検出
                                 if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
                                     resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
-                                    setTimeout(function() {
-                                        location.reload();
-                                    }, 2000);
+                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                    // setTimeout(function() {
+                                    //     location.reload();
+                                    // }, 2000);
                                     return;
                                 }
                             }
@@ -1330,9 +1335,10 @@ $('#cancel-edit').click(function() {
                                 var parsed = JSON.parse(xhr.responseText);
                                 if (parsed && parsed.success) {
                                     resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                                    setTimeout(function() {
-                                        location.reload();
-                                    }, 2000);
+                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                    // setTimeout(function() {
+                                    //     location.reload();
+                                    // }, 2000);
                                     return;
                                 } else if (parsed && parsed.data) {
                                     resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
@@ -1344,19 +1350,23 @@ $('#cancel-edit').click(function() {
                                 
                                 // プレーンテキストで成功メッセージが返ってきた場合
                                 if (/強制実行|完了|ログ|投稿ID|作成しました/.test(cleanResponse)) {
-                                    resultContent.html('✅ 強制実行完了\n\n' + cleanResponse);
-                                    setTimeout(function() {
-                                        location.reload();
-                                    }, 2000);
+                                    var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + cleanResponse + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                    resultContent.html(successMessage);
+                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                    // setTimeout(function() {
+                                    //     location.reload();
+                                    // }, 2000);
                                     return;
                                 }
                                 
                                 // 警告メッセージが含まれていても成功メッセージがある場合
                                 if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
-                                    resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
-                                    setTimeout(function() {
-                                        location.reload();
-                                    }, 2000);
+                                    var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + xhr.responseText + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                    resultContent.html(successMessage);
+                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                    // setTimeout(function() {
+                                    //     location.reload();
+                                    // }, 2000);
                                     return;
                                 }
                             }
@@ -1672,22 +1682,32 @@ $('#cancel-edit').click(function() {
                 url: ajaxurl,
                 type: 'POST',
                 dataType: 'json',
+                timeout: 300000, // 5分のタイムアウト（ニュースクロールには時間がかかる場合がある）
                 data: {
                     action: 'genre_settings_execute',
                     nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
                     genre_id: genreId
                 },
                 success: function(response) {
+                    console.log('AJAX Success Response:', response);
+                    
                     if (response && response.success) {
-                        jQuery('#execution-result-content').html(response.data);
-                        // 実行結果表示後に一覧を最新状態へ更新（投稿可能数などを即時反映）
-                        setTimeout(function() {
-                            location.reload();
-                        }, 1200);
+                        var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + response.data;
+                        jQuery('#execution-result-content').html(successMessage);
+                        // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                        // setTimeout(function() {
+                        //     location.reload();
+                        // }, 1200);
                     } else if (response && response.data) {
-                        jQuery('#execution-result-content').html('エラー: ' + response.data);
+                        jQuery('#execution-result-content').html('❌ エラー: ' + response.data);
                     } else {
-                        jQuery('#execution-result-content').html('エラー: 不明な応答形式です');
+                        var debugInfo = '❌ エラー: 不明な応答形式です\n\n';
+                        debugInfo += 'デバッグ情報:\n';
+                        debugInfo += 'Response: ' + JSON.stringify(response) + '\n';
+                        debugInfo += 'Response Type: ' + typeof response + '\n';
+                        debugInfo += 'Response Success: ' + (response ? response.success : 'undefined') + '\n';
+                        debugInfo += 'Response Data: ' + (response ? response.data : 'undefined');
+                        jQuery('#execution-result-content').html(debugInfo);
                     }
                 },
                 error: function(xhr, status, error) {
@@ -1728,19 +1748,23 @@ $('#cancel-edit').click(function() {
                             
                             // プレーンテキストで成功メッセージが返ってきた場合
                             if (/\b投稿ID\b|\b作成しました\b|\b成功\b|\b完了\b/.test(cleanResponse)) {
-                                jQuery('#execution-result-content').html(cleanResponse);
+                                var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + cleanResponse;
+                                jQuery('#execution-result-content').html(successMessage);
                                 return;
                             }
                             
                             // 警告メッセージが含まれていても成功メッセージがある場合
                             if (/\b投稿ID\b|\b作成しました\b|\b成功\b|\b完了\b/.test(xhr.responseText)) {
-                                jQuery('#execution-result-content').html(xhr.responseText);
+                                var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + xhr.responseText;
+                                jQuery('#execution-result-content').html(successMessage);
                                 return;
                             }
                         }
                     }
                     
                     var errorMessage = '実行中にエラーが発生しました。';
+                    var debugInfo = '';
+                    
                     if (xhr.responseJSON && xhr.responseJSON.data) {
                         errorMessage = xhr.responseJSON.data;
                     } else if (xhr.statusText && xhr.statusText !== 'OK') {
@@ -1749,8 +1773,21 @@ $('#cancel-edit').click(function() {
                         errorMessage = 'エラー: ' + error;
                     } else if (xhr.responseText) {
                         errorMessage = 'サーバーレスポンス: ' + xhr.responseText.substring(0, 200);
+                    } else if (status === 'timeout') {
+                        errorMessage = 'リクエストがタイムアウトしました（5分）。ニュースクロール処理に時間がかかりすぎています。';
+                    } else {
+                        errorMessage = 'レスポンスが空です';
+                        debugInfo = '\n\nデバッグ情報:\n';
+                        debugInfo += 'Status: ' + status + '\n';
+                        debugInfo += 'Error: ' + error + '\n';
+                        debugInfo += 'XHR Status: ' + xhr.status + '\n';
+                        debugInfo += 'XHR Status Text: ' + xhr.statusText + '\n';
+                        debugInfo += 'Response Text Length: ' + (xhr.responseText ? xhr.responseText.length : 0) + '\n';
+                        debugInfo += 'Response Text: ' + (xhr.responseText || '空') + '\n';
+                        debugInfo += 'Response JSON: ' + (xhr.responseJSON ? JSON.stringify(xhr.responseJSON) : 'undefined');
                     }
-                    jQuery('#execution-result-content').html('エラー: ' + errorMessage);
+                    
+                    jQuery('#execution-result-content').html('❌ エラー: ' + errorMessage + debugInfo);
                 },
                 complete: function() {
                     button.prop('disabled', false).text(originalText);
@@ -2192,6 +2229,12 @@ $('#cancel-edit').click(function() {
     }
     
     public function execute_genre_setting() {
+        // 実行時間制限を延長（5分）
+        set_time_limit(300);
+        
+        // メモリ制限を増加（256MB）
+        ini_set('memory_limit', '256M');
+        
         // 出力バッファリングを開始してPHPの警告やエラーをキャプチャ
         ob_start();
         
@@ -2233,9 +2276,18 @@ $('#cancel-edit').click(function() {
             // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
             delete_transient('news_crawler_available_count_' . $setting['id']);
             
+            // デバッグログにレスポンス内容を記録
+            error_log('NewsCrawler: 実行結果レスポンス準備完了');
+            error_log('NewsCrawler: 最終結果長: ' . strlen($final_result));
+            error_log('NewsCrawler: 最終結果内容: ' . substr($final_result, 0, 500));
+            
             // 出力バッファをクリアしてからJSONレスポンスを送信
             ob_end_clean();
+            
+            // レスポンス送信前にログ出力
+            error_log('NewsCrawler: wp_send_json_success実行前');
             wp_send_json_success($final_result);
+            error_log('NewsCrawler: wp_send_json_success実行後');
             
         } catch (Exception $e) {
             // エラーが発生した場合も出力バッファをクリア
