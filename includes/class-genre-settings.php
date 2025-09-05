@@ -4230,7 +4230,6 @@ $('#cancel-edit').click(function() {
                     <!-- ライセンス情報 -->
                     <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
                         <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
-                        <p><?php echo esc_html__( 'News Crawlerプラグインを利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
 
 
                         <ul style="margin-left: 20px;">
@@ -4248,23 +4247,6 @@ $('#cancel-edit').click(function() {
                         </p>
                     </div>
 
-                    <!-- 機能制限情報 -->
-                    <div class="ktp-feature-limitations" style="margin-top: 30px; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
-                        <h3 style="margin-top: 0; color: #856404;">
-                            <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
-                            <?php echo esc_html__( '機能制限について', 'news-crawler' ); ?>
-                        </h3>
-                        <p><?php echo esc_html__( 'ライセンスキーがない場合、以下の機能が制限されます：', 'news-crawler' ); ?></p>
-                        <ul style="margin-left: 20px; line-height: 1.8;">
-                            <li><strong><?php echo esc_html__( 'AI要約生成', 'news-crawler' ); ?></strong>: OpenAI APIを使用した記事の自動要約</li>
-                            <li><strong><?php echo esc_html__( '高度なアイキャッチ生成', 'news-crawler' ); ?></strong>: AIを使用した画像生成</li>
-                            <li><strong><?php echo esc_html__( 'SEOタイトル最適化', 'news-crawler' ); ?></strong>: AIによるタイトルの最適化提案</li>
-                            <li><strong><?php echo esc_html__( '高度なOGP管理', 'news-crawler' ); ?></strong>: 自動OGPタグ生成</li>
-                        </ul>
-                        <p style="margin-bottom: 0;">
-                            <em><?php echo esc_html__( '基本的なニュースクロール機能は無料でご利用いただけます。', 'news-crawler' ); ?></em>
-                        </p>
-                    </div>
 
                 </div>
             </div>
@@ -4670,25 +4652,6 @@ $('#cancel-edit').click(function() {
                     </p>
                 </div>
 
-                <!-- 機能制限情報 -->
-                <div class="ktp-feature-limitations" style="margin-top: 30px; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
-                    <h3 style="margin-top: 0; color: #856404;">
-                        <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
-                        <?php echo esc_html__( '機能制限について', 'news-crawler' ); ?>
-                    </h3>
-                    <p><?php echo esc_html__( 'ライセンスキーがない場合、以下の機能が制限されます：', 'news-crawler' ); ?></p>
-                    <ul style="margin-left: 20px; line-height: 1.8;">
-                        <li><strong><?php echo esc_html__( 'ニュースクロール機能', 'news-crawler' ); ?></strong>: 記事の自動収集・フィルタリング</li>
-                        <li><strong><?php echo esc_html__( '投稿作成機能', 'news-crawler' ); ?></strong>: 自動投稿の作成・公開</li>
-                        <li><strong><?php echo esc_html__( 'AI要約生成', 'news-crawler' ); ?></strong>: OpenAI APIを使用した記事の自動要約</li>
-                        <li><strong><?php echo esc_html__( '高度なアイキャッチ生成', 'news-crawler' ); ?></strong>: AIを使用した画像生成</li>
-                        <li><strong><?php echo esc_html__( 'SEOタイトル最適化', 'news-crawler' ); ?></strong>: AIによるタイトルの最適化提案</li>
-                        <li><strong><?php echo esc_html__( '高度なOGP管理', 'news-crawler' ); ?></strong>: 自動OGPタグ生成</li>
-                    </ul>
-                    <p style="margin-bottom: 0;">
-                        <em><?php echo esc_html__( 'プラグインを利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></em>
-                    </p>
-                </div>
             </div>
         </div>
         <?php

@@ -338,7 +338,7 @@ class NewsCrawler_License_Manager {
             if ( $license_status !== 'not_set' ) {
                 update_option( 'news_crawler_license_status', 'not_set' );
                 update_option( 'news_crawler_license_info', array(
-                    'message' => 'プラグインを利用するには有効なライセンスキーが必要です。',
+                    'message' => 'ライセンスキーを入力してください。',
                     'features' => array(
                         'ai_summary' => false,
                         'advanced_features' => false,
@@ -691,7 +691,7 @@ class NewsCrawler_License_Manager {
         if ( empty( $license_key ) ) {
             return array(
                 'status' => 'not_set',
-                'message' => __( 'ライセンスキーが設定されていません。プラグインを利用するには有効なライセンスキーが必要です。', 'news-crawler' ),
+                'message' => __( 'ライセンスキーが設定されていません。', 'news-crawler' ),
                 'icon' => 'dashicons-warning',
                 'color' => '#f56e28'
             );
