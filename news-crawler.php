@@ -1224,7 +1224,9 @@ class NewsCrawler {
             wp_send_json_error('権限がありません');
         }
         
-        $result = $this->crawl_news();
+        // 新しいジャンル設定システムを使用
+        $genre_settings = new NewsCrawlerGenreSettings();
+        $result = $genre_settings->manual_run_news();
         wp_send_json_success($result);
     }
     
@@ -2982,16 +2984,3 @@ function news_crawler_deactivation() {
     wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
 }
 
-// デバッグ用: nonceの生成と検証をログに記録
-add_action('wp_ajax_news_crawler_manual_run_news', function() {
-    $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
-    error_log('News Crawler: 受信したnonce: ' . $nonce);
-
-    if (!wp_verify_nonce($nonce, 'news_crawler_nonce')) {
-        error_log('News Crawler: nonceの検証に失敗しました');
-        wp_send_json_error('nonceの検証に失敗しました');
-    }
-
-    error_log('News Crawler: nonceの検証に成功しました');
-    // 残りの処理を実行
-});
