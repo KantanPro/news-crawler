@@ -307,12 +307,17 @@ class NewsCrawler_License_Manager {
                 );
             }
             
-            // 開発環境では、実際のライセンスサーバーへの接続をスキップ
-            error_log( 'NewsCrawler License: Development environment detected, skipping actual server verification' );
-            return array(
-                'success' => false,
-                'message' => __( '開発環境では、テスト用ライセンスキー「DEV-TEST-KEY-12345」を使用してください。', 'news-crawler' )
-            );
+            // 開発環境でもNCRL-で始まるキーは実際のAPIで検証を試行
+            if ( strpos( $license_key, 'NCRL-' ) === 0 ) {
+                error_log( 'NewsCrawler License: Development environment with NCRL key, attempting API verification' );
+                // 開発環境でもAPI検証を試行するため、ここではスキップしない
+            } else {
+                error_log( 'NewsCrawler License: Development environment detected, skipping verification for non-NCRL key' );
+                return array(
+                    'success' => false,
+                    'message' => __( '開発環境では、テスト用ライセンスキー「DEV-TEST-KEY-12345」またはNCRL-で始まるライセンスキーを使用してください。', 'news-crawler' )
+                );
+            }
         }
         
         // Check rate limit
@@ -1173,9 +1178,18 @@ class NewsCrawler_License_Manager {
             }
         }
         
-        // 本番環境でKLMがない場合は、ライセンスキーの基本形式チェックのみ
+        // NCRL-で始まるキーの場合は、KLM APIに直接接続を試行
         if ( strpos( $license_key, 'NCRL-' ) === 0 ) {
-            error_log( 'NewsCrawler License: NCRL license key format detected, accepting without KLM verification' );
+            error_log( 'NewsCrawler License: NCRL license key format detected, attempting direct API verification' );
+            
+            // KLM APIに直接接続を試行
+            $api_result = $this->verify_license_via_api( $license_key );
+            if ( $api_result['success'] ) {
+                return $api_result;
+            }
+            
+            // API接続に失敗した場合は、フォールバックとして形式チェックのみで受け入れ
+            error_log( 'NewsCrawler License: API verification failed, falling back to format check only' );
             return array(
                 'success' => true,
                 'data'    => array(
@@ -1184,13 +1198,119 @@ class NewsCrawler_License_Manager {
                     'end_date'   => date('Y-m-d', strtotime('+1 year')),
                     'remaining_days' => 365
                 ),
-                'message' => __( 'ライセンスキーが認証されました。（KLMなし、形式チェックのみ）', 'news-crawler' )
+                'message' => __( 'ライセンスキーが認証されました。（API接続失敗、形式チェックのみ）', 'news-crawler' )
             );
         }
         
         return array(
             'success' => false,
             'message' => __( 'KLMプラグインが見つかりません。KLMプラグインをインストールするか、開発環境ではテスト用ライセンスキー「DEV-TEST-KEY-12345」を使用してください。', 'news-crawler' )
+        );
+    }
+
+    /**
+     * Verify license via KLM API directly
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to verify
+     * @return array Verification result
+     */
+    private function verify_license_via_api( $license_key ) {
+        error_log( 'NewsCrawler License: verify_license_via_api called' );
+        
+        $site_url = get_site_url();
+        $klm_api_url = $this->api_endpoints['verify'];
+        
+        error_log( 'NewsCrawler License: Attempting direct API call to ' . $klm_api_url );
+        
+        $response = wp_remote_post( $klm_api_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+            ),
+            'body' => json_encode( array(
+                'license_key' => $license_key,
+                'site_url'    => $site_url,
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                'plugin_slug' => 'news-crawler'
+            ) ),
+            'timeout' => 30,
+            'sslverify' => true
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'NewsCrawler License: API call failed: ' . $response->get_error_message() );
+            return array(
+                'success' => false,
+                'message' => __( 'KLM APIへの接続に失敗しました: ', 'news-crawler' ) . $response->get_error_message()
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        error_log( 'NewsCrawler License: API response code: ' . $response_code );
+        error_log( 'NewsCrawler License: API response body: ' . $body );
+
+        if ( $response_code === 200 && $data && isset( $data['success'] ) ) {
+            return $data;
+        }
+
+        return array(
+            'success' => false,
+            'message' => __( 'KLM APIからの応答が無効です。', 'news-crawler' )
+        );
+    }
+
+    /**
+     * Test KLM API connection
+     *
+     * @since 2.1.5
+     * @return array Test result
+     */
+    public function test_klm_api_connection() {
+        error_log( 'NewsCrawler License: Testing KLM API connection' );
+        
+        $test_url = $this->api_endpoints['verify'];
+        
+        $response = wp_remote_post( $test_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+            ),
+            'body' => json_encode( array(
+                'license_key' => 'TEST-CONNECTION',
+                'site_url'    => get_site_url(),
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                'plugin_slug' => 'news-crawler'
+            ) ),
+            'timeout' => 10,
+            'sslverify' => true
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => __( 'KLM APIへの接続に失敗しました: ', 'news-crawler' ) . $response->get_error_message(),
+                'error_code' => 'connection_failed'
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code( $response );
+        
+        if ( $response_code === 200 ) {
+            return array(
+                'success' => true,
+                'message' => __( 'KLM APIへの接続が成功しました。', 'news-crawler' ),
+                'response_code' => $response_code
+            );
+        }
+
+        return array(
+            'success' => false,
+            'message' => __( 'KLM APIからの応答が異常です。レスポンスコード: ', 'news-crawler' ) . $response_code,
+            'response_code' => $response_code
         );
     }
 }

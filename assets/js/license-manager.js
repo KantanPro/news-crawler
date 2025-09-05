@@ -345,9 +345,9 @@
                 return;
             }
 
-            // ライセンスキーの形式チェック（KLM仕様）
-            if (!this.validateLicenseKeyFormat(licenseKey)) {
-                this.showError('ライセンスキーの形式が正しくありません。NCRL-XXXXXX-XXXXXX-XXXX形式のライセンスキーを入力してください。');
+            // ライセンスキーの基本形式チェック（NCRL-で始まるかどうかのみ）
+            if (!licenseKey.startsWith('NCRL-')) {
+                this.showError('ライセンスキーはNCRL-で始まる必要があります。');
                 $licenseKey.focus();
                 return;
             }
@@ -556,18 +556,12 @@
         },
 
         /**
-         * ライセンスキーの形式を検証
+         * ライセンスキーの基本形式を検証（サーバーサイドで詳細検証）
          */
         validateLicenseKeyFormat: function(licenseKey) {
-            // KLM仕様のライセンスキー形式: NCRL-XXXXXX-XXXXXX-XXXX
-            // より厳密な形式チェック
-            var pattern = /^NCRL-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{4}$/;
-            
-            // デバッグ用ログ
-            console.log('Validating license key:', licenseKey);
-            console.log('Pattern test result:', pattern.test(licenseKey));
-            
-            return pattern.test(licenseKey);
+            // 基本的な形式チェック（NCRL-で始まるかどうかのみ）
+            // 詳細な形式検証はサーバーサイドで実行
+            return licenseKey && licenseKey.startsWith('NCRL-');
         },
 
         /**
