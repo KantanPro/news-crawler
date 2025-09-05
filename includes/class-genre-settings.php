@@ -2012,8 +2012,19 @@ $('#cancel-edit').click(function() {
             $global_max_posts = $this->get_global_max_posts_per_execution();
             $global_available = max(0, $global_max_posts - $global_recent_posts);
             
-            // 実際に「今」投稿できる最大件数（グローバル制限と個別制限の両方を考慮）
-            $possible_posts = min(1, $slots, $available_candidates, $per_crawl_cap, $global_available);
+            // 強制実行時の実際の投稿可能数を計算
+            // 候補があるジャンルのみをカウント
+            $enabled_genres_with_candidates = $this->count_enabled_genres_with_candidates();
+            
+            // グローバル制限を実際の実行に合わせて調整（各ジャンル1件ずつ）
+            $realistic_global_limit = $enabled_genres_with_candidates; // 候補があるジャンル数が上限
+            $actual_possible_posts = min($realistic_global_limit, $global_available);
+            
+            // 個別ジャンルの制限も考慮
+            $individual_limit = min(1, $slots, $available_candidates, $per_crawl_cap);
+            
+            // 実際に「今」投稿できる最大件数
+            $possible_posts = min($individual_limit, $actual_possible_posts > 0 ? 1 : 0);
             $possible_posts = max(0, intval($possible_posts));
 
             // 制限要因を特定
@@ -2034,7 +2045,8 @@ $('#cancel-edit').click(function() {
             $limit_text = !empty($limit_factors) ? ' (' . implode(', ', $limit_factors) . ')' : '';
             
             $available_posts_display = '<span style="font-weight: bold;">' . esc_html($possible_posts) . ' 件</span>' . $limit_text . '<br>'
-                . '<small>候補: ' . esc_html($available_candidates) . ' / 空き: ' . esc_html($slots) . ' / 上限: ' . esc_html($per_crawl_cap) . ' / グローバル: ' . esc_html($global_available) . '</small>';
+                . '<small>候補: ' . esc_html($available_candidates) . ' / 空き: ' . esc_html($slots) . ' / 上限: ' . esc_html($per_crawl_cap) . '<br>'
+                . 'グローバル: ' . esc_html($global_available) . ' / 候補あり: ' . esc_html($enabled_genres_with_candidates) . ' / 実際可能: ' . esc_html($actual_possible_posts) . '</small>';
 
             echo '<td>' . $available_posts_display . '</td>';
             
@@ -2374,8 +2386,7 @@ $('#cancel-edit').click(function() {
             $debug_info[] = '  - 投稿カテゴリー: ' . implode(', ', $temp_options['post_categories']);
             $debug_info[] = '  - 投稿ステータス: ' . $temp_options['post_status'];
             
-            // デバッグログを追加
-            error_log('Execute News Crawling - Max articles: ' . $temp_options['max_articles']);
+            // デバッグログを削除（パフォーマンス向上のため）
             
             // キーワードの詳細チェック
             $debug_info[] = '';
@@ -2878,89 +2889,64 @@ $('#cancel-edit').click(function() {
         $genre_id = $setting['id'];
         $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
         
-        $display_id = $this->get_display_genre_id($genre_id);
-        error_log('Execute Auto Posting for Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
-        
         try {
             // 実行前のチェック
-            error_log('Execute Auto Posting for Genre - Performing pre-execution check...');
             $check_result = $this->pre_execution_check($setting);
-            error_log('Execute Auto Posting for Genre - Pre-execution check result: ' . print_r($check_result, true));
             
             if (!$check_result['can_execute']) {
-                error_log('Execute Auto Posting for Genre - Cannot execute: ' . $check_result['reason']);
                 $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
                 return;
             }
             
-            error_log('Execute Auto Posting for Genre - Pre-execution check passed');
-            
             // 投稿記事数上限をチェック
-            error_log('Execute Auto Posting for Genre - Checking post limit...');
             $existing_posts = $this->count_recent_posts_by_genre($genre_id);
-            error_log('Execute Auto Posting for Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
             
             if ($existing_posts >= $max_posts) {
-                error_log('Execute Auto Posting for Genre - Post limit reached for genre: ' . $setting['genre_name']);
-                error_log('Execute Auto Posting for Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
                 $this->log_auto_posting_execution($genre_id, 'skipped', "投稿数上限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）");
                 return;
             }
             
             // 実行可能な投稿数を計算（1件ずつ実行するように制限）
             $available_posts = min(1, $max_posts - $existing_posts);
-            error_log('Execute Auto Posting for Genre - Available posts: ' . $available_posts . ' for genre: ' . $setting['genre_name']);
             
             // 利用可能な投稿数が0以下の場合はスキップ
             if ($available_posts <= 0) {
-                error_log('Execute Auto Posting for Genre - No available posts for genre: ' . $setting['genre_name']);
                 $this->log_auto_posting_execution($genre_id, 'skipped', "実行可能な投稿数がありません（利用可能: {$available_posts}件）");
                 return;
             }
             
             // クロール実行
-            error_log('Execute Auto Posting for Genre - Starting crawl execution...');
             $result = '';
             $post_id = null;
             
             if ($setting['content_type'] === 'news') {
-                error_log('Execute Auto Posting for Genre - Executing news crawling...');
                 $result = $this->execute_news_crawling_with_limit($setting, $available_posts);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
-                    error_log('Execute Auto Posting for Genre - Extracted post ID: ' . $post_id);
                 }
             } elseif ($setting['content_type'] === 'youtube') {
-                error_log('Execute Auto Posting for Genre - Executing YouTube crawling...');
                 $result = $this->execute_youtube_crawling_with_limit($setting, $available_posts);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
-                    error_log('Execute Auto Posting for Genre - Extracted post ID: ' . $post_id);
                 }
             }
             
-            error_log('Execute Auto Posting for Genre - Crawl execution result: ' . $result);
-            error_log('Execute Auto Posting for Genre - Extracted post ID: ' . ($post_id ?: 'Not found'));
-            
             // 実行結果をログに記録（投稿IDを含める）
-            error_log('Execute Auto Posting for Genre - Logging success result...');
             $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}", $post_id);
-            error_log('Execute Auto Posting for Genre - Success logged');
             
             // 次回実行スケジュールを更新
             $this->reschedule_next_execution($genre_id, $setting);
             
         } catch (Exception $e) {
-            error_log('Execute Auto Posting for Genre - Exception occurred: ' . $e->getMessage());
             // エラーログを記録
             $this->log_auto_posting_execution($genre_id, 'error', "実行エラー: " . $e->getMessage());
         }
         
-        error_log('Execute Auto Posting for Genre - Completed for genre: ' . $setting['genre_name']);
+        // デバッグログを削除（パフォーマンス向上のため）
     }
     
     /**
@@ -2968,6 +2954,7 @@ $('#cancel-edit').click(function() {
      */
     private function pre_execution_check($setting) {
         $result = array('can_execute' => true, 'reason' => '');
+        $genre_id = $setting['id'];
         
         error_log('Pre Execution Check - Starting check for genre: ' . $setting['genre_name']);
         
@@ -3014,6 +3001,55 @@ $('#cancel-edit').click(function() {
         }
         error_log('Pre Execution Check - Keywords check passed: ' . implode(', ', $setting['keywords']));
         
+        // 24時間制限のチェック
+        $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
+        $existing_posts = $this->count_recent_posts_by_genre($genre_id);
+        
+        if ($existing_posts >= $max_posts) {
+            $result['can_execute'] = false;
+            $result['reason'] = "24時間制限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）";
+            error_log('Pre Execution Check - 24 hour limit reached: ' . $existing_posts . '/' . $max_posts);
+            return $result;
+        }
+        error_log('Pre Execution Check - 24 hour limit check passed: ' . $existing_posts . '/' . $max_posts);
+        
+        // 候補数のチェック
+        $cache_key = 'news_crawler_available_count_' . $genre_id;
+        $available_candidates = get_transient($cache_key);
+        
+        if ($available_candidates === false) {
+            // キャッシュがない場合は簡易チェック
+            try {
+                $available_candidates = intval($this->test_news_source_availability($setting));
+                if ($available_candidates < 0) {
+                    $available_candidates = 0;
+                }
+            } catch (Exception $e) {
+                $available_candidates = 0;
+            }
+        }
+        
+        if ($available_candidates <= 0) {
+            $result['can_execute'] = false;
+            $result['reason'] = '候補がありません';
+            error_log('Pre Execution Check - No candidates available: ' . $available_candidates);
+            return $result;
+        }
+        error_log('Pre Execution Check - Candidates check passed: ' . $available_candidates);
+        
+        // 取得上限のチェック
+        $per_crawl_cap = ($setting['content_type'] === 'youtube')
+            ? (isset($setting['max_videos']) ? intval($setting['max_videos']) : 5)
+            : (isset($setting['max_articles']) ? intval($setting['max_articles']) : 10);
+        
+        if ($per_crawl_cap <= 0) {
+            $result['can_execute'] = false;
+            $result['reason'] = '取得上限が設定されていません';
+            error_log('Pre Execution Check - Crawl cap not set: ' . $per_crawl_cap);
+            return $result;
+        }
+        error_log('Pre Execution Check - Crawl cap check passed: ' . $per_crawl_cap);
+        
         error_log('Pre Execution Check - All checks passed for genre: ' . $setting['genre_name']);
         return $result;
     }
@@ -3026,8 +3062,7 @@ $('#cancel-edit').click(function() {
         $original_max_articles = $setting['max_articles'] ?? 10;
         $setting['max_articles'] = min($original_max_articles, $max_posts);
         
-        // デバッグログを追加
-        error_log('Execute News Crawling with Limit - Max posts: ' . $max_posts . ', Original max articles: ' . $original_max_articles . ', Final max articles: ' . $setting['max_articles']);
+        // デバッグログを削除（パフォーマンス向上のため）
         
         return $this->execute_news_crawling($setting);
     }
@@ -3072,8 +3107,7 @@ $('#cancel-edit').click(function() {
         $query = new WP_Query($args);
         $count = $query->found_posts;
         
-        // デバッグログを追加
-        error_log('Count Recent Posts by Genre - Genre ID: ' . $genre_id . ', Count: ' . $count . ', After: ' . date('Y-m-d H:i:s', $one_day_ago));
+        // デバッグログを削除（パフォーマンス向上のため）
         
         return $count;
     }
@@ -3108,8 +3142,7 @@ $('#cancel-edit').click(function() {
         $query = new WP_Query($args);
         $count = $query->found_posts;
         
-        // デバッグログを追加
-        error_log('Count All Recent Posts - Count: ' . $count . ', After: ' . date('Y-m-d H:i:s', $one_day_ago));
+        // デバッグログを削除（パフォーマンス向上のため）
         
         return $count;
     }
@@ -3118,19 +3151,96 @@ $('#cancel-edit').click(function() {
      * グローバル投稿数制限を取得
      */
     private function get_global_max_posts_per_execution() {
-        // デフォルト値は全ジャンルの最大投稿数の合計
+        // 候補がある有効なジャンル数が上限（表示と実行で統一）
+        $enabled_genres_with_candidates = $this->count_enabled_genres_with_candidates();
+        
+        // 動的なジャンル数に合わせて制限（最大でも20件まで）
+        return min($enabled_genres_with_candidates, 20);
+    }
+    
+    /**
+     * 有効なジャンル数をカウント
+     */
+    private function count_enabled_genres() {
         $genre_settings = $this->get_genre_settings();
-        $total_max = 0;
+        $enabled_count = 0;
         
         foreach ($genre_settings as $setting) {
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
-                $total_max += $max_posts;
+                $enabled_count++;
             }
         }
         
-        // 最大でも20件までに制限
-        return min($total_max, 20);
+        return $enabled_count;
+    }
+    
+    /**
+     * 候補がある有効なジャンル数をカウント
+     */
+    private function count_enabled_genres_with_candidates() {
+        $genre_settings = $this->get_genre_settings();
+        $enabled_with_candidates = 0;
+        
+        foreach ($genre_settings as $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                // 候補件数をチェック（キャッシュを使用）
+                $genre_id = $setting['id'];
+                $cache_key = 'news_crawler_available_count_' . $genre_id;
+                $available_candidates = get_transient($cache_key);
+                
+                if ($available_candidates === false) {
+                    // キャッシュがない場合は簡易チェック
+                    try {
+                        $available_candidates = intval($this->test_news_source_availability($setting));
+                        if ($available_candidates < 0) {
+                            $available_candidates = 0;
+                        }
+                    } catch (Exception $e) {
+                        $available_candidates = 0;
+                    }
+                }
+                
+                if ($available_candidates > 0) {
+                    $enabled_with_candidates++;
+                }
+            }
+        }
+        
+        return $enabled_with_candidates;
+    }
+    
+    /**
+     * 候補がある有効なジャンルの設定を取得
+     */
+    private function get_genres_with_candidates() {
+        $genre_settings = $this->get_genre_settings();
+        $genres_with_candidates = array();
+        
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                // 候補件数をチェック（キャッシュを使用）
+                $cache_key = 'news_crawler_available_count_' . $genre_id;
+                $available_candidates = get_transient($cache_key);
+                
+                if ($available_candidates === false) {
+                    // キャッシュがない場合は簡易チェック
+                    try {
+                        $available_candidates = intval($this->test_news_source_availability($setting));
+                        if ($available_candidates < 0) {
+                            $available_candidates = 0;
+                        }
+                    } catch (Exception $e) {
+                        $available_candidates = 0;
+                    }
+                }
+                
+                if ($available_candidates > 0) {
+                    $genres_with_candidates[$genre_id] = $setting;
+                }
+            }
+        }
+        
+        return $genres_with_candidates;
     }
     
     /**
@@ -3620,17 +3730,21 @@ $('#cancel-edit').click(function() {
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
-        error_log('Force Auto Posting Execution - Found ' . count($genre_settings) . ' genre settings');
-        error_log('Force Auto Posting Execution - Current time: ' . date('Y-m-d H:i:s', $current_time));
-        
         $executed_count = 0;
         $skipped_count = 0;
         
-        // 強制実行時のグローバル投稿数制限をチェック
-        $total_recent_posts = $this->count_all_recent_posts();
-        $global_max_posts = $this->get_global_max_posts_per_execution();
+        // 候補がある有効なジャンルのみを取得
+        $genres_with_candidates = $this->get_genres_with_candidates();
         
-        error_log('Force Auto Posting Execution - Global post limit check: ' . $total_recent_posts . '/' . $global_max_posts);
+        if (empty($genres_with_candidates)) {
+            error_log('Force Auto Posting Execution - No genres with candidates available');
+            $this->log_auto_posting_execution('global', 'skipped', "候補があるジャンルがありません");
+            return;
+        }
+        
+        // 強制実行時のグローバル投稿数制限をチェック（候補があるジャンル数が上限）
+        $total_recent_posts = $this->count_all_recent_posts();
+        $global_max_posts = count($genres_with_candidates); // 候補があるジャンル数が上限
         
         if ($total_recent_posts >= $global_max_posts) {
             error_log('Force Auto Posting Execution - Global post limit reached: ' . $total_recent_posts . '/' . $global_max_posts);
@@ -3638,21 +3752,16 @@ $('#cancel-edit').click(function() {
             return;
         }
         
-        foreach ($genre_settings as $genre_id => $setting) {
-            $display_id = $this->get_display_genre_id($genre_id);
-            error_log('Force Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
+        foreach ($genres_with_candidates as $genre_id => $setting) {
+            // 個別ジャンルの制限をチェック
+            $check_result = $this->pre_execution_check($setting);
             
-            // 自動投稿が無効または設定されていない場合はスキップ
-            if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
-                error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting disabled');
+            if (!$check_result['can_execute']) {
+                error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' skipped: ' . $check_result['reason']);
+                $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
                 $skipped_count++;
                 continue;
             }
-            
-            error_log('Force Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled - FORCING EXECUTION');
-            
-            // 設定の詳細をログに記録
-            error_log('Force Auto Posting Execution - Genre settings: ' . print_r($setting, true));
             
             // 強制実行時は開始実行日時の制限を無視して即座に実行
             // 次回実行時刻は既存の自動投稿設定のスケジュールを復元・維持
