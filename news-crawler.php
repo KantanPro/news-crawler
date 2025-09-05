@@ -3508,8 +3508,20 @@ if (class_exists('NewsCrawlerYouTubeCrawler')) {
     new NewsCrawlerYouTubeCrawler();
 }
 
+// プラグイン有効化時の初期化
+register_activation_hook(__FILE__, 'news_crawler_activation');
+
 // プラグイン無効化時のクリーンアップ
 register_deactivation_hook(__FILE__, 'news_crawler_deactivation');
+
+function news_crawler_activation() {
+    // Cronスクリプトの自動作成
+    if (class_exists('NewsCrawlerCronSettings')) {
+        $cron_settings = new NewsCrawlerCronSettings();
+        // 有効化時は強制的にスクリプトを作成
+        $cron_settings->force_create_cron_script();
+    }
+}
 
 function news_crawler_deactivation() {
     // 更新チェックのクリーンアップ

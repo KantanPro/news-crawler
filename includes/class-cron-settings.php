@@ -21,6 +21,9 @@ class NewsCrawlerCronSettings {
         add_action('wp_ajax_generate_cron_script', array($this, 'generate_cron_script'));
         add_action('wp_ajax_news_crawler_cron_execute', array($this, 'handle_cron_execution'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        
+        // プラグイン初期化時にCronスクリプトの存在チェックと自動作成
+        add_action('init', array($this, 'check_and_create_cron_script'), 20);
     }
     
     /**
@@ -838,5 +841,91 @@ echo \"---\" >> \"\$LOG_FILE\"
         }
         
         wp_die(); // AJAX処理を終了
+    }
+    
+    /**
+     * Cronスクリプトの存在チェックと自動作成
+     */
+    public function check_and_create_cron_script() {
+        // 管理画面でのみ実行（フロントエンドでは実行しない）
+        if (!is_admin()) {
+            return;
+        }
+        
+        // プラグインの設定が存在しない場合はスキップ
+        $options = get_option($this->option_name);
+        if (!$options) {
+            return;
+        }
+        
+        $script_name = isset($options['shell_script_name']) ? $options['shell_script_name'] : 'news-crawler-cron.sh';
+        
+        // スクリプトが既に存在する場合はスキップ
+        if ($this->check_script_exists($script_name)) {
+            return;
+        }
+        
+        // スクリプトを自動作成
+        $this->auto_create_cron_script($script_name);
+    }
+    
+    /**
+     * Cronスクリプトを自動作成
+     */
+    private function auto_create_cron_script($script_name) {
+        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
+        
+        // プラグインディレクトリが書き込み可能かチェック
+        if (!is_writable(NEWS_CRAWLER_PLUGIN_DIR)) {
+            // プラグインディレクトリが書き込み不可の場合は、アップロードディレクトリに作成
+            $upload_dir = wp_upload_dir();
+            if (is_writable($upload_dir['basedir'])) {
+                $script_path = $upload_dir['basedir'] . '/' . $script_name;
+            } else {
+                // どちらも書き込み不可の場合はスキップ
+                return false;
+            }
+        }
+        
+        // スクリプトの内容を生成
+        $script_content = $this->generate_script_content();
+        
+        // ファイルを作成
+        $result = file_put_contents($script_path, $script_content, LOCK_EX);
+        
+        if ($result !== false) {
+            // 実行権限を設定
+            chmod($script_path, 0755);
+            
+            // ログに記録（オプション）
+            error_log("News Crawler: Cronスクリプトを自動作成しました: " . $script_path);
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 強制的にCronスクリプトを作成（プラグイン有効化時など）
+     */
+    public function force_create_cron_script() {
+        $script_name = 'news-crawler-cron.sh';
+        
+        // 既存のスクリプトを削除してから新しく作成
+        $plugin_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
+        if (file_exists($plugin_path)) {
+            unlink($plugin_path);
+        }
+        
+        // アップロードディレクトリの既存スクリプトも削除
+        $upload_dir = wp_upload_dir();
+        $upload_path = $upload_dir['basedir'] . '/' . $script_name;
+        if (file_exists($upload_path)) {
+            unlink($upload_path);
+        }
+        
+        // 新しいスクリプトを作成
+        return $this->auto_create_cron_script($script_name);
     }
 }
