@@ -4230,11 +4230,8 @@ $('#cancel-edit').click(function() {
                     <!-- ライセンス情報 -->
                     <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
                         <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
-
-
                         <ul style="margin-left: 20px;">
                             <li><?php echo esc_html__( 'ライセンスキーはKantanPro公式サイトから購入できます。', 'news-crawler' ); ?></li>
-                            <li><?php echo esc_html__( 'ライセンス認証により、AI要約生成などの高度な機能が有効になります。', 'news-crawler' ); ?></li>
                             <li><?php echo esc_html__( 'ライセンスキーに関する問題がございましたら、サポートまでお問い合わせください。', 'news-crawler' ); ?></li>
                         </ul>
                         <p>
@@ -4602,7 +4599,6 @@ $('#cancel-edit').click(function() {
                 <!-- ライセンス認証フォーム -->
                 <div class="ktp-license-form-container" style="padding: 20px; background: #f9f9f9; border-radius: 5px;">
                     <h3><?php echo esc_html__( 'ライセンスキーを入力してください', 'news-crawler' ); ?></h3>
-                    <p><?php echo esc_html__( 'News Crawlerの全機能を利用するには、有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
                     
                     <form method="post" action="" id="news-crawler-license-form" style="margin-top: 20px;">
                         <?php wp_nonce_field( 'news_crawler_license_activation', 'news_crawler_license_nonce' ); ?>
@@ -4639,7 +4635,6 @@ $('#cancel-edit').click(function() {
 
                     <ul style="margin-left: 20px;">
                         <li><?php echo esc_html__( 'ライセンスキーはKantanPro公式サイトから購入できます。', 'news-crawler' ); ?></li>
-                        <li><?php echo esc_html__( 'ライセンス認証により、AI要約生成などの高度な機能が有効になります。', 'news-crawler' ); ?></li>
                         <li><?php echo esc_html__( 'ライセンスキーに関する問題がございましたら、サポートまでお問い合わせください。', 'news-crawler' ); ?></li>
                     </ul>
                     <p>
