@@ -53,8 +53,7 @@ class NewsCrawlerUpdater {
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
         add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 10, 3);
         
-        // 管理画面での更新通知
-        add_action('admin_notices', array($this, 'admin_update_notice'));
+        // 管理画面での更新通知（WordPress標準のみ使用）
         add_action('admin_init', array($this, 'force_update_check'));
         
         // 更新チェックのスケジュール
@@ -90,6 +89,8 @@ class NewsCrawlerUpdater {
         $latest_version = $this->get_latest_version();
         
         if (!$latest_version || !isset($latest_version['version'])) {
+            // エラー時はログを記録
+            error_log('News Crawler: Failed to get latest version information');
             return $transient;
         }
         
@@ -120,6 +121,9 @@ class NewsCrawlerUpdater {
                     'low' => ''
                 )
             );
+            
+            // 更新通知のログを記録
+            error_log('News Crawler: Update available - Current: ' . $current_version . ', Latest: ' . $latest_version['version']);
         } else {
             // 最新バージョンの場合、no_updateに登録
             if (!isset($transient->no_update)) {
@@ -175,13 +179,6 @@ class NewsCrawlerUpdater {
             delete_site_transient('update_plugins');
             wp_clean_plugins_cache();
             wp_update_plugins();
-            
-            // 成功メッセージ
-            add_action('admin_notices', function() {
-                echo '<div class="notice notice-success is-dismissible">';
-                echo '<p><strong>News Crawler</strong> のキャッシュがクリアされました。更新情報を再チェックしてください。</p>';
-                echo '</div>';
-            });
         }
     }
     
@@ -189,7 +186,7 @@ class NewsCrawlerUpdater {
      * Get latest version from GitHub
      */
     private function get_latest_version() {
-        // キャッシュをチェック
+        // キャッシュをチェック（1時間に短縮）
         $cached = get_transient('news_crawler_latest_version');
         if ($cached !== false) {
             return $cached;
@@ -207,12 +204,24 @@ class NewsCrawlerUpdater {
         
         if (is_wp_error($response)) {
             error_log('News Crawler: GitHub API request failed: ' . $response->get_error_message());
+            // エラー時は古いキャッシュがあれば返す
+            $old_cached = get_transient('news_crawler_latest_version_backup');
+            if ($old_cached !== false) {
+                return $old_cached;
+            }
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         if ($response_code !== 200) {
             error_log('News Crawler: GitHub API returned status code: ' . $response_code);
+            // レート制限の場合は古いキャッシュを返す
+            if ($response_code === 403) {
+                $old_cached = get_transient('news_crawler_latest_version_backup');
+                if ($old_cached !== false) {
+                    return $old_cached;
+                }
+            }
             return false;
         }
         
@@ -235,8 +244,10 @@ class NewsCrawlerUpdater {
             'draft' => isset($data['draft']) ? $data['draft'] : false
         );
         
-        // 6時間キャッシュ（より頻繁なチェック）
-        set_transient('news_crawler_latest_version', $version_info, 6 * HOUR_IN_SECONDS);
+        // 1時間キャッシュ（より頻繁なチェック）
+        set_transient('news_crawler_latest_version', $version_info, HOUR_IN_SECONDS);
+        // バックアップキャッシュ（24時間）
+        set_transient('news_crawler_latest_version_backup', $version_info, DAY_IN_SECONDS);
         
         return $version_info;
     }
@@ -334,59 +345,11 @@ class NewsCrawlerUpdater {
             // プラグイン情報の再読み込みを強制
             wp_clean_plugins_cache();
             
-            // 更新完了メッセージ
-            add_action('admin_notices', function() {
-                echo '<div class="notice notice-success is-dismissible">';
-                echo '<p><strong>News Crawler</strong> が正常に更新されました。新しい機能や改善点については、<a href="' . esc_url($this->github_repo_url . '/releases') . '" target="_blank">リリースノート</a>をご確認ください。</p>';
-                echo '<p>ページを再読み込みして、バージョン情報が正しく表示されることを確認してください。</p>';
-                echo '</div>';
-            });
         }
         
         return $response;
     }
     
-    /**
-     * Admin update notice
-     */
-    public function admin_update_notice() {
-        // 管理者のみに表示
-        if (!current_user_can('update_plugins') && !current_user_can('manage_options')) {
-            return;
-        }
-        
-        // WordPressの標準的な更新通知システムを使用
-        $transient = get_site_transient('update_plugins');
-        if (!$transient || !is_object($transient) || !isset($transient->response[$this->plugin_basename])) {
-            return;
-        }
-        
-        $update = $transient->response[$this->plugin_basename];
-        $new_version = isset($update->new_version) ? $update->new_version : '';
-        $current_version = NEWS_CRAWLER_VERSION;
-        
-        // バージョンチェック
-        if (!$new_version || version_compare($current_version, $new_version, '>=')) {
-            return;
-        }
-        
-        $update_url = wp_nonce_url(
-            admin_url('update.php?action=upgrade-plugin&plugin=' . $this->plugin_basename),
-            'upgrade-plugin_' . $this->plugin_basename
-        );
-        
-        $force_check_url = add_query_arg('force-check', '1', admin_url('update-core.php'));
-        $clear_cache_url = add_query_arg('clear-cache', '1', admin_url('admin.php?page=news-crawler-main'));
-        
-        echo '<div class="notice notice-warning is-dismissible">';
-        echo '<p><strong>News Crawler</strong> の新しいバージョン <strong>' . esc_html($new_version) . '</strong> が利用可能です。';
-        echo ' <a href="' . esc_url($update_url) . '" class="button button-primary">今すぐ更新</a> ';
-        echo ' <a href="' . esc_url($this->github_repo_url . '/releases') . '" target="_blank" class="button">詳細を確認</a> ';
-        echo ' <a href="' . esc_url($force_check_url) . '" class="button">更新を再チェック</a>';
-        echo ' <a href="' . esc_url($clear_cache_url) . '" class="button">キャッシュクリア</a></p>';
-        echo '<p><small>更新後はページを再読み込みして、バージョン情報が正しく表示されることを確認してください。</small></p>';
-        echo '</div>';
-    }
     
     /**
      * Plugin row meta
@@ -421,6 +384,50 @@ class NewsCrawlerUpdater {
             'has_update' => $has_update,
             'download_url' => $latest_version['download_url']
         );
+    }
+    
+    /**
+     * Debug update system
+     */
+    public function debug_update_system() {
+        $debug_info = array();
+        
+        // 現在のバージョン
+        $debug_info['current_version'] = NEWS_CRAWLER_VERSION;
+        
+        // プラグインベース名
+        $debug_info['plugin_basename'] = $this->plugin_basename;
+        
+        // キャッシュ状況
+        $debug_info['cached_version'] = get_transient('news_crawler_latest_version');
+        $debug_info['backup_cached_version'] = get_transient('news_crawler_latest_version_backup');
+        
+        // WordPress更新システムの状況
+        $transient = get_site_transient('update_plugins');
+        $debug_info['wp_transient_exists'] = !empty($transient);
+        $debug_info['wp_transient_response'] = isset($transient->response[$this->plugin_basename]) ? $transient->response[$this->plugin_basename] : null;
+        $debug_info['wp_transient_checked'] = isset($transient->checked[$this->plugin_basename]) ? $transient->checked[$this->plugin_basename] : null;
+        
+        // GitHub APIテスト
+        $response = wp_remote_get($this->github_api_url, array(
+            'timeout' => 10,
+            'headers' => array(
+                'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
+                'Accept' => 'application/vnd.github.v3+json'
+            )
+        ));
+        
+        if (is_wp_error($response)) {
+            $debug_info['github_api_error'] = $response->get_error_message();
+        } else {
+            $debug_info['github_api_status'] = wp_remote_retrieve_response_code($response);
+            $debug_info['github_api_response'] = wp_remote_retrieve_body($response);
+        }
+        
+        // スケジュール状況
+        $debug_info['scheduled_check'] = wp_next_scheduled('news_crawler_update_check');
+        
+        return $debug_info;
     }
     
     /**

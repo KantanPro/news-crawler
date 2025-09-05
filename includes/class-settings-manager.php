@@ -20,8 +20,6 @@ class NewsCrawlerSettingsManager {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_test_api_connection', array($this, 'test_api_connection'));
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
-        add_action('wp_ajax_check_for_updates', array($this, 'check_for_updates'));
-        add_action('wp_ajax_force_update_check', array($this, 'force_update_check'));
         
         // ライセンス認証の処理を追加
         add_action('admin_init', array($this, 'handle_license_activation'));
@@ -283,11 +281,6 @@ class NewsCrawlerSettingsManager {
             <div class="update-info-container">
                 <?php $this->display_update_info(); ?>
             </div>
-            <div class="card">
-                <h3>強制更新チェック</h3>
-                <p>キャッシュをクリアして最新の更新情報を強制的に取得します。</p>
-                <button type="button" id="force-update-check" class="button button-secondary">強制更新チェック</button>
-            </div>
         </div>
                 
                 <div id="system-info" class="tab-content">
@@ -407,36 +400,6 @@ class NewsCrawlerSettingsManager {
                 });
             }
             
-            // 強制更新チェック
-            $('#force-update-check').click(function() {
-                if (confirm('キャッシュをクリアして強制的に更新チェックを実行しますか？')) {
-                    var button = $(this);
-                    button.prop('disabled', true).text('強制チェック中...');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'force_update_check',
-                            nonce: '<?php echo wp_create_nonce('force_update_check'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('強制更新チェックが完了しました。ページを再読み込みします。');
-                                location.reload();
-                            } else {
-                                alert('強制更新チェックに失敗しました: ' + response.data);
-                            }
-                        },
-                        error: function() {
-                            alert('強制更新チェックに失敗しました。');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('強制更新チェック');
-                        }
-                    });
-                }
-            });
             
             // 設定リセット
             $('#reset-settings').click(function() {
@@ -907,35 +870,8 @@ class NewsCrawlerSettingsManager {
             echo '</div>';
         }
         
-        echo '<div class="card">';
-        echo '<h3>更新チェック</h3>';
-        echo '<p>最新バージョンの確認を行います。</p>';
-        echo '<button type="button" id="check-updates" class="button">今すぐチェック</button>';
-        echo '</div>';
     }
     
-    /**
-     * 更新チェックAJAX
-     */
-    public function check_for_updates() {
-        if (!wp_verify_nonce($_POST['nonce'], 'check_for_updates')) {
-            wp_die('Security check failed');
-        }
-        
-        // キャッシュをクリア
-        delete_transient('news_crawler_latest_version');
-        
-        // 更新チェックを実行（WordPress標準のUpdate URIを使用するため無効化）
-        // if (class_exists('NewsCrawlerUpdater')) {
-        //     $updater = new NewsCrawlerUpdater();
-        //     $transient = get_site_transient('update_plugins');
-        //     if ($transient) {
-        //         $updater->check_for_updates($transient);
-        //     }
-        // }
-        
-        wp_send_json_success('更新チェックが完了しました。');
-    }
     
     /**
      * 更新情報セクションのコールバック
@@ -945,29 +881,6 @@ class NewsCrawlerSettingsManager {
         $this->display_update_info();
     }
     
-    /**
-     * 強制更新チェックAJAX
-     */
-    public function force_update_check() {
-        if (!wp_verify_nonce($_POST['nonce'], 'force_update_check')) {
-            wp_die('Security check failed');
-        }
-        
-        // キャッシュをクリア
-        delete_transient('news_crawler_latest_version');
-        delete_site_transient('update_plugins');
-        
-        // 更新チェックを実行（WordPress標準のUpdate URIを使用するため無効化）
-        // if (class_exists('NewsCrawlerUpdater')) {
-        //     $updater = new NewsCrawlerUpdater();
-        //     $transient = get_site_transient('update_plugins');
-        //     if ($transient) {
-        //         $updater->check_for_updates($transient);
-        //     }
-        // }
-        
-        wp_send_json_success('強制更新チェックが完了しました。');
-    }
     
     /**
      * ライセンス設定ページの表示
