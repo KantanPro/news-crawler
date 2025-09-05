@@ -29,7 +29,7 @@ class NewsCrawlerPostEditorSummary {
         // 投稿タイプがpostの場合のみ追加
         add_meta_box(
             'news_crawler_summary',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - AI要約生成',
+            'News Crawler ' . $this->get_plugin_version() . ' - AI要約生成',
             array($this, 'render_summary_meta_box'),
             'post',
             'side',
@@ -241,6 +241,20 @@ class NewsCrawlerPostEditorSummary {
         } else {
             wp_send_json_error('OpenAI要約生成クラスが見つかりません');
         }
+    }
+    
+    /**
+     * プラグインのバージョンを動的に取得
+     */
+    private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
 }
 

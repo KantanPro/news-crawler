@@ -437,7 +437,7 @@ class NewsCrawlerCronSettings {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - Cron設定</h1>
+            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - Cron設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -927,5 +927,19 @@ echo \"---\" >> \"\$LOG_FILE\"
         
         // 新しいスクリプトを作成
         return $this->auto_create_cron_script($script_name);
+    }
+    
+    /**
+     * プラグインのバージョンを動的に取得
+     */
+    private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
 }

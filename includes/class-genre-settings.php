@@ -79,7 +79,7 @@ class NewsCrawlerGenreSettings {
         // 基本設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - 基本設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - 基本設定',
             '基本設定',
             'manage_options',
             'news-crawler-basic',
@@ -89,7 +89,7 @@ class NewsCrawlerGenreSettings {
         // Cron設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - Cron設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - Cron設定',
             'Cron設定',
             'manage_options',
             'news-crawler-cron-settings',
@@ -99,7 +99,7 @@ class NewsCrawlerGenreSettings {
         // ライセンス設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - ライセンス設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - ライセンス設定',
             'ライセンス設定',
             'manage_options',
             'news-crawler-license',
@@ -109,7 +109,7 @@ class NewsCrawlerGenreSettings {
         // OGP設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - OGP設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - OGP設定',
             'OGP設定',
             'manage_options',
             'news-crawler-ogp-settings',
@@ -682,7 +682,7 @@ class NewsCrawlerGenreSettings {
             $settings_manager = new NewsCrawlerSettingsManager();
             $settings_manager->display_post_settings_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - 基本設定</h1><p>設定管理クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - 基本設定</h1><p>設定管理クラスが見つかりません。</p></div>';
         }
     }
     
@@ -710,7 +710,7 @@ class NewsCrawlerGenreSettings {
             $ogp_settings = new NewsCrawlerOGPSettings();
             $ogp_settings->admin_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
         }
     }
     
@@ -745,7 +745,7 @@ class NewsCrawlerGenreSettings {
             
             $cron_settings->admin_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html(NEWS_CRAWLER_VERSION) . ' - Cron設定</h1><p>Cron設定クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - Cron設定</h1><p>Cron設定クラスが見つかりません。</p></div>';
         }
     }
     
@@ -4598,7 +4598,7 @@ $('#cancel-edit').click(function() {
     private function display_license_input_page($license_status) {
         ?>
         <div class="wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - ライセンス認証</h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - ライセンス認証</h1>
             
             <?php
             // 通知表示

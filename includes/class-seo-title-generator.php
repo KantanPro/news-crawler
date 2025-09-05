@@ -416,7 +416,7 @@ class NewsCrawlerSEOTitleGenerator {
         // 投稿タイプがpostの場合のみ追加
         add_meta_box(
             'news_crawler_seo_title',
-            'News Crawler ' . NEWS_CRAWLER_VERSION . ' - SEOタイトル生成',
+            'News Crawler ' . $this->get_plugin_version() . ' - SEOタイトル生成',
             array($this, 'render_seo_title_meta_box'),
             'post',
             'side',
@@ -575,6 +575,20 @@ class NewsCrawlerSEOTitleGenerator {
             echo '<p>現在の画面: ' . $screen->base . ' / ' . $screen->post_type . '</p>';
             echo '</div>';
         }
+    }
+    
+    /**
+     * プラグインのバージョンを動的に取得
+     */
+    private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
 }
 
