@@ -145,6 +145,13 @@ class NewsCrawlerUpdater {
             }
         }
         
+        // キャッシュクリアを強制実行してバージョン情報を更新
+        if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
+            delete_transient('news_crawler_latest_version');
+            delete_site_transient('update_plugins');
+            wp_clean_plugins_cache();
+        }
+        
         return $transient;
     }
     
@@ -167,18 +174,34 @@ class NewsCrawlerUpdater {
         
         // 強制更新チェック
         if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
-            delete_transient('news_crawler_latest_version');
-            delete_site_transient('update_plugins');
-            wp_clean_plugins_cache();
+            $this->clear_all_caches();
             wp_update_plugins();
         }
         
         // キャッシュクリア機能
         if (isset($_GET['clear-cache']) && $_GET['clear-cache'] === '1') {
-            delete_transient('news_crawler_latest_version');
-            delete_site_transient('update_plugins');
-            wp_clean_plugins_cache();
+            $this->clear_all_caches();
             wp_update_plugins();
+        }
+    }
+    
+    /**
+     * すべてのキャッシュをクリア
+     */
+    private function clear_all_caches() {
+        // プラグイン関連のキャッシュをクリア
+        delete_transient('news_crawler_latest_version');
+        delete_transient('news_crawler_latest_version_backup');
+        delete_site_transient('update_plugins');
+        delete_site_transient('update_plugins_checked');
+        
+        // WordPressのキャッシュをクリア
+        wp_clean_plugins_cache();
+        wp_cache_flush();
+        
+        // オブジェクトキャッシュをクリア
+        if (function_exists('wp_cache_flush_group')) {
+            wp_cache_flush_group('plugins');
         }
     }
     
@@ -344,6 +367,15 @@ class NewsCrawlerUpdater {
             
             // プラグイン情報の再読み込みを強制
             wp_clean_plugins_cache();
+            
+            // プラグインの再読み込みを強制
+            if (function_exists('wp_cache_flush')) {
+                wp_cache_flush();
+            }
+            
+            // プラグインの状態をリセット
+            deactivate_plugins($this->plugin_basename);
+            activate_plugin($this->plugin_basename);
             
         }
         
