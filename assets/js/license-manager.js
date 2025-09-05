@@ -345,9 +345,9 @@
                 return;
             }
 
-            // ライセンスキーの形式チェック（緩和版）
+            // ライセンスキーの形式チェック（KLM仕様）
             if (!this.validateLicenseKeyFormat(licenseKey)) {
-                this.showError('ライセンスキーの形式が正しくありません。NCRL-で始まる形式のライセンスキーを入力してください。');
+                this.showError('ライセンスキーの形式が正しくありません。NCRL-XXXXXX-XXXXXX-XXXX形式のライセンスキーを入力してください。');
                 $licenseKey.focus();
                 return;
             }
@@ -559,9 +559,9 @@
          * ライセンスキーの形式を検証
          */
         validateLicenseKeyFormat: function(licenseKey) {
-            // 実際のライセンスキー形式: NCRL-080940-RXKL,[F}-4725
-            // NCRL-で始まり、ハイフンで区切られた形式（より柔軟）
-            var pattern = /^NCRL-.+$/;
+            // KLM仕様のライセンスキー形式: NCRL-XXXXXX-XXXXXX-XXXX
+            // より厳密な形式チェック
+            var pattern = /^NCRL-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{4}$/;
             
             // デバッグ用ログ
             console.log('Validating license key:', licenseKey);

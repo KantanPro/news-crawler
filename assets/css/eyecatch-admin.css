@@ -5,6 +5,153 @@
  * @since 1.3.0
  */
 
+/* ライセンス管理用スタイル */
+.ktp-license-status-display {
+    border-left: 4px solid #0073aa;
+    background: #f9f9f9;
+}
+
+.ktp-license-status-display h3 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.ktp-dev-mode-toggle {
+    background-color: #fff8e1 !important;
+    border: 1px solid #ffecb3 !important;
+    border-radius: 4px;
+}
+
+.ktp-license-info-details {
+    background: #f9f9f9;
+    border-radius: 3px;
+    margin-top: 15px;
+}
+
+.ktp-license-info-details h4 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.ktp-license-info-details .form-table {
+    margin: 0;
+}
+
+.ktp-license-info-details .form-table th {
+    padding: 5px 0;
+    font-weight: normal;
+    width: 150px;
+}
+
+.ktp-license-info-details .form-table td {
+    padding: 5px 0;
+}
+
+/* ライセンスキー入力フィールド */
+#news_crawler_license_key {
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+#news_crawler_license_key:invalid {
+    border-color: #dc3232;
+    box-shadow: 0 0 2px rgba(204, 48, 50, 0.8);
+}
+
+#news_crawler_license_key:valid {
+    border-color: #46b450;
+    box-shadow: 0 0 2px rgba(70, 180, 80, 0.8);
+}
+
+/* 通知メッセージ */
+.news-crawler-notification {
+    position: fixed;
+    top: 32px;
+    right: 20px;
+    z-index: 9999;
+    max-width: 400px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* ローディング表示 */
+#news-crawler-loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 20px;
+    border-radius: 5px;
+    z-index: 9999;
+    text-align: center;
+}
+
+#news-crawler-loading .spinner {
+    float: none;
+    margin: 0 auto 10px;
+}
+
+/* デバッグ情報 */
+.ktp-debug-info {
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 5px;
+    margin-top: 30px;
+    padding: 20px;
+}
+
+.ktp-debug-info h3 {
+    margin-top: 0;
+    color: #d63638;
+}
+
+.ktp-debug-info h4 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.ktp-debug-info .form-table {
+    margin: 0;
+}
+
+.ktp-debug-info .form-table th {
+    padding: 5px 0;
+    font-weight: normal;
+    width: 150px;
+}
+
+.ktp-debug-info .form-table td {
+    padding: 5px 0;
+}
+
+/* ライセンス情報セクション */
+.ktp-license-info {
+    background: #f9f9f9;
+    border-radius: 5px;
+    margin-top: 30px;
+    padding: 20px;
+}
+
+.ktp-license-info h3 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.ktp-license-info h4 {
+    margin-top: 0;
+    color: #0073aa;
+}
+
+.ktp-license-info ul {
+    margin-left: 20px;
+    line-height: 1.8;
+}
+
+.ktp-license-info .button {
+    margin-right: 10px;
+}
+
 .eyecatch-generator-form {
     background: #fff;
     padding: 20px;

@@ -186,8 +186,35 @@ function news_crawler_ajax_toggle_dev_license() {
     }
 }
 
+// ライセンス制限通知
+function news_crawler_license_restriction_notice() {
+    ?>
+    <div class="notice notice-error">
+        <p>
+            <strong><?php echo esc_html__('News Crawler', 'news-crawler'); ?>:</strong>
+            <?php echo esc_html__('有効なライセンスキーが必要です。プラグインの機能が制限されています。', 'news-crawler'); ?>
+            <a href="<?php echo admin_url('admin.php?page=news-crawler-license'); ?>" class="button button-small" style="margin-left: 10px;">
+                <?php echo esc_html__('ライセンスを設定', 'news-crawler'); ?>
+            </a>
+        </p>
+    </div>
+    <?php
+}
+
 // プラグインコンポーネントの初期化
 function news_crawler_init_components() {
+    // ライセンス管理クラスの初期化（最初に実行）
+    if (class_exists('NewsCrawler_License_Manager')) {
+        $license_manager = NewsCrawler_License_Manager::get_instance();
+        
+        // ライセンスが無効な場合は機能を制限
+        if (!$license_manager->is_license_valid()) {
+            // ライセンス無効時の制限を適用
+            add_action('admin_notices', 'news_crawler_license_restriction_notice');
+            return; // 他の初期化をスキップ
+        }
+    }
+    
     // セキュリティマネージャーの初期化
     NewsCrawlerSecurityManager::get_instance();
     // ジャンル設定管理クラスを初期化

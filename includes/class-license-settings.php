@@ -163,7 +163,9 @@ class NewsCrawler_License_Settings {
                                    value="<?php echo esc_attr( get_option( 'news_crawler_license_key' ) ); ?>"
                                    style="width: 400px;"
                                    placeholder="NCRL-XXXXXX-XXXXXX-XXXX"
-                                   autocomplete="off">
+                                   autocomplete="off"
+                                   pattern="NCRL-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{4}"
+                                   title="NCRL-XXXXXX-XXXXXX-XXXX形式で入力してください">
 
                             <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
                         </form>
@@ -189,6 +191,8 @@ class NewsCrawler_License_Settings {
 
                     <p class="description" style="padding-left: 8px; margin-top: 5px;">
                         <?php echo esc_html__( 'KantanPro License Managerから取得したライセンスキーを入力してください。', 'news-crawler' ); ?>
+                        <br>
+                        <strong><?php echo esc_html__( '対応ライセンス形式', 'news-crawler' ); ?>:</strong> NCRL-XXXXXX-XXXXXX-XXXX
                     </p>
 
                     <!-- デバッグ情報（WP_DEBUGが有効な場合のみ表示） -->
@@ -309,7 +313,7 @@ class NewsCrawler_License_Settings {
                     <!-- ライセンス情報 -->
                     <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
                         <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
-                        <p><?php echo esc_html__( 'News Crawlerプラグインの基本的なニュースクロール機能は無料でご利用いただけます。AI機能を利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
+                        <p><?php echo esc_html__( 'News Crawlerプラグインの機能を利用するには有効なライセンスキーが必要です。KantanPro License Manager (KLM) で管理されたライセンスキーをご利用ください。', 'news-crawler' ); ?></p>
 
                         <!-- 利用可能なライセンスプラン -->
                         <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #0073aa;">
@@ -318,6 +322,15 @@ class NewsCrawler_License_Settings {
                                 <li><strong><?php echo esc_html__( '月額プラン', 'news-crawler' ); ?></strong>: 980円/月</li>
                                 <li><strong><?php echo esc_html__( '年額プラン', 'news-crawler' ); ?></strong>: 9,980円/年</li>
                                 <li><strong><?php echo esc_html__( '買い切りプラン', 'news-crawler' ); ?></strong>: 49,900円</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #46b450;">
+                            <h4 style="margin-top: 0; color: #46b450;"><?php echo esc_html__( 'KLMエンドポイント情報', 'news-crawler' ); ?></h4>
+                            <ul style="margin-left: 20px; line-height: 1.8;">
+                                <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://www.kantanpro.com</li>
+                                <li><strong><?php echo esc_html__( 'ライセンス検証', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/verify</li>
+                                <li><strong><?php echo esc_html__( 'ライセンス情報取得', 'news-crawler' ); ?>:</strong> GET /wp-json/ktp-license/v1/info</li>
                             </ul>
                         </div>
 

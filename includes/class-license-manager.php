@@ -37,9 +37,9 @@ class NewsCrawler_License_Manager {
      * @var array
      */
     private $api_endpoints = array(
-        'verify' => '/wp-json/ktp-license/v1/verify',
-        'info'   => '/wp-json/ktp-license/v1/info',
-        'create' => '/wp-json/ktp-license/v1/create'
+        'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
+        'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
+        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create'
     );
 
     /**
@@ -80,6 +80,12 @@ class NewsCrawler_License_Manager {
         // AJAXハンドラーの登録をinitフックで実行
         add_action( 'init', array( $this, 'register_ajax_handlers' ) );
         
+        // 定期的なライセンス検証
+        add_action( 'wp_loaded', array( $this, 'periodic_license_verification' ) );
+        
+        // 管理画面でのライセンス通知
+        add_action( 'admin_notices', array( $this, 'show_license_notices' ) );
+        
         // ライセンス状態の初期化
         $this->initialize_license_state();
     }
@@ -99,6 +105,97 @@ class NewsCrawler_License_Manager {
         
         // AJAXハンドラーの登録確認
         error_log( 'NewsCrawler License: AJAX handlers registered on init hook' );
+    }
+
+    /**
+     * Show license notices in admin
+     *
+     * @since 2.1.5
+     */
+    public function show_license_notices() {
+        // 管理画面でのみ表示
+        if ( ! is_admin() ) {
+            return;
+        }
+        
+        // 開発環境では表示しない
+        if ( $this->is_development_environment() ) {
+            return;
+        }
+        
+        $license_key = get_option( 'news_crawler_license_key' );
+        $license_status = get_option( 'news_crawler_license_status' );
+        
+        // ライセンスキーが設定されていない場合
+        if ( empty( $license_key ) ) {
+            ?>
+            <div class="notice notice-warning">
+                <p>
+                    <strong><?php echo esc_html__( 'News Crawler', 'news-crawler' ); ?>:</strong>
+                    <?php echo esc_html__( 'ライセンスキーが設定されていません。機能が制限されています。', 'news-crawler' ); ?>
+                    <a href="<?php echo admin_url( 'admin.php?page=news-crawler-license' ); ?>" class="button button-small" style="margin-left: 10px;">
+                        <?php echo esc_html__( 'ライセンスを設定', 'news-crawler' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
+            return;
+        }
+        
+        // ライセンスが無効な場合
+        if ( $license_status !== 'active' ) {
+            ?>
+            <div class="notice notice-error">
+                <p>
+                    <strong><?php echo esc_html__( 'News Crawler', 'news-crawler' ); ?>:</strong>
+                    <?php echo esc_html__( 'ライセンスが無効です。機能が制限されています。', 'news-crawler' ); ?>
+                    <a href="<?php echo admin_url( 'admin.php?page=news-crawler-license' ); ?>" class="button button-small" style="margin-left: 10px;">
+                        <?php echo esc_html__( 'ライセンスを確認', 'news-crawler' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
+        }
+    }
+
+    /**
+     * Periodic license verification
+     *
+     * @since 2.1.5
+     */
+    public function periodic_license_verification() {
+        $license_key = get_option( 'news_crawler_license_key' );
+        $last_check = get_option( 'news_crawler_last_license_check', 0 );
+        
+        // 24時間以内にチェック済みの場合はスキップ
+        if ( time() - $last_check < 24 * 60 * 60 ) {
+            return;
+        }
+        
+        // ライセンスキーが設定されていない場合はスキップ
+        if ( empty( $license_key ) ) {
+            return;
+        }
+        
+        // 開発環境の場合はスキップ
+        if ( $this->is_development_environment() ) {
+            return;
+        }
+        
+        // ライセンス検証を実行
+        $result = $this->verify_license( $license_key );
+        
+        // 検証時刻を更新
+        update_option( 'news_crawler_last_license_check', time() );
+        
+        if ( $result['success'] ) {
+            update_option( 'news_crawler_license_status', 'active' );
+            update_option( 'news_crawler_license_info', $result['data'] );
+            update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+        } else {
+            update_option( 'news_crawler_license_status', 'invalid' );
+            error_log( 'NewsCrawler License: Periodic verification failed: ' . $result['message'] );
+        }
     }
 
     /**
@@ -229,7 +326,7 @@ class NewsCrawler_License_Manager {
         $site_url = get_site_url();
         
         // KLMプラグインのAPIエンドポイントを使用
-        $klm_api_url = get_site_url() . '/wp-json/ktp-license/v1/verify';
+        $klm_api_url = $this->api_endpoints['verify'];
         
         // APIエンドポイントの接続テスト
         error_log( 'NewsCrawler License: Attempting to connect to ' . $klm_api_url );
@@ -250,7 +347,7 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'User-Agent'   => 'NewsCrawler/' . NEWS_CRAWLER_VERSION
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
             'body' => json_encode( array(
                 'license_key' => $license_key,
@@ -259,7 +356,7 @@ class NewsCrawler_License_Manager {
                 'plugin_slug' => 'news-crawler'
             ) ),
             'timeout' => 30,
-            'sslverify' => false  // 開発環境でのSSL証明書問題を回避
+            'sslverify' => true  // 本番環境ではSSL証明書を検証
         ) );
 
         if ( is_wp_error( $response ) ) {
@@ -352,15 +449,11 @@ class NewsCrawler_License_Manager {
      * @return array License information
      */
     public function get_license_info( $license_key ) {
-        $response = wp_remote_post( get_site_url() . $this->api_endpoints['info'], array(
+        $response = wp_remote_get( $this->api_endpoints['info'] . '?license_key=' . urlencode( $license_key ), array(
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'User-Agent'   => 'NewsCrawler/' . NEWS_CRAWLER_VERSION
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => json_encode( array(
-                'license_key' => $license_key,
-                'plugin_slug' => 'news-crawler'
-            ) ),
             'timeout' => 30,
             'sslverify' => true
         ) );
@@ -500,6 +593,11 @@ class NewsCrawler_License_Manager {
      * @return bool True if basic features should be enabled
      */
     public function is_basic_features_enabled() {
+        // 開発環境では常に有効
+        if ( $this->is_development_environment() ) {
+            return true;
+        }
+        
         return $this->is_license_valid();
     }
 
@@ -511,6 +609,11 @@ class NewsCrawler_License_Manager {
      * @return bool True if news crawling should be enabled
      */
     public function is_news_crawling_enabled() {
+        // 開発環境では常に有効
+        if ( $this->is_development_environment() ) {
+            return true;
+        }
+        
         return $this->is_license_valid();
     }
 
