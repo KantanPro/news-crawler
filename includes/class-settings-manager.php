@@ -73,11 +73,22 @@ class NewsCrawlerSettingsManager {
             $nonce = wp_create_nonce('news_crawler_license_nonce');
             error_log('NewsCrawler Settings: Generated nonce for license manager: ' . $nonce);
             
+            // 開発環境かどうかを厳密にチェック
+            $is_dev = false;
+            $dev_license_key = '';
+            if (class_exists('NewsCrawler_License_Manager')) {
+                $license_manager = NewsCrawler_License_Manager::get_instance();
+                $is_dev = $license_manager->is_development_environment();
+                if ($is_dev) {
+                    $dev_license_key = $license_manager->get_display_dev_license_key();
+                }
+            }
+            
             wp_localize_script('news-crawler-license-manager', 'news_crawler_license_ajax', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce'   => $nonce,
-                'dev_license_key' => class_exists('NewsCrawler_License_Manager') ? NewsCrawler_License_Manager::get_instance()->get_display_dev_license_key() : '',
-                'is_development' => class_exists('NewsCrawler_License_Manager') ? NewsCrawler_License_Manager::get_instance()->is_development_environment() : false,
+                'dev_license_key' => $dev_license_key,
+                'is_development' => $is_dev,
                 'strings' => array(
                     'verifying' => __( '認証中...', 'news-crawler' ),
                     'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),

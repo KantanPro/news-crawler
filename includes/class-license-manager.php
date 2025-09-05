@@ -489,16 +489,27 @@ class NewsCrawler_License_Manager {
         // 開発環境の判定ロジック
         $host = $_SERVER['HTTP_HOST'] ?? '';
         $is_localhost = in_array( $host, array( 'localhost', '127.0.0.1', '::1' ) );
-        $is_dev_domain = strpos( $host, '.local' ) !== false || strpos( $host, '.test' ) !== false;
-        $is_dev_constant = defined( 'WP_DEBUG' ) && WP_DEBUG;
+        $is_dev_domain = strpos( $host, '.local' ) !== false || strpos( $host, '.test' ) !== false || strpos( $host, '.dev' ) !== false;
         
-        // Docker環境も開発環境として認識
-        $is_docker = strpos( $host, 'docker' ) !== false || strpos( $host, 'container' ) !== false;
+        // Docker環境も開発環境として認識（より具体的な判定）
+        $is_docker = (strpos( $host, 'docker' ) !== false || strpos( $host, 'container' ) !== false) && $is_localhost;
         
-        // より柔軟な開発環境判定
-        $is_dev = $is_localhost || $is_dev_domain || $is_dev_constant || $is_docker;
+        // 本番環境のドメインパターンを除外
+        $is_production_domain = strpos( $host, '.com' ) !== false || 
+                               strpos( $host, '.net' ) !== false || 
+                               strpos( $host, '.org' ) !== false || 
+                               strpos( $host, '.jp' ) !== false ||
+                               strpos( $host, '.co.jp' ) !== false;
         
-        error_log('NewsCrawler License: Environment check - Host: ' . $host . ', Localhost: ' . ($is_localhost ? 'true' : 'false') . ', Dev domain: ' . ($is_dev_domain ? 'true' : 'false') . ', WP_DEBUG: ' . ($is_dev_constant ? 'true' : 'false') . ', Docker: ' . ($is_docker ? 'true' : 'false') . ', Is Dev: ' . ($is_dev ? 'true' : 'false'));
+        // 開発環境の明示的な定数チェック（より厳密）
+        $is_dev_constant = defined( 'WP_DEBUG' ) && WP_DEBUG && 
+                          (defined( 'WP_ENV' ) && WP_ENV === 'development') || 
+                          (defined( 'WP_ENVIRONMENT_TYPE' ) && WP_ENVIRONMENT_TYPE === 'development');
+        
+        // 開発環境判定（本番ドメインの場合は除外）
+        $is_dev = ($is_localhost || $is_dev_domain || $is_docker || $is_dev_constant) && !$is_production_domain;
+        
+        error_log('NewsCrawler License: Environment check - Host: ' . $host . ', Localhost: ' . ($is_localhost ? 'true' : 'false') . ', Dev domain: ' . ($is_dev_domain ? 'true' : 'false') . ', WP_DEBUG: ' . (defined( 'WP_DEBUG' ) && WP_DEBUG ? 'true' : 'false') . ', Docker: ' . ($is_docker ? 'true' : 'false') . ', Production domain: ' . ($is_production_domain ? 'true' : 'false') . ', Is Dev: ' . ($is_dev ? 'true' : 'false'));
         
         return $is_dev;
     }

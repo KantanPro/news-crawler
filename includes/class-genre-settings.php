@@ -4193,7 +4193,22 @@ $('#cancel-edit').click(function() {
                         <?php echo esc_html__( 'KantanPro License Managerから取得したライセンスキーを入力してください。', 'news-crawler' ); ?>
                     </p>
                     
-                    <?php if ( isset($license_manager) && $license_manager->is_development_environment() ) : ?>
+                    <?php 
+                    // より厳密な開発環境判定
+                    $is_dev_env = false;
+                    if (isset($license_manager)) {
+                        $is_dev_env = $license_manager->is_development_environment();
+                        // 追加の本番環境チェック
+                        $host = $_SERVER['HTTP_HOST'] ?? '';
+                        $is_production_domain = strpos( $host, '.com' ) !== false || 
+                                               strpos( $host, '.net' ) !== false || 
+                                               strpos( $host, '.org' ) !== false || 
+                                               strpos( $host, '.jp' ) !== false ||
+                                               strpos( $host, '.co.jp' ) !== false;
+                        $is_dev_env = $is_dev_env && !$is_production_domain;
+                    }
+                    ?>
+                    <?php if ( $is_dev_env ) : ?>
                         <!-- 開発環境用テストライセンスキー -->
                         <div style="margin-top: 15px; padding: 15px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px;">
                             <h4 style="margin-top: 0; color: #0066cc;">
