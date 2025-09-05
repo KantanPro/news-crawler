@@ -1911,7 +1911,12 @@ class NewsCrawler {
         if ($this->is_rss_feed($source)) {
             return $this->fetch_rss_articles($source, $max_results);
         } else {
-            return $this->fetch_html_articles($source, $max_results);
+            // ニュース記事タイプかどうかを判定
+            if ($this->is_news_article_type($source)) {
+                return $this->fetch_news_articles_deep($source, $max_results);
+            } else {
+                return $this->fetch_html_articles($source, $max_results);
+            }
         }
     }
     
@@ -1930,6 +1935,511 @@ class NewsCrawler {
         
         $body = wp_remote_retrieve_body($response);
         return strpos($body, '<rss') !== false || strpos($body, '<feed') !== false;
+    }
+    
+    /**
+     * ニュース記事タイプかどうかを判定
+     */
+    private function is_news_article_type($url) {
+        // URLパターンでニュース記事タイプを判定
+        $news_patterns = array(
+            '/\/news\//',
+            '/\/article\//',
+            '/\/post\//',
+            '/\/blog\//',
+            '/\/press\//',
+            '/\/release\//',
+            '/\/info\//',
+            '/\/information\//',
+            '/\/announcement\//',
+            '/\/update\//',
+            '/\/report\//'
+        );
+        
+        foreach ($news_patterns as $pattern) {
+            if (preg_match($pattern, $url)) {
+                return true;
+            }
+        }
+        
+        // HTMLコンテンツでニュース記事タイプを判定
+        $response = wp_remote_get($url, array(
+            'timeout' => 10,
+            'sslverify' => false,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        
+        // ニュース記事の特徴的な要素をチェック
+        $news_indicators = array(
+            'article',
+            'news-item',
+            'post-content',
+            'entry-content',
+            'news-content',
+            'article-content',
+            'news-list',
+            'article-list',
+            'post-list',
+            'entry-list',
+            'news-archive',
+            'article-archive'
+        );
+        
+        foreach ($news_indicators as $indicator) {
+            if (strpos($body, $indicator) !== false) {
+                return true;
+            }
+        }
+        
+        // より詳細な判定：記事リンクの存在をチェック
+        $article_link_patterns = array(
+            '/<a[^>]+href=["\'][^"\']*\/news\/[^"\']*["\'][^>]*>/i',
+            '/<a[^>]+href=["\'][^"\']*\/article\/[^"\']*["\'][^>]*>/i',
+            '/<a[^>]+href=["\'][^"\']*\/post\/[^"\']*["\'][^>]*>/i',
+            '/<a[^>]+href=["\'][^"\']*\/blog\/[^"\']*["\'][^>]*>/i'
+        );
+        
+        foreach ($article_link_patterns as $pattern) {
+            if (preg_match($pattern, $body)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * ニュース記事の深層クロール
+     */
+    private function fetch_news_articles_deep($source_url, $max_results = 20) {
+        $articles = array();
+        
+        try {
+            // ニュースソースページから最新記事のリンクを取得
+            $article_links = $this->extract_article_links($source_url, $max_results);
+            
+            if (empty($article_links)) {
+                return $articles;
+            }
+            
+            // 各記事ページから詳細コンテンツを取得
+            foreach ($article_links as $link) {
+                $article_data = $this->fetch_individual_article($link);
+                if ($article_data) {
+                    $articles[] = $article_data;
+                }
+                
+                // 最大記事数に達したら終了
+                if (count($articles) >= $max_results) {
+                    break;
+                }
+            }
+            
+        } catch (Exception $e) {
+            error_log('NewsCrawler: 深層クロールエラー: ' . $e->getMessage());
+        }
+        
+        return $articles;
+    }
+    
+    /**
+     * ニュースソースから記事リンクを抽出
+     */
+    private function extract_article_links($source_url, $max_links = 20) {
+        $response = wp_remote_get($source_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
+        
+        if (is_wp_error($response)) {
+            throw new Exception('ニュースソースページの取得に失敗しました: ' . $response->get_error_message());
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $links = array();
+        
+        // より包括的な記事リンクのパターンを検索
+        $patterns = array(
+            // 一般的なニュース記事パターン
+            '/<a[^>]+href=["\']([^"\']*\/news\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/post\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/blog\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/info\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/information\/[^"\']*)["\'][^>]*>/i',
+            
+            // 数字付き記事パターン（n4909のような）
+            '/<a[^>]+href=["\']([^"\']*\/news\/n\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/post\/\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/blog\/\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/info\/\d+[^"\']*)["\'][^>]*>/i',
+            
+            // 日付付き記事パターン
+            '/<a[^>]+href=["\']([^"\']*\/news\/\d{4}\/\d{2}\/\d{2}[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/\d{4}\/\d{2}\/\d{2}[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/\d{4}\/\d{2}[^"\']*)["\'][^>]*>/i',
+            
+            // カテゴリ付き記事パターン
+            '/<a[^>]+href=["\']([^"\']*\/news\/cat\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/cat\/[^"\']*)["\'][^>]*>/i',
+            
+            // より汎用的なパターン（ニュース関連のリンク）
+            '/<a[^>]+href=["\']([^"\']*\/news\/[^"\']*\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/[^"\']*\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/post\/[^"\']*\/[^"\']*)["\'][^>]*>/i',
+            
+            // より柔軟なパターン（任意の文字列を含む記事リンク）
+            '/<a[^>]+href=["\']([^"\']*\/news\/[^"\']*[^\/]+\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/[^"\']*[^\/]+\/[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/post\/[^"\']*[^\/]+\/[^"\']*)["\'][^>]*>/i',
+            
+            // 数字のみの記事IDパターン
+            '/<a[^>]+href=["\']([^"\']*\/news\/\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/article\/\d+[^"\']*)["\'][^>]*>/i',
+            '/<a[^>]+href=["\']([^"\']*\/post\/\d+[^"\']*)["\'][^>]*>/i'
+        );
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match_all($pattern, $body, $matches)) {
+                foreach ($matches[1] as $link) {
+                    // 相対URLを絶対URLに変換
+                    $absolute_link = $this->make_absolute_url($link, $source_url);
+                    if ($absolute_link && !in_array($absolute_link, $links)) {
+                        // カテゴリページや一覧ページを除外
+                        if (!$this->is_category_or_list_page($absolute_link)) {
+                            $links[] = $absolute_link;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // リンクを優先度順にソート（数字付き記事を優先）
+        usort($links, array($this, 'sort_article_links'));
+        
+        // 最大リンク数に制限
+        return array_slice($links, 0, $max_links);
+    }
+    
+    /**
+     * カテゴリページや一覧ページかどうかを判定
+     */
+    private function is_category_or_list_page($url) {
+        $exclude_patterns = array(
+            '/\/cat\//',
+            '/\/category\//',
+            '/\/archive\//',
+            '/\/list\//',
+            '/\/index\//',
+            '/\/page\//',
+            '/\/tag\//',
+            '/\/author\//',
+            '/\/search\//',
+            '/\/feed\//',
+            '/\/rss\//',
+            '/\/sitemap\//'
+        );
+        
+        foreach ($exclude_patterns as $pattern) {
+            if (preg_match($pattern, $url)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 記事リンクを優先度順にソート
+     */
+    private function sort_article_links($a, $b) {
+        // 数字付き記事（n4909など）を優先
+        $a_has_number = preg_match('/\/n\d+|\/\d+[^\/]*$/', $a);
+        $b_has_number = preg_match('/\/n\d+|\/\d+[^\/]*$/', $b);
+        
+        if ($a_has_number && !$b_has_number) return -1;
+        if (!$a_has_number && $b_has_number) return 1;
+        
+        // 日付付き記事を次に優先
+        $a_has_date = preg_match('/\/\d{4}\/\d{2}\/\d{2}/', $a);
+        $b_has_date = preg_match('/\/\d{4}\/\d{2}\/\d{2}/', $b);
+        
+        if ($a_has_date && !$b_has_date) return -1;
+        if (!$a_has_date && $b_has_date) return 1;
+        
+        return 0;
+    }
+    
+    /**
+     * 相対URLを絶対URLに変換
+     */
+    private function make_absolute_url($url, $base_url) {
+        // 既に絶対URLの場合はそのまま返す
+        if (filter_var($url, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+        
+        // ベースURLからドメインとパスを取得
+        $parsed_base = parse_url($base_url);
+        $base_domain = $parsed_base['scheme'] . '://' . $parsed_base['host'];
+        
+        // 相対URLを絶対URLに変換
+        if (strpos($url, '/') === 0) {
+            return $base_domain . $url;
+        } else {
+            return $base_domain . '/' . $url;
+        }
+    }
+    
+    /**
+     * 個別記事ページから詳細コンテンツを取得
+     */
+    private function fetch_individual_article($article_url) {
+        $response = wp_remote_get($article_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'user-agent' => 'News Crawler Plugin/1.0'
+        ));
+        
+        if (is_wp_error($response)) {
+            return null;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        
+        // タイトルを取得（複数のパターンを試行）
+        $title = $this->extract_title($body);
+        
+        // 本文を取得（より包括的なパターンで試行）
+        $content = $this->extract_article_content($body);
+        
+        // メタディスクリプションを取得
+        $description = $this->extract_description($body, $content);
+        
+        // 公開日を取得
+        $published_at = $this->extract_published_date($body);
+        
+        // 著者情報を取得
+        $author = $this->extract_author($body);
+        
+        // カテゴリ情報を取得
+        $categories = $this->extract_categories($body);
+        
+        return array(
+            'title' => $title,
+            'content' => $content,
+            'description' => $description,
+            'url' => $article_url,
+            'published_at' => $published_at,
+            'author' => $author,
+            'source' => $article_url,
+            'categories' => $categories,
+            'guid' => md5($article_url),
+            'excerpt' => wp_trim_words(strip_tags($content), 100, '...')
+        );
+    }
+    
+    /**
+     * タイトルを抽出
+     */
+    private function extract_title($body) {
+        $title_patterns = array(
+            '/<title[^>]*>(.*?)<\/title>/i',
+            '/<h1[^>]*>(.*?)<\/h1>/i',
+            '/<meta[^>]*property=["\']og:title["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*name=["\']title["\'][^>]*content=["\']([^"\']*)["\']/i'
+        );
+        
+        foreach ($title_patterns as $pattern) {
+            if (preg_match($pattern, $body, $matches)) {
+                $title = trim(strip_tags($matches[1]));
+                if (!empty($title)) {
+                    return $title;
+                }
+            }
+        }
+        
+        return 'タイトルなし';
+    }
+    
+    /**
+     * 記事本文を抽出（強化版）
+     */
+    private function extract_article_content($body) {
+        $content_patterns = array(
+            // セマンティックな要素を優先
+            '/<article[^>]*>(.*?)<\/article>/is',
+            '/<main[^>]*>(.*?)<\/main>/is',
+            
+            // クラス名ベースのパターン（より詳細）
+            '/<div[^>]*class=["\'][^"\']*content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*post-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*entry-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*news-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*article-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*post-body[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*entry-body[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*text[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            
+            // IDベースのパターン
+            '/<div[^>]*id=["\'][^"\']*content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*id=["\'][^"\']*post-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*id=["\'][^"\']*entry-content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            
+            // より汎用的なパターン
+            '/<div[^>]*class=["\'][^"\']*[^"\']*content[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*[^"\']*post[^"\']*["\'][^>]*>(.*?)<\/div>/is',
+            '/<div[^>]*class=["\'][^"\']*[^"\']*article[^"\']*["\'][^>]*>(.*?)<\/div>/is'
+        );
+        
+        $best_content = '';
+        $max_length = 0;
+        
+        foreach ($content_patterns as $pattern) {
+            if (preg_match_all($pattern, $body, $matches)) {
+                foreach ($matches[1] as $match) {
+                    $cleaned_content = $this->clean_article_content($match);
+                    $content_length = strlen(strip_tags($cleaned_content));
+                    
+                    // より長いコンテンツを優先
+                    if ($content_length > $max_length && $content_length > 100) {
+                        $best_content = $cleaned_content;
+                        $max_length = $content_length;
+                    }
+                }
+            }
+        }
+        
+        // パターンマッチで見つからない場合は、段落タグから抽出
+        if (empty($best_content)) {
+            $best_content = $this->extract_content_from_paragraphs($body);
+        }
+        
+        return $best_content;
+    }
+    
+    /**
+     * 段落タグからコンテンツを抽出
+     */
+    private function extract_content_from_paragraphs($body) {
+        $content = '';
+        
+        // 複数の段落を結合
+        if (preg_match_all('/<p[^>]*>(.*?)<\/p>/is', $body, $matches)) {
+            $paragraphs = array();
+            foreach ($matches[1] as $paragraph) {
+                $cleaned = $this->clean_article_content($paragraph);
+                if (strlen(strip_tags($cleaned)) > 50) { // 短すぎる段落は除外
+                    $paragraphs[] = $cleaned;
+                }
+            }
+            $content = implode("\n\n", $paragraphs);
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * 説明文を抽出
+     */
+    private function extract_description($body, $content) {
+        $description_patterns = array(
+            '/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*property=["\']og:description["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*name=["\']twitter:description["\'][^>]*content=["\']([^"\']*)["\']/i'
+        );
+        
+        foreach ($description_patterns as $pattern) {
+            if (preg_match($pattern, $body, $matches)) {
+                $description = trim($matches[1]);
+                if (!empty($description)) {
+                    return $description;
+                }
+            }
+        }
+        
+        // メタディスクリプションが見つからない場合は、コンテンツから生成
+        return wp_trim_words(strip_tags($content), 100, '...');
+    }
+    
+    /**
+     * 公開日を抽出
+     */
+    private function extract_published_date($body) {
+        $date_patterns = array(
+            '/<time[^>]*datetime=["\']([^"\']*)["\'][^>]*>/i',
+            '/<meta[^>]*property=["\']article:published_time["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*name=["\']date["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*name=["\']pubdate["\'][^>]*content=["\']([^"\']*)["\']/i'
+        );
+        
+        foreach ($date_patterns as $pattern) {
+            if (preg_match($pattern, $body, $matches)) {
+                $date = strtotime($matches[1]);
+                if ($date !== false) {
+                    return date('Y-m-d H:i:s', $date);
+                }
+            }
+        }
+        
+        return current_time('Y-m-d H:i:s');
+    }
+    
+    /**
+     * 著者情報を抽出
+     */
+    private function extract_author($body) {
+        $author_patterns = array(
+            '/<meta[^>]*name=["\']author["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<meta[^>]*property=["\']article:author["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<span[^>]*class=["\'][^"\']*author[^"\']*["\'][^>]*>(.*?)<\/span>/i',
+            '/<div[^>]*class=["\'][^"\']*author[^"\']*["\'][^>]*>(.*?)<\/div>/i'
+        );
+        
+        foreach ($author_patterns as $pattern) {
+            if (preg_match($pattern, $body, $matches)) {
+                $author = trim(strip_tags($matches[1]));
+                if (!empty($author)) {
+                    return $author;
+                }
+            }
+        }
+        
+        return '';
+    }
+    
+    /**
+     * カテゴリ情報を抽出
+     */
+    private function extract_categories($body) {
+        $categories = array();
+        
+        $category_patterns = array(
+            '/<meta[^>]*property=["\']article:section["\'][^>]*content=["\']([^"\']*)["\']/i',
+            '/<a[^>]*class=["\'][^"\']*category[^"\']*["\'][^>]*>(.*?)<\/a>/i',
+            '/<span[^>]*class=["\'][^"\']*category[^"\']*["\'][^>]*>(.*?)<\/span>/i'
+        );
+        
+        foreach ($category_patterns as $pattern) {
+            if (preg_match_all($pattern, $body, $matches)) {
+                foreach ($matches[1] as $match) {
+                    $category = trim(strip_tags($match));
+                    if (!empty($category) && !in_array($category, $categories)) {
+                        $categories[] = $category;
+                    }
+                }
+            }
+        }
+        
+        return $categories;
     }
     
     /**
