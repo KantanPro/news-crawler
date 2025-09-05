@@ -207,11 +207,11 @@ function news_crawler_init_components() {
     if (class_exists('NewsCrawler_License_Manager')) {
         $license_manager = NewsCrawler_License_Manager::get_instance();
         
-        // ライセンスが無効な場合は機能を制限
+        // ライセンスが無効な場合は通知を表示するが、メニューは表示する
         if (!$license_manager->is_license_valid()) {
             // ライセンス無効時の制限を適用
             add_action('admin_notices', 'news_crawler_license_restriction_notice');
-            return; // 他の初期化をスキップ
+            // returnを削除してメニュー登録を継続
         }
     }
     
