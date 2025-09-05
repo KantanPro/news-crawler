@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.3)
+[![Version](https://img.shields.io/badge/version-2.3.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.4)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,22 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.4** (2025-09-05): Update check logic improvements and enhanced crawling functionality
+  - Organized update check logic by removing unnecessary filters and actions
+  - Improved update schedule configuration and latest version retrieval processing
+  - Added automatic Cron script creation on plugin activation with enhanced initialization
+  - Enhanced news crawling process with error logging for article link retrieval
+  - Implemented processing time limits and interruption functionality
+  - Added article type determination feature with deep crawling processing
+  - Improved article link extraction logic and error handling
+  - Replaced manual execution process with new genre settings system
+
+- **v2.3.3** (2025-09-04): Settings UI improvements and duplicate handling
+  - Settings UI: Improved visibility toggling when changing content type. Hides news settings when YouTube is selected; cancel restores default content type to News Article.
+  - Duplicate handling: Implemented duplicate skipping for news/videos and preserved order (keywords and news sources).
+  - Post creation: Improved post status sanitization; added default post author setting. Relaxed minimum content length threshold with fallback; clarified error message when no valid articles.
+  - Update checks: Improved logic to suppress notification when already up to date; added transient saving; fixed behavior of forced update check.
 
 - **v2.3.0** (2025-09-03): Enhanced category handling and AI processing improvements
   - Added article summary generation feature using OpenAI API to create detailed summaries
@@ -348,6 +364,17 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.4 - 2025-09-05
+
+- Update check logic improvements: Organized update check logic by removing unnecessary filters and actions
+- Improved update schedule configuration and latest version retrieval processing
+- Added automatic Cron script creation on plugin activation with enhanced initialization
+- Enhanced news crawling process with error logging for article link retrieval
+- Implemented processing time limits and interruption functionality
+- Added article type determination feature with deep crawling processing
+- Improved article link extraction logic and error handling
+- Replaced manual execution process with new genre settings system
 
 ### v2.3.3 - 2025-09-04
 
