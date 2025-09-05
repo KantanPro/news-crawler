@@ -180,7 +180,7 @@ class NewsCrawler_License_Settings {
                     <!-- ライセンス情報 -->
                     <div class="ktp-license-info" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px;">
                         <h3><?php echo esc_html__( 'ライセンスについて', 'news-crawler' ); ?></h3>
-                        <p><?php echo esc_html__( 'News Crawlerプラグインの一部の機能を利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
+                        <p><?php echo esc_html__( 'News Crawlerプラグインの基本的なニュースクロール機能は無料でご利用いただけます。AI機能を利用するには有効なライセンスキーが必要です。', 'news-crawler' ); ?></p>
 
                         <!-- 利用可能なライセンスプラン -->
                         <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #0073aa;">
@@ -198,7 +198,7 @@ class NewsCrawler_License_Settings {
                             <li><?php echo esc_html__( 'ライセンスキーに関する問題がございましたら、サポートまでお問い合わせください。', 'news-crawler' ); ?></li>
                         </ul>
                         <p>
-                            <a href="https://www.kantanpro.com/" target="_blank" class="button button-primary">
+                            <a href="https://www.kantanpro.com/klm-news-crawler" target="_blank" class="button button-primary">
                                 <?php echo esc_html__( 'ライセンスを購入', 'news-crawler' ); ?>
                             </a>
                             <a href="mailto:support@kantanpro.com" class="button button-secondary">
@@ -213,7 +213,7 @@ class NewsCrawler_License_Settings {
                             <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
                             <?php echo esc_html__( '機能制限について', 'news-crawler' ); ?>
                         </h3>
-                        <p><?php echo esc_html__( 'ライセンスキーがない場合、以下の機能が制限されます：', 'news-crawler' ); ?></p>
+                        <p><?php echo esc_html__( 'ライセンスキーがない場合、以下のAI機能が制限されます：', 'news-crawler' ); ?></p>
                         <ul style="margin-left: 20px; line-height: 1.8;">
                             <li><strong><?php echo esc_html__( 'AI要約生成', 'news-crawler' ); ?></strong>: OpenAI APIを使用した記事の自動要約</li>
                             <li><strong><?php echo esc_html__( '高度なアイキャッチ生成', 'news-crawler' ); ?></strong>: AIを使用した画像生成</li>
@@ -221,7 +221,7 @@ class NewsCrawler_License_Settings {
                             <li><strong><?php echo esc_html__( '高度なOGP管理', 'news-crawler' ); ?></strong>: 自動OGPタグ生成</li>
                         </ul>
                         <p style="margin-bottom: 0;">
-                            <em><?php echo esc_html__( '基本的なニュースクロール機能は無料でご利用いただけます。', 'news-crawler' ); ?></em>
+                            <em><?php echo esc_html__( '基本的なニュースクロール機能（記事の収集、フィルタリング、投稿作成など）は無料でご利用いただけます。', 'news-crawler' ); ?></em>
                         </p>
                     </div>
 

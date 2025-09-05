@@ -3503,6 +3503,11 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-youtube-crawler.php';
 // プラグインのインスタンス化
 new NewsCrawler();
 
+// 設定管理クラスの初期化
+if (class_exists('NewsCrawlerSettingsManager')) {
+    new NewsCrawlerSettingsManager();
+}
+
 // YouTube機能が利用可能な場合のみインスタンス化
 if (class_exists('NewsCrawlerYouTubeCrawler')) {
     new NewsCrawlerYouTubeCrawler();

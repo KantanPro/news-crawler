@@ -37,9 +37,9 @@ class NewsCrawler_License_Manager {
      * @var array
      */
     private $api_endpoints = array(
-        'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
-        'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
-        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create'
+        'verify' => '/wp-json/ktp-license/v1/verify',
+        'info'   => '/wp-json/ktp-license/v1/info',
+        'create' => '/wp-json/ktp-license/v1/create'
     );
 
     /**
@@ -186,18 +186,19 @@ class NewsCrawler_License_Manager {
         $site_url = get_site_url();
         
         // APIエンドポイントの接続テスト
-        error_log( 'NewsCrawler License: Attempting to connect to ' . $this->api_endpoints['verify'] );
+        error_log( 'NewsCrawler License: Attempting to connect to ' . get_site_url() . $this->api_endpoints['verify'] );
         error_log( 'NewsCrawler License: Site URL: ' . $site_url );
         error_log( 'NewsCrawler License: License key: ' . substr( $license_key, 0, 8 ) . '...' );
         
-        $response = wp_remote_post( $this->api_endpoints['verify'], array(
+        $response = wp_remote_post( get_site_url() . $this->api_endpoints['verify'], array(
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'User-Agent'   => 'NewsCrawler/' . NEWS_CRAWLER_VERSION
             ),
             'body' => json_encode( array(
                 'license_key' => $license_key,
-                'site_url'    => $site_url
+                'site_url'    => $site_url,
+                'plugin_slug' => 'news-crawler'
             ) ),
             'timeout' => 30,
             'sslverify' => false  // 開発環境でのSSL証明書問題を回避
@@ -270,13 +271,14 @@ class NewsCrawler_License_Manager {
      * @return array License information
      */
     public function get_license_info( $license_key ) {
-        $response = wp_remote_post( $this->api_endpoints['info'], array(
+        $response = wp_remote_post( get_site_url() . $this->api_endpoints['info'], array(
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'User-Agent'   => 'NewsCrawler/' . NEWS_CRAWLER_VERSION
             ),
             'body' => json_encode( array(
-                'license_key' => $license_key
+                'license_key' => $license_key,
+                'plugin_slug' => 'news-crawler'
             ) ),
             'timeout' => 30,
             'sslverify' => true
@@ -309,6 +311,26 @@ class NewsCrawler_License_Manager {
      * @return bool True if license is valid
      */
     public function is_license_valid() {
+        $license_key = get_option( 'news_crawler_license_key' );
+        $license_status = get_option( 'news_crawler_license_status' );
+        
+        // ライセンスキーが空の場合、ステータスを確実に'not_set'にする
+        if ( empty( $license_key ) ) {
+            if ( $license_status !== 'not_set' ) {
+                update_option( 'news_crawler_license_status', 'not_set' );
+                update_option( 'news_crawler_license_info', array(
+                    'message' => 'プラグインを利用するには有効なライセンスキーが必要です。',
+                    'features' => array(
+                        'ai_summary' => false,
+                        'advanced_features' => false,
+                        'basic_features' => false
+                    )
+                ));
+                error_log( 'NewsCrawler License Check: License key is empty, setting status to not_set' );
+            }
+            return false;
+        }
+
         // 開発環境の判定
         if ( $this->is_development_environment() ) {
             // 開発ライセンスが無効化されている場合は false
@@ -317,39 +339,20 @@ class NewsCrawler_License_Manager {
                 return false;
             }
             
-            // 開発環境であれば、ライセンスキーの検証をスキップして常に有効とみなす
-            error_log( 'NewsCrawler License Check: Development environment active, license assumed valid.' );
-            return true;
-        }
-        
-        // 本番環境でも、AI機能を強制的に有効にするオプション
-        $force_ai_enabled = get_option( 'news_crawler_force_ai_enabled', true ); // デフォルトで有効
-        if ( $force_ai_enabled ) {
-            error_log( 'NewsCrawler License Check: AI features forced enabled by setting.' );
-            return true;
-        }
-
-        // --- 以下、本番環境のライセンスチェックロジック ---
-
-        $license_key = get_option( 'news_crawler_license_key' );
-        $license_status = get_option( 'news_crawler_license_status' );
-        $verified_at = get_option( 'news_crawler_license_verified_at' );
-
-        // ライセンスキーが空の場合、ステータスを確実に'not_set'にする
-        if ( empty( $license_key ) ) {
-            if ( $license_status !== 'not_set' ) {
-                update_option( 'news_crawler_license_status', 'not_set' );
-                update_option( 'news_crawler_license_info', array(
-                    'message' => '一部の機能を利用するにはライセンスキーが必要です。',
-                    'features' => array(
-                        'ai_summary' => false,
-                        'advanced_features' => false
-                    )
-                ));
-                error_log( 'NewsCrawler License Check: License key is empty, setting status to not_set' );
+            // 開発環境でテスト用ライセンスキーが設定されている場合のみ有効
+            $dev_license_key = $this->get_development_license_key();
+            if ( $license_key === $dev_license_key ) {
+                error_log( 'NewsCrawler License Check: Development environment with valid dev license key.' );
+                return true;
             }
-            return false;
+            
+            // 開発環境でも他のライセンスキーの場合は検証が必要
+            error_log( 'NewsCrawler License Check: Development environment with non-dev license key, proceeding with verification.' );
         }
+
+        // --- 本番環境のライセンスチェックロジック ---
+
+        $verified_at = get_option( 'news_crawler_license_verified_at' );
 
         // デバッグログを追加
         error_log( 'NewsCrawler License Check: license_key = set, status = ' . $license_status );
@@ -389,13 +392,12 @@ class NewsCrawler_License_Manager {
      * @return bool True if AI summary should be enabled
      */
     public function is_ai_summary_enabled() {
-        // 強制的にAI機能を有効にするオプション
-        $force_ai_enabled = get_option( 'news_crawler_force_ai_enabled', true ); // デフォルトで有効
-        if ( $force_ai_enabled ) {
-            error_log( 'NewsCrawler License: AI summary forced enabled by setting.' );
+        // 開発環境では常に有効
+        if ( $this->is_development_environment() ) {
             return true;
         }
         
+        // 本番環境ではライセンスキーが必要
         return $this->is_license_valid();
     }
 
@@ -406,6 +408,28 @@ class NewsCrawler_License_Manager {
      * @return bool True if advanced features should be enabled
      */
     public function is_advanced_features_enabled() {
+        return $this->is_license_valid();
+    }
+
+    /**
+     * Check if basic features should be enabled
+     * Basic features require a valid license
+     *
+     * @since 2.1.5
+     * @return bool True if basic features should be enabled
+     */
+    public function is_basic_features_enabled() {
+        return $this->is_license_valid();
+    }
+
+    /**
+     * Check if news crawling functionality should be enabled
+     * News crawling requires a valid license
+     *
+     * @since 2.1.5
+     * @return bool True if news crawling should be enabled
+     */
+    public function is_news_crawling_enabled() {
         return $this->is_license_valid();
     }
 
@@ -589,7 +613,7 @@ class NewsCrawler_License_Manager {
         if ( empty( $license_key ) ) {
             return array(
                 'status' => 'not_set',
-                'message' => __( 'ライセンスキーが設定されていません。', 'news-crawler' ),
+                'message' => __( 'ライセンスキーが設定されていません。プラグインを利用するには有効なライセンスキーが必要です。', 'news-crawler' ),
                 'icon' => 'dashicons-warning',
                 'color' => '#f56e28'
             );

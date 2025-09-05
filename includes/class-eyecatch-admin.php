@@ -22,14 +22,9 @@ class News_Crawler_Eyecatch_Admin {
      * 管理メニューを追加
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'news-crawler-settings',
-            'アイキャッチ画像生成',
-            'アイキャッチ生成',
-            'manage_options',
-            'news-crawler-eyecatch',
-            array($this, 'admin_page')
-        );
+        // アイキャッチ画像生成メニューは無効化
+        // 元々存在しなかったメニューのため、登録しない
+        return;
     }
     
     /**
