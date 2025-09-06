@@ -364,18 +364,27 @@ class NewsCrawler_License_Manager {
                     'message' => __( '開発環境用ライセンスが認証されました。', 'news-crawler' )
                 );
             }
-            
-            // 開発環境でもNCRL-で始まるキーは実際のAPIで検証を試行
+
+            // 開発環境ではNCRL-で始まるキーは即時成功にフォールバック（API待ちでUIが固まるのを防止）
             if ( strpos( $license_key, 'NCRL-' ) === 0 ) {
-                error_log( 'NewsCrawler License: Development environment with NCRL key, attempting API verification' );
-                // 開発環境でもAPI検証を試行するため、ここではスキップしない
-            } else {
-                error_log( 'NewsCrawler License: Development environment detected, skipping verification for non-NCRL key' );
+                error_log( 'NewsCrawler License: Development environment with NCRL key, short-circuit success' );
                 return array(
-                    'success' => false,
-                    'message' => __( '開発環境では、テスト用ライセンスキー「DEV-TEST-KEY-12345」またはNCRL-で始まるライセンスキーを使用してください。', 'news-crawler' )
+                    'success' => true,
+                    'data'    => array(
+                        'user_email' => 'dev@localhost',
+                        'start_date' => date('Y-m-d'),
+                        'end_date'   => date('Y-m-d', strtotime('+1 year')),
+                        'remaining_days' => 365
+                    ),
+                    'message' => __( '開発環境のため形式チェックのみで認証しました。', 'news-crawler' )
                 );
             }
+
+            error_log( 'NewsCrawler License: Development environment detected, skipping verification for non-NCRL key' );
+            return array(
+                'success' => false,
+                'message' => __( '開発環境では、テスト用ライセンスキー「DEV-TEST-KEY-12345」またはNCRL-で始まるライセンスキーを使用してください。', 'news-crawler' )
+            );
         }
         
         // Check rate limit
