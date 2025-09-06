@@ -43,6 +43,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 
 
 // プラグイン初期化
