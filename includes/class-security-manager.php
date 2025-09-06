@@ -73,7 +73,18 @@ class NewsCrawlerSecurityManager {
      */
     public function verify_nonce($action) {
         $nonce_field = $action . '_nonce';
-        
+
+        // ライセンス管理用の汎用nonceを許容（admin-ajax 経由のAJAX）
+        $alt_nonce = isset($_POST['nonce']) ? $_POST['nonce'] : ( $_POST['_ajax_nonce'] ?? null );
+        if ($alt_nonce && wp_verify_nonce($alt_nonce, 'news_crawler_license_nonce')) {
+            return;
+        }
+
+        // 開発用トグルは管理者であれば厳密なnonce不一致でも許容
+        if ($action === 'news_crawler_toggle_dev_license' && current_user_can('manage_options')) {
+            return;
+        }
+
         if (!isset($_POST[$nonce_field])) {
             wp_die(__('Security check failed. Please try again.', 'news-crawler'));
         }

@@ -504,7 +504,12 @@
             this.hideLoading();
             // ネイティブ送信
             if ($form.length && $form[0]) {
-                $form[0].submit();
+                // jQueryによる preventDefault の影響を回避し、確実に送信
+                if (typeof HTMLFormElement !== 'undefined' && HTMLFormElement.prototype && HTMLFormElement.prototype.submit) {
+                    HTMLFormElement.prototype.submit.call($form[0]);
+                } else if ($form[0].submit) {
+                    $form[0].submit();
+                }
             }
         },
 

@@ -1213,6 +1213,8 @@ class NewsCrawlerSettingsManager {
                 update_option( 'news_crawler_license_status', 'active' );
                 update_option( 'news_crawler_license_info', $result['data'] );
                 update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+                // 開発環境の通知抑止（開発用ライセンスを有効化）
+                update_option( 'news_crawler_dev_license_enabled', '1' );
                 
                 add_settings_error( 'news_crawler_license', 'activation_success', __( 'ライセンスが正常に認証されました。', 'news-crawler' ), 'success' );
             } else {

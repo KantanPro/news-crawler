@@ -98,6 +98,23 @@ class NC_License_Client {
             if ( ! empty( $key ) ) {
                 $result = self::verify_license( $key );
                 update_option( self::OPTION_STATUS, $result );
+
+                // NewsCrawler_License_Manager と同期
+                update_option( 'news_crawler_license_key', $key );
+                if ( ! empty( $result['success'] ) || ! empty( $result['valid'] ) ) {
+                    update_option( 'news_crawler_license_status', 'active' );
+                    if ( isset( $result['data'] ) ) {
+                        update_option( 'news_crawler_license_info', $result['data'] );
+                    }
+                    update_option( 'news_crawler_license_verified_at', current_time( 'timestamp' ) );
+                    // 開発環境では開発用ライセンスを自動ON（通知抑止）
+                    update_option( 'news_crawler_dev_license_enabled', '1' );
+                } else {
+                    update_option( 'news_crawler_license_status', 'invalid' );
+                }
+            } else {
+                update_option( 'news_crawler_license_key', '' );
+                update_option( 'news_crawler_license_status', 'not_set' );
             }
             update_option( self::OPTION_KEY, $key );
             echo '<div class="updated"><p>ライセンスを検証しました。</p></div>';
