@@ -539,24 +539,27 @@ class NewsCrawler_License_Manager {
                 $detailed_message .= ' (エラーコード: ' . $error_code . ')';
             }
             
-            // レスポンスデータの詳細を追加（デバッグモードまたは開発環境の場合）
+            // レスポンスデータの詳細を追加（常に詳細情報を表示）
+            if ( isset( $data ) && is_array( $data ) ) {
+                $detailed_message .= "\n\n【サーバーレスポンス詳細】\n" . json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+            }
+            
+            // API接続情報も追加
+            $detailed_message .= "\n\n【接続情報】\n";
+            $detailed_message .= "API URL: " . $klm_api_url . "\n";
+            $detailed_message .= "サイトURL: " . $site_url . "\n";
+            $detailed_message .= "プラグインバージョン: " . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . "\n";
+            $detailed_message .= "HTTPステータス: " . $response_code . "\n";
+            $detailed_message .= "レスポンスボディ: " . $body;
+            
+            // デバッグモードの場合はさらに詳細な情報を追加
             if ( ( defined( 'WP_DEBUG' ) && WP_DEBUG ) || $this->is_development_environment() ) {
-                if ( isset( $data ) && is_array( $data ) ) {
-                    $detailed_message .= "\n\n【詳細なサーバーレスポンス】\n" . json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
-                }
-                
-                // API接続情報も追加
-                $detailed_message .= "\n\n【接続情報】\n";
-                $detailed_message .= "API URL: " . $klm_api_url . "\n";
-                $detailed_message .= "サイトURL: " . $site_url . "\n";
-                $detailed_message .= "プラグインバージョン: " . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . "\n";
-                $detailed_message .= "HTTPステータス: " . $response_code . "\n";
-                $detailed_message .= "レスポンスボディ: " . $body;
-            } else {
-                // 本番環境では簡潔なメッセージのみ
-                if ( isset( $data ) && is_array( $data ) ) {
-                    $detailed_message .= ' [サーバーレスポンス: ' . json_encode( $data ) . ']';
-                }
+                $detailed_message .= "\n\n【デバッグ情報】\n";
+                $detailed_message .= "WordPressバージョン: " . get_bloginfo( 'version' ) . "\n";
+                $detailed_message .= "PHPバージョン: " . PHP_VERSION . "\n";
+                $detailed_message .= "サーバーソフトウェア: " . ( $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown' ) . "\n";
+                $detailed_message .= "現在時刻: " . current_time( 'Y-m-d H:i:s' ) . "\n";
+                $detailed_message .= "タイムゾーン: " . wp_timezone_string();
             }
             
             return array(
@@ -966,7 +969,29 @@ class NewsCrawler_License_Manager {
             wp_send_json_success( array( 'message' => $result['message'] ) );
         } else {
             error_log( 'NewsCrawler License: AJAX license activation failed: ' . $result['message'] );
-            wp_send_json_error( array( 'message' => $result['message'] ) );
+            
+            // 詳細なエラー情報を含むレスポンス
+            $error_response = array(
+                'message' => $result['message'],
+                'error_code' => $result['error_code'] ?? '',
+                'debug_info' => array(
+                    'license_key' => substr( $license_key, 0, 8 ) . '...',
+                    'site_url' => home_url(),
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                    'wp_version' => get_bloginfo( 'version' ),
+                    'php_version' => PHP_VERSION,
+                    'timestamp' => current_time( 'Y-m-d H:i:s' ),
+                    'is_development' => $this->is_development_environment(),
+                    'wp_debug' => defined( 'WP_DEBUG' ) && WP_DEBUG
+                )
+            );
+            
+            // デバッグモードの場合はさらに詳細な情報を追加
+            if ( isset( $result['debug_info'] ) ) {
+                $error_response['debug_info']['server_debug'] = $result['debug_info'];
+            }
+            
+            wp_send_json_error( $error_response );
         }
     }
 

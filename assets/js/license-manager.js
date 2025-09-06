@@ -391,13 +391,13 @@
                             errorMessage = response.message;
                         }
                         
+                        // レスポンス全体をコンソールに出力
+                        console.error('License verification failed - Full response:', response);
+                        
                         // デバッグ情報がある場合は表示
                         if (response.data && response.data.debug_info) {
                             console.log('Debug info:', response.data.debug_info);
-                            // デバッグモードの場合は詳細情報を表示
-                            if (typeof news_crawler_license_ajax !== 'undefined' && news_crawler_license_ajax.debug_mode) {
-                                errorMessage += '\n\n【デバッグ情報】\n' + JSON.stringify(response.data.debug_info, null, 2);
-                            }
+                            errorMessage += '\n\n【デバッグ情報】\n' + JSON.stringify(response.data.debug_info, null, 2);
                         }
                         
                         // エラーコードがある場合は追加
@@ -405,40 +405,58 @@
                             errorMessage += '\nエラーコード: ' + response.data.error_code;
                         }
                         
-                        NewsCrawlerLicenseManager.showError(errorMessage);
+                        // レスポンスデータ全体を追加（デバッグ用）
+                        if (response.data) {
+                            errorMessage += '\n\n【レスポンスデータ】\n' + JSON.stringify(response.data, null, 2);
+                        }
+                        
+                        // 常に詳細なモーダルで表示
+                        NewsCrawlerLicenseManager.showDetailedError(errorMessage);
                     }
                 },
                 error: function(xhr, status, error) {
                     console.error('License verification error:', xhr, status, error);
+                    console.error('Response text:', xhr.responseText);
                     
-                    var errorMessage = '通信エラーが発生しました。';
+                    var errorMessage = '通信エラーが発生しました。\n\n';
+                    errorMessage += '【エラー詳細】\n';
+                    errorMessage += 'ステータス: ' + status + '\n';
+                    errorMessage += 'エラー: ' + error + '\n';
+                    errorMessage += 'HTTPステータス: ' + xhr.status + '\n';
+                    errorMessage += 'ステータステキスト: ' + xhr.statusText + '\n';
                     
                     // 詳細なエラー情報を取得
                     if (xhr.responseText) {
+                        errorMessage += '\n【レスポンス内容】\n';
                         try {
                             var response = JSON.parse(xhr.responseText);
+                            errorMessage += JSON.stringify(response, null, 2);
+                            
                             if (response && response.data && response.data.message) {
-                                errorMessage = response.data.message;
+                                errorMessage = response.data.message + '\n\n' + errorMessage;
                             } else if (response && response.message) {
-                                errorMessage = response.message;
+                                errorMessage = response.message + '\n\n' + errorMessage;
                             }
                         } catch (e) {
                             // JSON解析に失敗した場合
+                            errorMessage += xhr.responseText;
+                            
                             if (xhr.status === 0) {
-                                errorMessage = 'ネットワーク接続エラーが発生しました。インターネット接続を確認してください。';
+                                errorMessage = 'ネットワーク接続エラーが発生しました。インターネット接続を確認してください。\n\n' + errorMessage;
                             } else if (xhr.status === 404) {
-                                errorMessage = 'ライセンスサーバーが見つかりません。しばらく時間をおいてから再試行してください。';
+                                errorMessage = 'ライセンスサーバーが見つかりません。しばらく時間をおいてから再試行してください。\n\n' + errorMessage;
                             } else if (xhr.status === 500) {
-                                errorMessage = 'ライセンスサーバーでエラーが発生しました。しばらく時間をおいてから再試行してください。';
+                                errorMessage = 'ライセンスサーバーでエラーが発生しました。しばらく時間をおいてから再試行してください。\n\n' + errorMessage;
                             } else if (xhr.status === 503) {
-                                errorMessage = 'ライセンスサーバーが一時的に利用できません。しばらく時間をおいてから再試行してください。';
+                                errorMessage = 'ライセンスサーバーが一時的に利用できません。しばらく時間をおいてから再試行してください。\n\n' + errorMessage;
                             } else {
-                                errorMessage = 'サーバーエラーが発生しました。(' + xhr.status + ')';
+                                errorMessage = 'サーバーエラーが発生しました。(' + xhr.status + ')\n\n' + errorMessage;
                             }
                         }
                     }
                     
-                    NewsCrawlerLicenseManager.showError(errorMessage);
+                    // 常に詳細なモーダルで表示
+                    NewsCrawlerLicenseManager.showDetailedError(errorMessage);
                 },
                 complete: function() {
                     // ボタンを有効化

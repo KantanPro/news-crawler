@@ -12,8 +12,22 @@ if (!defined('ABSPATH')) {
 
 class NewsCrawlerGenreSettings {
     private $option_name = 'news_crawler_genre_settings';
+    private static $instance = null;
     
-    public function __construct() {
+    /**
+     * シングルトンインスタンスを取得
+     */
+    public static function get_instance() {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    /**
+     * プライベートコンストラクタ（シングルトンパターン）
+     */
+    private function __construct() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_genre_settings_save', array($this, 'save_genre_setting'));
@@ -55,6 +69,11 @@ class NewsCrawlerGenreSettings {
     }
     
     public function add_admin_menu() {
+        // メニューの重複登録を防ぐ
+        if (get_option('news_crawler_menu_registered', false)) {
+            return;
+        }
+        
         // メインメニュー
         add_menu_page(
             'News Crawler ' . NEWS_CRAWLER_VERSION,
@@ -65,6 +84,9 @@ class NewsCrawlerGenreSettings {
             'dashicons-rss',
             30
         );
+        
+        // メニュー登録完了フラグを設定
+        update_option('news_crawler_menu_registered', true);
         
         // 投稿設定サブメニュー
         add_submenu_page(

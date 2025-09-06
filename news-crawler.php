@@ -217,9 +217,9 @@ function news_crawler_init_components() {
     
     // セキュリティマネージャーの初期化
     NewsCrawlerSecurityManager::get_instance();
-    // ジャンル設定管理クラスを初期化
+    // ジャンル設定管理クラスを初期化（シングルトンパターン）
     if (class_exists('NewsCrawlerGenreSettings')) {
-        new NewsCrawlerGenreSettings();
+        NewsCrawlerGenreSettings::get_instance();
     }
     
     // 既存のNewsCrawlerクラスも初期化（後方互換性のため）
@@ -311,7 +311,7 @@ function news_crawler_ensure_cron_setup() {
     // cronが設定されていない場合は設定を実行
     if (!$next_cron) {
         if (class_exists('NewsCrawlerGenreSettings')) {
-            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings = NewsCrawlerGenreSettings::get_instance();
             if (method_exists($genre_settings, 'setup_auto_posting_cron')) {
                 $genre_settings->setup_auto_posting_cron();
                 error_log('NewsCrawler: 自動投稿のcron設定を実行しました');
@@ -1384,7 +1384,7 @@ class NewsCrawler {
         }
         
         // 新しいジャンル設定システムを使用
-        $genre_settings = new NewsCrawlerGenreSettings();
+        $genre_settings = NewsCrawlerGenreSettings::get_instance();
         $result = $genre_settings->manual_run_news();
         wp_send_json_success($result);
     }
@@ -3692,6 +3692,9 @@ function news_crawler_deactivation() {
     if (class_exists('NewsCrawlerUpdater')) {
         NewsCrawlerUpdater::cleanup();
     }
+    
+    // メニュー登録フラグをリセット
+    delete_option('news_crawler_menu_registered');
     
     // その他のクリーンアップ処理
     wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
