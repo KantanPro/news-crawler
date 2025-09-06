@@ -162,10 +162,10 @@ class NewsCrawler_License_Settings {
                                    name="news_crawler_license_key"
                                    value="<?php echo esc_attr( get_option( 'news_crawler_license_key' ) ); ?>"
                                    style="width: 400px;"
-                                   placeholder="NCRL-XXXXXX-XXXXXX-XXXX"
+                                   placeholder="KTPM-XXXXXX-XXXXXX-XXXX"
                                    autocomplete="off"
-                                   pattern="NCRL-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{4}"
-                                   title="NCRL-XXXXXX-XXXXXX-XXXX形式で入力してください">
+                                   pattern="[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}"
+                                   title="[プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]形式で入力してください">
 
                             <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
                         </form>
@@ -192,7 +192,9 @@ class NewsCrawler_License_Settings {
                     <p class="description" style="padding-left: 8px; margin-top: 5px;">
                         <?php echo esc_html__( 'KantanPro License Managerから取得したライセンスキーを入力してください。', 'news-crawler' ); ?>
                         <br>
-                        <strong><?php echo esc_html__( '対応ライセンス形式', 'news-crawler' ); ?>:</strong> NCRL-XXXXXX-XXXXXX-XXXX
+                        <strong><?php echo esc_html__( '対応ライセンス形式', 'news-crawler' ); ?>:</strong> [プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]
+                        <br>
+                        <strong><?php echo esc_html__( '例', 'news-crawler' ); ?>:</strong> KTPM-227598-MF7RORXLQ9-30381D, NCRL-080629-BRX<9D1+-C69B
                     </p>
 
                     <!-- デバッグ情報（WP_DEBUGが有効な場合のみ表示） -->
@@ -331,6 +333,7 @@ class NewsCrawler_License_Settings {
                                 <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://www.kantanpro.com</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス検証', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/verify</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス情報取得', 'news-crawler' ); ?>:</strong> GET /wp-json/ktp-license/v1/info</li>
+                                <li><strong><?php echo esc_html__( 'デバッグエンドポイント', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/debug</li>
                             </ul>
                         </div>
 

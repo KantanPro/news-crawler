@@ -283,6 +283,43 @@ class NewsCrawler_License_Manager {
     }
 
     /**
+     * Validate license key format
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to validate
+     * @return array Validation result
+     */
+    private function validate_license_key_format( $license_key ) {
+        // ライセンスキーの前処理（trim()で余分な空白文字を除去）
+        $license_key = trim( $license_key );
+        
+        // ライセンスキーの形式チェック
+        // 正規表現: /^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}$/
+        $pattern = '/^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}$/';
+        
+        if ( empty( $license_key ) ) {
+            return array(
+                'valid' => false,
+                'error_code' => 'empty_license_key',
+                'message' => __( 'ライセンスキーが空です。', 'news-crawler' )
+            );
+        }
+        
+        if ( ! preg_match( $pattern, $license_key ) ) {
+            return array(
+                'valid' => false,
+                'error_code' => 'invalid_format',
+                'message' => __( 'ライセンスキーの形式が不正です。正しい形式: [プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]', 'news-crawler' )
+            );
+        }
+        
+        return array(
+            'valid' => true,
+            'license_key' => $license_key
+        );
+    }
+
+    /**
      * Verify license with KantanPro License Manager
      *
      * @since 2.1.5
@@ -290,6 +327,19 @@ class NewsCrawler_License_Manager {
      * @return array Verification result
      */
     public function verify_license( $license_key ) {
+        // ライセンスキーの前処理と形式チェック
+        $validation = $this->validate_license_key_format( $license_key );
+        if ( ! $validation['valid'] ) {
+            error_log( 'NewsCrawler License: License key validation failed - ' . $validation['message'] );
+            return array(
+                'success' => false,
+                'message' => $validation['message'],
+                'error_code' => $validation['error_code']
+            );
+        }
+        
+        // 検証済みのライセンスキーを使用
+        $license_key = $validation['license_key'];
         // 開発環境でのテスト用ライセンスチェック
         if ( $this->is_development_environment() ) {
             $dev_license_key = $this->get_development_license_key();
@@ -351,10 +401,10 @@ class NewsCrawler_License_Manager {
         
         $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
-                'Content-Type' => 'application/json',
+                'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => json_encode( array(
+            'body' => http_build_query( array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
@@ -365,11 +415,29 @@ class NewsCrawler_License_Manager {
         ) );
 
         if ( is_wp_error( $response ) ) {
-            error_log( 'NewsCrawler License: WP_Error during verification - ' . $response->get_error_message() );
-            return array(
-                'success' => false,
-                'message' => __( 'ライセンスサーバーとの通信に失敗しました。', 'news-crawler' ) . ' ' . $response->get_error_message()
-            );
+            $error_message = $response->get_error_message();
+            error_log( 'NewsCrawler License: WP_Error during verification - ' . $error_message );
+            
+            // ネットワーク接続エラーの詳細な分類
+            if ( strpos( $error_message, 'timeout' ) !== false ) {
+                return array(
+                    'success' => false,
+                    'message' => __( 'ライセンスサーバーへの接続がタイムアウトしました。ネットワーク接続を確認してください。', 'news-crawler' ),
+                    'error_code' => 'connection_error'
+                );
+            } elseif ( strpos( $error_message, 'connection' ) !== false || strpos( $error_message, 'resolve' ) !== false ) {
+                return array(
+                    'success' => false,
+                    'message' => __( 'ライセンスサーバーに接続できません。ネットワーク接続を確認してください。', 'news-crawler' ),
+                    'error_code' => 'connection_error'
+                );
+            } else {
+                return array(
+                    'success' => false,
+                    'message' => __( 'ライセンスサーバーとの通信に失敗しました。', 'news-crawler' ) . ' ' . $error_message,
+                    'error_code' => 'connection_error'
+                );
+            }
         }
 
         $response_code = wp_remote_retrieve_response_code( $response );
@@ -382,16 +450,19 @@ class NewsCrawler_License_Manager {
             error_log( 'NewsCrawler License: HTTP error response - ' . $response_code );
             return array(
                 'success' => false,
-                'message' => __( 'ライセンスサーバーからエラーレスポンスが返されました。', 'news-crawler' ) . ' (HTTP ' . $response_code . ')'
+                'message' => __( 'ライセンスサーバーからエラーレスポンスが返されました。', 'news-crawler' ) . ' (HTTP ' . $response_code . ')',
+                'error_code' => 'server_error'
             );
         }
         
         $data = json_decode( $body, true );
 
         if ( ! $data ) {
+            error_log( 'NewsCrawler License: JSON parse error - Response body: ' . $body );
             return array(
                 'success' => false,
-                'message' => __( 'ライセンスサーバーからの応答が無効です。', 'news-crawler' )
+                'message' => __( 'ライセンスサーバーからの応答の解析に失敗しました。', 'news-crawler' ),
+                'error_code' => 'json_parse_error'
             );
         }
 
@@ -410,24 +481,41 @@ class NewsCrawler_License_Manager {
             // レスポンスデータの詳細ログ
             error_log( 'NewsCrawler License: Full response data: ' . json_encode( $data ) );
             
+            // エラーコードの取得
+            if ( isset( $data['error_code'] ) && ! empty( $data['error_code'] ) ) {
+                $error_code = $data['error_code'];
+            } elseif ( isset( $data['code'] ) && ! empty( $data['code'] ) ) {
+                $error_code = $data['code'];
+            }
+            
+            // エラーメッセージの取得と分類
             if ( isset( $data['message'] ) && ! empty( $data['message'] ) ) {
                 $error_message = $data['message'];
             } elseif ( isset( $data['error'] ) && ! empty( $data['error'] ) ) {
                 $error_message = $data['error'];
             } elseif ( isset( $data['error_message'] ) && ! empty( $data['error_message'] ) ) {
                 $error_message = $data['error_message'];
-            } elseif ( isset( $data['code'] ) && ! empty( $data['code'] ) ) {
-                $error_message = 'エラーコード: ' . $data['code'];
-                $error_code = $data['code'];
             } else {
                 $error_message = __( 'ライセンスの認証に失敗しました。', 'news-crawler' );
             }
             
-            // エラーコードの取得
-            if ( isset( $data['error_code'] ) && ! empty( $data['error_code'] ) ) {
-                $error_code = $data['error_code'];
-            } elseif ( isset( $data['code'] ) && ! empty( $data['code'] ) ) {
-                $error_code = $data['code'];
+            // プロンプトで指定されたエラーケースの処理
+            switch ( $error_code ) {
+                case 'license_not_found':
+                    $error_message = __( 'ライセンスキーが見つかりません。正しいライセンスキーを入力してください。', 'news-crawler' );
+                    break;
+                case 'invalid_status':
+                    $error_message = __( 'ライセンスが無効化されています。サポートにお問い合わせください。', 'news-crawler' );
+                    break;
+                case 'expired':
+                    $error_message = __( 'ライセンスの有効期限が切れています。ライセンスを更新してください。', 'news-crawler' );
+                    break;
+                case 'site_mismatch':
+                    $error_message = __( 'ライセンスキーがこのサイト用ではありません。正しいライセンスキーを入力してください。', 'news-crawler' );
+                    break;
+                case 'server_error':
+                    $error_message = __( 'サーバー側でエラーが発生しました。しばらく時間をおいてから再試行してください。', 'news-crawler' );
+                    break;
             }
             
             error_log( 'NewsCrawler License: Verification failed - Error code: ' . $error_code . ', Error message: ' . $error_message );
@@ -1225,10 +1313,10 @@ class NewsCrawler_License_Manager {
         
         $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
-                'Content-Type' => 'application/json',
+                'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => json_encode( array(
+            'body' => http_build_query( array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
@@ -1276,10 +1364,10 @@ class NewsCrawler_License_Manager {
         
         $response = wp_remote_post( $test_url, array(
             'headers' => array(
-                'Content-Type' => 'application/json',
+                'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => json_encode( array(
+            'body' => http_build_query( array(
                 'license_key' => 'TEST-CONNECTION',
                 'site_url'    => get_site_url(),
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
