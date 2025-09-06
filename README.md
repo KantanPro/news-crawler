@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.14-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.14)
+[![Version](https://img.shields.io/badge/version-2.3.15-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.15)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -428,6 +428,16 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.15 - 2025-09-06
+
+- **Complete KantanPro License Manager (KLM) Integration**: Fully implemented KLM integration with all specified requirements
+- **Enhanced License Key Validation**: Added trim() preprocessing and strict regex format checking
+- **Improved API Communication**: Unified Content-Type to application/x-www-form-urlencoded
+- **Comprehensive Error Handling**: Implemented all error cases specified in the integration prompt
+- **Enhanced Admin Interface**: Detailed license format descriptions and examples
+- **Added Debug Endpoint Information**: Included debug endpoint details for troubleshooting
+- **Significantly Improved License Verification**: Enhanced stability and user experience
 
 ### v2.3.14 - 2025-09-06
 
