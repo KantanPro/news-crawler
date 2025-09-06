@@ -96,7 +96,7 @@ class NewsCrawler_License_Settings {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span><?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示

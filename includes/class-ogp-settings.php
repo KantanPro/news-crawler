@@ -225,7 +225,7 @@ class NewsCrawlerOGPSettings {
         
         ?>
         <div class="wrap">
-            <h1>OGP設定</h1>
+            <h1>News Crawler <?php echo esc_html(defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''); ?> - OGP設定</h1>
             
             <form method="post" action="options.php">
                 <?php

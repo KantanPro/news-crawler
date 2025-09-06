@@ -742,7 +742,7 @@ class NewsCrawlerGenreSettings {
         // 設定管理クラスのインスタンスを作成してページを表示
         if (class_exists('NewsCrawlerSettingsManager')) {
             $settings_manager = new NewsCrawlerSettingsManager();
-            $settings_manager->display_post_settings_page();
+            $settings_manager->display_post_settings_page('基本設定');
         } else {
             echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - 基本設定</h1><p>設定管理クラスが見つかりません。</p></div>';
         }
@@ -4200,7 +4200,7 @@ $('#cancel-edit').click(function() {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span><?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示

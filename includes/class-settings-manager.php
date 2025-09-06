@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 
 class NewsCrawlerSettingsManager {
     
-    private $option_name = 'news_crawler_settings';
+    private $option_name = 'news_crawler_basic_settings';
     
     public function __construct() {
         error_log( 'NewsCrawler Settings: Constructor called' );
@@ -23,6 +23,19 @@ class NewsCrawlerSettingsManager {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_test_api_connection', array($this, 'test_api_connection'));
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
+        // オプション保存時の権限を緩和
+        add_filter('option_page_capability_' . $this->option_name, array($this, 'resolve_settings_capability'));
+
+        // 旧オプションから新オプション名へ自動移行（読み出し側と統一）
+        $old_settings = get_option('news_crawler_settings', array());
+        if (!empty($old_settings) && is_array($old_settings)) {
+            $current_basic = get_option($this->option_name, array());
+            $merged = array_merge(is_array($current_basic) ? $current_basic : array(), $old_settings);
+            if ($merged !== $current_basic) {
+                update_option($this->option_name, $merged);
+                error_log('NewsCrawler Settings: Migrated settings from news_crawler_settings to ' . $this->option_name);
+            }
+        }
         
         // ライセンス認証の処理を追加
         add_action('admin_init', array($this, 'handle_license_activation'));
@@ -112,7 +125,11 @@ class NewsCrawlerSettingsManager {
             $this->option_name,
             $this->option_name,
             array(
-                'sanitize_callback' => array($this, 'sanitize_settings')
+                'sanitize_callback' => array($this, 'sanitize_settings'),
+                'type' => 'array',
+                'default' => array(),
+                'show_in_rest' => false,
+                'capability' => $this->resolve_settings_capability()
             )
         );
         
@@ -227,6 +244,24 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings-quality',
             'quality_settings'
         );
+    }
+
+    /**
+     * 設定保存に必要な権限を解決
+     * メニュー側と同様に柔軟に権限を緩和する
+     */
+    public function resolve_settings_capability($default = 'manage_options') {
+        if (current_user_can('manage_options')) {
+            return 'manage_options';
+        }
+        if (current_user_can('edit_posts')) {
+            return 'edit_posts';
+        }
+        if (current_user_can('publish_posts')) {
+            return 'publish_posts';
+        }
+        // 最低限
+        return 'read';
     }
     
     /**
@@ -350,10 +385,14 @@ class NewsCrawlerSettingsManager {
     /**
      * 投稿設定画面を表示（ライセンス認証後）
      */
-    public function display_post_settings_page() {
+    public function display_post_settings_page($page_title_suffix = '投稿設定') {
+        // アクティブタブを決定（保存後も同じタブを維持）
+        $valid_tabs = array('api-settings', 'feature-settings', 'quality-settings');
+        $requested_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : '';
+        $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> 投稿設定</h1>
+            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -362,17 +401,17 @@ class NewsCrawlerSettingsManager {
             <?php endif; ?>
             
             <div class="nav-tab-wrapper">
-                <a href="#api-settings" class="nav-tab nav-tab-active" data-tab="api-settings">API設定</a>
-                <a href="#feature-settings" class="nav-tab" data-tab="feature-settings">機能設定</a>
-                <a href="#quality-settings" class="nav-tab" data-tab="quality-settings">品質管理</a>
-                <a href="#update-info" class="nav-tab" data-tab="update-info">更新情報</a>
-                <a href="#system-info" class="nav-tab" data-tab="system-info">システム情報</a>
+                <a href="#api-settings" class="nav-tab<?php echo ($active_tab === 'api-settings' ? ' nav-tab-active' : ''); ?>" data-tab="api-settings">API設定</a>
+                <a href="#feature-settings" class="nav-tab<?php echo ($active_tab === 'feature-settings' ? ' nav-tab-active' : ''); ?>" data-tab="feature-settings">機能設定</a>
+                <a href="#quality-settings" class="nav-tab<?php echo ($active_tab === 'quality-settings' ? ' nav-tab-active' : ''); ?>" data-tab="quality-settings">品質管理</a>
+                
             </div>
             
-            <div id="api-settings" class="tab-content active">
+            <div id="api-settings" class="tab-content<?php echo ($active_tab === 'api-settings' ? ' active' : ''); ?>">
                 <form method="post" action="options.php">
                     <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-api'); ?>
+                    <input type="hidden" name="current_tab" value="api-settings" />
 
                     <div class="card">
                         <h2>API接続テスト</h2>
@@ -386,30 +425,27 @@ class NewsCrawlerSettingsManager {
                 </form>
             </div>
             
-            <div id="feature-settings" class="tab-content">
+            <div id="feature-settings" class="tab-content<?php echo ($active_tab === 'feature-settings' ? ' active' : ''); ?>">
                 <form method="post" action="options.php">
                     <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-features'); ?>
+                    <input type="hidden" name="current_tab" value="feature-settings" />
                     <?php submit_button(); ?>
                 </form>
             </div>
             
-            <div id="quality-settings" class="tab-content">
+            <div id="quality-settings" class="tab-content<?php echo ($active_tab === 'quality-settings' ? ' active' : ''); ?>">
                 <form method="post" action="options.php">
                     <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-quality'); ?>
+                    <input type="hidden" name="current_tab" value="quality-settings" />
                     <?php submit_button(); ?>
                 </form>
             </div>
             
-            <div id="update-info" class="tab-content">
-                <?php do_settings_sections('news-crawler-settings-update'); ?>
-            </div>
             
-            <div id="system-info" class="tab-content">
-                <h2>システム情報</h2>
-                <?php $this->display_system_info(); ?>
-            </div>
+            
+            
             
             
         </div>
@@ -468,6 +504,37 @@ class NewsCrawlerSettingsManager {
                 
                 $('.tab-content').removeClass('active');
                 $('#' + target).addClass('active');
+
+                // URLに現在のタブを保持
+                try {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('tab', target);
+                    window.history.replaceState(null, '', url.toString());
+                } catch (e) {
+                    // ignore
+                }
+            });
+            // 保存時にリダイレクト先(_wp_http_referer)へタブ名を付与
+            $('form[action="options.php"]').on('submit', function() {
+                var activeTab = $('.nav-tab.nav-tab-active').data('tab') || '<?php echo esc_js($active_tab); ?>';
+                var referer = $(this).find('input[name="_wp_http_referer"]');
+                if (referer.length) {
+                    try {
+                        var abs = new URL(window.location.origin + referer.val());
+                        abs.searchParams.set('tab', activeTab);
+                        // 相対パス + クエリに戻す
+                        referer.val(abs.pathname + abs.search);
+                    } catch (e) {
+                        // フォールバック: 文字列操作
+                        var val = referer.val();
+                        if (val.indexOf('tab=') > -1) {
+                            val = val.replace(/([?&])tab=[^&]*/, '$1tab=' + activeTab);
+                        } else {
+                            val += (val.indexOf('?') > -1 ? '&' : '?') + 'tab=' + activeTab;
+                        }
+                        referer.val(val);
+                    }
+                }
             });
             
             // API接続テスト
@@ -647,27 +714,51 @@ class NewsCrawlerSettingsManager {
         $info = array(
             'WordPress バージョン' => get_bloginfo('version'),
             'PHP バージョン' => PHP_VERSION,
-            'プラグイン バージョン' => NEWS_CRAWLER_VERSION,
+            'プラグイン バージョン' => (defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''),
             'GD ライブラリ' => extension_loaded('gd') ? '有効' : '無効',
             'cURL' => extension_loaded('curl') ? '有効' : '無効',
             'JSON' => extension_loaded('json') ? '有効' : '無効',
             'メモリ制限' => ini_get('memory_limit'),
-            '最大実行時間' => ini_get('max_execution_time') . '秒'
+            '最大実行時間' => ini_get('max_execution_time') . '秒',
+            'サーバーソフトウェア' => isset($_SERVER['SERVER_SOFTWARE']) ? $_SERVER['SERVER_SOFTWARE'] : '',
+            'サイトURL' => get_site_url(),
         );
-        
+
+        echo '<div class="card">';
+        echo '<h3 style="margin-top:0;">環境</h3>';
         echo '<table class="system-info-table">';
         foreach ($info as $label => $value) {
             $status_class = '';
             if (strpos($label, 'ライブラリ') !== false || $label === 'cURL' || $label === 'JSON') {
                 $status_class = ($value === '有効') ? 'status-ok' : 'status-error';
             }
-            
             echo '<tr>';
             echo '<th>' . esc_html($label) . '</th>';
             echo '<td class="' . $status_class . '">' . esc_html($value) . '</td>';
             echo '</tr>';
         }
         echo '</table>';
+        echo '</div>';
+
+        // 追加のPHP設定
+        $php_info = array(
+            'post_max_size' => ini_get('post_max_size'),
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'max_input_vars' => ini_get('max_input_vars'),
+            'max_input_time' => ini_get('max_input_time'),
+            'default_socket_timeout' => ini_get('default_socket_timeout') . '秒',
+        );
+        echo '<div class="card">';
+        echo '<h3 style="margin-top:0;">PHP 設定</h3>';
+        echo '<table class="system-info-table">';
+        foreach ($php_info as $label => $value) {
+            echo '<tr>';
+            echo '<th>' . esc_html($label) . '</th>';
+            echo '<td>' . esc_html($value) . '</td>';
+            echo '</tr>';
+        }
+        echo '</table>';
+        echo '</div>';
     }
     
     // セクションコールバック関数
@@ -701,6 +792,7 @@ class NewsCrawlerSettingsManager {
     public function auto_featured_image_callback() {
         $settings = get_option($this->option_name, array());
         $value = isset($settings['auto_featured_image']) ? $settings['auto_featured_image'] : false;
+        echo '<input type="hidden" name="' . $this->option_name . '[auto_featured_image]" value="0" />';
         echo '<input type="checkbox" name="' . $this->option_name . '[auto_featured_image]" value="1" ' . checked(1, $value, false) . ' />';
         echo '<p class="description">投稿作成時に自動でアイキャッチ画像を生成します。</p>';
     }
@@ -723,6 +815,7 @@ class NewsCrawlerSettingsManager {
     public function auto_summary_generation_callback() {
         $settings = get_option($this->option_name, array());
         $value = isset($settings['auto_summary_generation']) ? $settings['auto_summary_generation'] : false;
+        echo '<input type="hidden" name="' . $this->option_name . '[auto_summary_generation]" value="0" />';
         echo '<input type="checkbox" name="' . $this->option_name . '[auto_summary_generation]" value="1" ' . checked(1, $value, false) . ' />';
         echo '<p class="description">投稿作成時に自動でAI要約を生成します。</p>';
     }
@@ -770,6 +863,7 @@ class NewsCrawlerSettingsManager {
     public function age_limit_enabled_callback() {
         $settings = get_option($this->option_name, array());
         $value = isset($settings['age_limit_enabled']) ? $settings['age_limit_enabled'] : true;
+        echo '<input type="hidden" name="' . $this->option_name . '[age_limit_enabled]" value="0" />';
         echo '<input type="checkbox" name="' . $this->option_name . '[age_limit_enabled]" value="1" ' . checked(1, $value, false) . ' />';
         echo '<p class="description">古い記事・動画をスキップする機能を有効にします。</p>';
     }
@@ -923,7 +1017,7 @@ class NewsCrawlerSettingsManager {
      * 設定値を取得
      */
     public static function get_setting($key, $default = null) {
-        $settings = get_option('news_crawler_settings', array());
+        $settings = get_option('news_crawler_basic_settings', array());
         return isset($settings[$key]) ? $settings[$key] : $default;
     }
     
@@ -931,9 +1025,9 @@ class NewsCrawlerSettingsManager {
      * 設定値を更新
      */
     public static function update_setting($key, $value) {
-        $settings = get_option('news_crawler_settings', array());
+        $settings = get_option('news_crawler_basic_settings', array());
         $settings[$key] = $value;
-        return update_option('news_crawler_settings', $settings);
+        return update_option('news_crawler_basic_settings', $settings);
     }
     
     /**
@@ -982,10 +1076,6 @@ class NewsCrawlerSettingsManager {
             echo '<div class="notice notice-warning" style="margin: 15px 0;">';
             echo '<p><strong>新しいバージョンが利用可能です！</strong></p>';
             echo '<p><a href="' . admin_url('update-core.php') . '" class="button button-primary">今すぐ更新</a></p>';
-            echo '</div>';
-        } else {
-            echo '<div class="notice notice-success" style="margin: 15px 0;">';
-            echo '<p><strong>最新バージョンを使用しています。</strong></p>';
             echo '</div>';
         }
         
@@ -1046,7 +1136,7 @@ class NewsCrawlerSettingsManager {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span><?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示
