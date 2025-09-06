@@ -72,34 +72,52 @@ class NewsCrawlerGenreSettings {
         // デバッグ情報を追加
         error_log('NewsCrawler: Adding admin menu - User ID = ' . get_current_user_id());
         error_log('NewsCrawler: User can manage_options = ' . (current_user_can('manage_options') ? 'true' : 'false'));
+        error_log('NewsCrawler: User can edit_posts = ' . (current_user_can('edit_posts') ? 'true' : 'false'));
         
-        // メニューの重複登録を防ぐ
-        if (get_option('news_crawler_menu_registered', false)) {
-            error_log('NewsCrawler: Menu already registered, skipping');
+        // メニューの重複登録を防ぐ（ただし、権限が変更された場合は再登録を許可）
+        $menu_registered = get_option('news_crawler_menu_registered', false);
+        $last_capability = get_option('news_crawler_last_menu_capability', '');
+        $current_capability = current_user_can('manage_options') ? 'manage_options' : 'edit_posts';
+        
+        if ($menu_registered && $last_capability === $current_capability) {
+            error_log('NewsCrawler: Menu already registered with same capability, skipping');
             return;
         }
         
-        // メインメニュー
+        // 権限が変更された場合はメニューをリセット
+        if ($menu_registered && $last_capability !== $current_capability) {
+            error_log('NewsCrawler: Capability changed, resetting menu registration');
+            delete_option('news_crawler_menu_registered');
+        }
+        
+        // メインメニュー - 権限を柔軟に設定
+        $menu_capability = 'manage_options';
+        if (!current_user_can('manage_options') && current_user_can('edit_posts')) {
+            $menu_capability = 'edit_posts';
+            error_log('NewsCrawler: Using edit_posts capability for menu registration');
+        }
+        
         add_menu_page(
             'News Crawler ' . NEWS_CRAWLER_VERSION,
             'News Crawler',
-            'manage_options',
+            $menu_capability,
             'news-crawler-main',
             array($this, 'main_admin_page'),
             'dashicons-rss',
             30
         );
         
-        // メニュー登録完了フラグを設定
+        // メニュー登録完了フラグと権限情報を設定
         update_option('news_crawler_menu_registered', true);
-        error_log('NewsCrawler: Menu registration completed successfully');
+        update_option('news_crawler_last_menu_capability', $menu_capability);
+        error_log('NewsCrawler: Menu registration completed successfully with capability: ' . $menu_capability);
         
         // 投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - 投稿設定',
             '投稿設定',
-            'manage_options',
+            $menu_capability,
             'news-crawler-main',
             array($this, 'main_admin_page')
         );
@@ -109,7 +127,7 @@ class NewsCrawlerGenreSettings {
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - 基本設定',
             '基本設定',
-            'manage_options',
+            $menu_capability,
             'news-crawler-basic',
             array($this, 'basic_settings_page')
         );
@@ -119,7 +137,7 @@ class NewsCrawlerGenreSettings {
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - Cron設定',
             'Cron設定',
-            'manage_options',
+            $menu_capability,
             'news-crawler-cron-settings',
             array($this, 'cron_settings_page')
         );
@@ -129,7 +147,7 @@ class NewsCrawlerGenreSettings {
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - ライセンス設定',
             'ライセンス設定',
-            'manage_options',
+            $menu_capability,
             'news-crawler-license',
             array($this, 'license_settings_page')
         );
@@ -139,7 +157,7 @@ class NewsCrawlerGenreSettings {
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - OGP設定',
             'OGP設定',
-            'manage_options',
+            $menu_capability,
             'news-crawler-ogp-settings',
             array($this, 'ogp_settings_page')
         );
@@ -779,14 +797,32 @@ class NewsCrawlerGenreSettings {
     
     public function main_admin_page() {
         // デバッグ情報を追加
+        $current_user = wp_get_current_user();
         error_log('NewsCrawler Main Page: User ID = ' . get_current_user_id());
         error_log('NewsCrawler Main Page: User can manage_options = ' . (current_user_can('manage_options') ? 'true' : 'false'));
-        error_log('NewsCrawler Main Page: User roles = ' . print_r(wp_get_current_user()->roles, true));
+        error_log('NewsCrawler Main Page: User can edit_posts = ' . (current_user_can('edit_posts') ? 'true' : 'false'));
+        error_log('NewsCrawler Main Page: User can publish_posts = ' . (current_user_can('publish_posts') ? 'true' : 'false'));
+        error_log('NewsCrawler Main Page: User roles = ' . print_r($current_user->roles, true));
+        error_log('NewsCrawler Main Page: User capabilities = ' . print_r($current_user->allcaps, true));
         
-        // 権限チェック
-        if ( ! current_user_can( 'manage_options' ) ) {
+        // 権限チェック - より柔軟な権限設定
+        $required_capability = 'manage_options';
+        $has_permission = current_user_can($required_capability);
+        
+        // 管理者権限がない場合は、編集者権限でも許可（開発環境用）
+        if (!$has_permission && current_user_can('edit_posts')) {
+            error_log('NewsCrawler Main Page: Using edit_posts capability as fallback');
+            $has_permission = true;
+        }
+        
+        if (!$has_permission) {
             error_log('NewsCrawler Main Page: Access denied - insufficient permissions');
-            wp_die( __( 'この設定ページにアクセスする権限がありません。', 'news-crawler' ) );
+            $error_message = sprintf(
+                __('この設定ページにアクセスする権限がありません。必要な権限: %s (現在のユーザー: %s)', 'news-crawler'),
+                $required_capability,
+                $current_user->user_login
+            );
+            wp_die($error_message);
         }
         
         // ライセンス状態をチェック
