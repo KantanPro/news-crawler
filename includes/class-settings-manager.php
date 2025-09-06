@@ -361,11 +361,11 @@ class NewsCrawlerSettingsManager {
             <?php endif; ?>
             
             <div class="nav-tab-wrapper">
-                <a href="#api-settings" class="nav-tab nav-tab-active">API設定</a>
-                <a href="#feature-settings" class="nav-tab">機能設定</a>
-                <a href="#quality-settings" class="nav-tab">品質管理</a>
-                <a href="#update-info" class="nav-tab">更新情報</a>
-                <a href="#system-info" class="nav-tab">システム情報</a>
+                <a href="#api-settings" class="nav-tab nav-tab-active" data-tab="api-settings">API設定</a>
+                <a href="#feature-settings" class="nav-tab" data-tab="feature-settings">機能設定</a>
+                <a href="#quality-settings" class="nav-tab" data-tab="quality-settings">品質管理</a>
+                <a href="#update-info" class="nav-tab" data-tab="update-info">更新情報</a>
+                <a href="#system-info" class="nav-tab" data-tab="system-info">システム情報</a>
             </div>
             
             <form method="post" action="options.php">
@@ -418,11 +418,6 @@ class NewsCrawlerSettingsManager {
         .tab-content.active {
             display: block;
         }
-        .submit {
-            margin-top: 20px;
-            padding: 20px 0;
-            border-top: 1px solid #ddd;
-        }
         .card {
             background: #fff;
             border: 1px solid #ccd0d4;
@@ -460,7 +455,7 @@ class NewsCrawlerSettingsManager {
             // タブ切り替え
             $('.nav-tab').click(function(e) {
                 e.preventDefault();
-                var target = $(this).attr('href').substring(1);
+                var target = $(this).data('tab');
                 
                 $('.nav-tab').removeClass('nav-tab-active');
                 $(this).addClass('nav-tab-active');
