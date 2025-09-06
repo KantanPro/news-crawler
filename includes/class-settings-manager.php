@@ -785,39 +785,43 @@ class NewsCrawlerSettingsManager {
      * 設定をサニタイズ
      */
     public function sanitize_settings($input) {
-        $sanitized = array();
-        
+        // 既存設定を起点にして、送信された項目のみ更新（未送信項目は維持）
+        $existing_options = get_option($this->option_name, array());
+        $sanitized = is_array($existing_options) ? $existing_options : array();
+        $input = is_array($input) ? $input : array();
+
         // APIキー
-        if (isset($input['youtube_api_key'])) {
+        if (array_key_exists('youtube_api_key', $input)) {
             $sanitized['youtube_api_key'] = sanitize_text_field($input['youtube_api_key']);
         }
-        
-        if (isset($input['openai_api_key'])) {
+        if (array_key_exists('openai_api_key', $input)) {
             $sanitized['openai_api_key'] = sanitize_text_field($input['openai_api_key']);
         }
-        
-        // チェックボックス
+
+        // チェックボックス（送信があった項目のみ更新）
         $checkboxes = array('auto_featured_image', 'auto_summary_generation', 'age_limit_enabled');
         foreach ($checkboxes as $checkbox) {
-            $sanitized[$checkbox] = isset($input[$checkbox]) ? true : false;
+            if (array_key_exists($checkbox, $input)) {
+                $sanitized[$checkbox] = $input[$checkbox] ? true : false;
+            }
         }
-        
+
         // セレクトボックス
         $selects = array('featured_image_method', 'summary_generation_model', 'duplicate_check_strictness');
         foreach ($selects as $select) {
-            if (isset($input[$select])) {
+            if (array_key_exists($select, $input)) {
                 $sanitized[$select] = sanitize_text_field($input[$select]);
             }
         }
-        
+
         // 数値
         $numbers = array('duplicate_check_period', 'age_limit_days');
         foreach ($numbers as $number) {
-            if (isset($input[$number])) {
+            if (array_key_exists($number, $input)) {
                 $sanitized[$number] = max(1, min(365, intval($input[$number])));
             }
         }
-        
+
         return $sanitized;
     }
     
