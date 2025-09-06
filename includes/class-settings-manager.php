@@ -1196,7 +1196,8 @@ class NewsCrawlerSettingsManager {
             wp_die( __( 'この操作を実行する権限がありません。', 'news-crawler' ) );
         }
 
-        $license_key = sanitize_text_field( $_POST['news_crawler_license_key'] ?? '' );
+        // ライセンスキーは記号・スペースを保持
+        $license_key = isset( $_POST['news_crawler_license_key'] ) ? trim( wp_unslash( $_POST['news_crawler_license_key'] ) ) : '';
         
         if ( empty( $license_key ) ) {
             add_settings_error( 'news_crawler_license', 'empty_key', __( 'ライセンスキーを入力してください。', 'news-crawler' ), 'error' );

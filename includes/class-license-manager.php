@@ -256,7 +256,8 @@ class NewsCrawler_License_Manager {
             wp_die( __( 'この操作を実行する権限がありません。', 'news-crawler' ) );
         }
 
-        $license_key = sanitize_text_field( $_POST['news_crawler_license_key'] ?? '' );
+        // 記号・スペースを保持するため、sanitize_text_fieldは使用しない
+        $license_key = isset( $_POST['news_crawler_license_key'] ) ? trim( wp_unslash( $_POST['news_crawler_license_key'] ) ) : '';
         error_log( 'NewsCrawler License: License key received: ' . substr( $license_key, 0, 8 ) . '...' );
         
         if ( empty( $license_key ) ) {
@@ -978,7 +979,8 @@ class NewsCrawler_License_Manager {
             wp_send_json_error( array( 'message' => __( '権限がありません。', 'news-crawler' ) ) );
         }
         
-        $license_key = sanitize_text_field( $_POST['license_key'] ?? '' );
+        // ライセンスキーは記号・スペースを保持する必要があるため、sanitize_text_fieldは使わずトリムとunslashのみ
+        $license_key = isset( $_POST['license_key'] ) ? trim( wp_unslash( $_POST['license_key'] ) ) : '';
         error_log( 'NewsCrawler License: AJAX license key received: ' . substr( $license_key, 0, 8 ) . '...' );
         
         if ( empty( $license_key ) ) {
@@ -1044,7 +1046,8 @@ class NewsCrawler_License_Manager {
             wp_send_json_error( array( 'message' => __( '権限がありません。', 'news-crawler' ) ) );
         }
         
-        $license_key = sanitize_text_field( $_POST['license_key'] ?? '' );
+        // ライセンスキーは記号・スペースを保持する必要があるため、sanitize_text_fieldは使わずトリムとunslashのみ
+        $license_key = isset( $_POST['license_key'] ) ? trim( wp_unslash( $_POST['license_key'] ) ) : '';
         
         if ( empty( $license_key ) ) {
             wp_send_json_error( array( 'message' => __( 'ライセンスキーを入力してください。', 'news-crawler' ) ) );
