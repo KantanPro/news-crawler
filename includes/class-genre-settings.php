@@ -28,7 +28,7 @@ class NewsCrawlerGenreSettings {
      * プライベートコンストラクタ（シングルトンパターン）
      */
     private function __construct() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_menu', array($this, 'add_admin_menu'), 1);
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_genre_settings_save', array($this, 'save_genre_setting'));
         add_action('wp_ajax_genre_settings_delete', array($this, 'delete_genre_setting'));
@@ -81,21 +81,26 @@ class NewsCrawlerGenreSettings {
             delete_option('news_crawler_last_menu_capability');
         }
         
-        // メニューの重複登録を防ぐ（ただし、権限が変更された場合は再登録を許可）
-        $menu_registered = get_option('news_crawler_menu_registered', false);
-        $last_capability = get_option('news_crawler_last_menu_capability', '');
-        $current_capability = current_user_can('manage_options') ? 'manage_options' : 'edit_posts';
-        
-        if ($menu_registered && $last_capability === $current_capability) {
-            error_log('NewsCrawler: Menu already registered with same capability, skipping');
-            return;
-        }
-        
-        // 権限が変更された場合はメニューをリセット
-        if ($menu_registered && $last_capability !== $current_capability) {
-            error_log('NewsCrawler: Capability changed, resetting menu registration');
+        // メニュー登録のキャッシュを無効化（常にメニューを登録）
+        // デバッグ用の強制リセット
+        if (isset($_GET['reset_news_crawler_menu']) && current_user_can('manage_options')) {
+            error_log('NewsCrawler: Force resetting menu registration');
             delete_option('news_crawler_menu_registered');
+            delete_option('news_crawler_last_menu_capability');
+            delete_option('news_crawler_last_menu_user_id');
         }
+        
+        // 権限チェックをより柔軟に
+        $current_capability = 'manage_options';
+        if (!current_user_can('manage_options') && current_user_can('edit_posts')) {
+            $current_capability = 'edit_posts';
+        } elseif (!current_user_can('edit_posts') && current_user_can('publish_posts')) {
+            $current_capability = 'publish_posts';
+        } elseif (!current_user_can('publish_posts') && current_user_can('read')) {
+            $current_capability = 'read';
+        }
+        
+        error_log('NewsCrawler: Registering menu with capability: ' . $current_capability . ', user: ' . get_current_user_id());
         
         // メインメニュー - 権限を柔軟に設定
         $menu_capability = 'manage_options';
@@ -120,10 +125,8 @@ class NewsCrawlerGenreSettings {
             30
         );
         
-        // メニュー登録完了フラグと権限情報を設定
-        update_option('news_crawler_menu_registered', true);
-        update_option('news_crawler_last_menu_capability', $menu_capability);
-        error_log('NewsCrawler: Menu registration completed successfully with capability: ' . $menu_capability);
+        // メニュー登録完了ログ
+        error_log('NewsCrawler: Menu registration completed successfully with capability: ' . $menu_capability . ', user: ' . get_current_user_id());
         
         // 投稿設定サブメニュー
         add_submenu_page(
