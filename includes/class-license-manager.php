@@ -293,8 +293,9 @@ class NewsCrawler_License_Manager {
      * @return array Validation result
      */
     private function validate_license_key_format( $license_key ) {
-        // ライセンスキーの前処理（trim()で余分な空白文字を除去）
+        // ライセンスキーの前処理
         $license_key = trim( $license_key );
+        $license_key = $this->normalize_license_key( $license_key );
 
         // 開発環境ではテスト用キーとNCRL-で始まるキーを先に許可（API待ちで固まらないように）
         if ( $this->is_development_environment() ) {
@@ -336,6 +337,31 @@ class NewsCrawler_License_Manager {
             'valid' => true,
             'license_key' => $license_key
         );
+    }
+
+    /**
+     * Normalize license key to ASCII-friendly canonical form
+     * - Convert full-width to half-width (basic set)
+     * - Unify various dashes to '-'
+     * - Remove zero-width spaces and control chars except spaces
+     * - Uppercase A-Z
+     */
+    private function normalize_license_key( $license_key ) {
+        // Remove zero-width and control characters except spaces (keep regular spaces)
+        $license_key = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}\p{C}&&[^\x20]]/u', '', $license_key);
+
+        // Convert common full-width alphanumerics and symbols to half-width
+        $full = '！＂＃＄％＆＇（）＊＋，－．／０１２３４５６７８９：；＜＝＞？＠ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ［＼］＾＿｀｛｜｝～　';
+        $half = '!"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~ ';
+        $license_key = strtr( $license_key, $full, $half );
+
+        // Normalize various dashes to hyphen-minus '-'
+        $license_key = str_replace(array('–','—','−','―','ー','‑'), '-', $license_key);
+
+        // Uppercase letters
+        $license_key = strtoupper( $license_key );
+
+        return $license_key;
     }
 
     /**
