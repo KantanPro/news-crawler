@@ -368,10 +368,9 @@ class NewsCrawlerSettingsManager {
                 <a href="#system-info" class="nav-tab" data-tab="system-info">システム情報</a>
             </div>
             
-            <form method="post" action="options.php">
-                <?php settings_fields($this->option_name); ?>
-                
-                <div id="api-settings" class="tab-content active">
+            <div id="api-settings" class="tab-content active">
+                <form method="post" action="options.php">
+                    <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-api'); ?>
 
                     <div class="card">
@@ -382,28 +381,34 @@ class NewsCrawlerSettingsManager {
                         <div id="api-test-results" style="margin-top: 10px;"></div>
                     </div>
 
-                    
-                </div>
-                
-                <div id="feature-settings" class="tab-content">
+                    <?php submit_button(); ?>
+                </form>
+            </div>
+            
+            <div id="feature-settings" class="tab-content">
+                <form method="post" action="options.php">
+                    <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-features'); ?>
-                </div>
-                
-                <div id="quality-settings" class="tab-content">
+                    <?php submit_button(); ?>
+                </form>
+            </div>
+            
+            <div id="quality-settings" class="tab-content">
+                <form method="post" action="options.php">
+                    <?php settings_fields($this->option_name); ?>
                     <?php do_settings_sections('news-crawler-settings-quality'); ?>
-                </div>
-                
-                <div id="update-info" class="tab-content">
-                    <?php do_settings_sections('news-crawler-settings-update'); ?>
-                </div>
-                
-                <div id="system-info" class="tab-content">
-                    <h2>システム情報</h2>
-                    <?php $this->display_system_info(); ?>
-                </div>
-                
-                <?php submit_button(); ?>
-            </form>
+                    <?php submit_button(); ?>
+                </form>
+            </div>
+            
+            <div id="update-info" class="tab-content">
+                <?php do_settings_sections('news-crawler-settings-update'); ?>
+            </div>
+            
+            <div id="system-info" class="tab-content">
+                <h2>システム情報</h2>
+                <?php $this->display_system_info(); ?>
+            </div>
             
             
         </div>
