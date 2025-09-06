@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.20-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.20)
+[![Version](https://img.shields.io/badge/version-2.3.22-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.22)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,18 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.22** (2025-09-06): Complete main page access permission fixes and enhanced debugging
+  - Completely fixed main page access permission issues
+  - Further enhanced permission checking functionality and improved debugging features
+  - Significantly improved admin interface stability and user experience
+  - Overall plugin stability and security improvements
+
+- **v2.3.21** (2025-09-06): Main page access permission fixes and enhanced debugging
+  - Fixed main page access permission issues
+  - Enhanced permission checking functionality and added debugging features
+  - Improved admin interface stability and user experience
+  - Overall plugin stability and security improvements
 
 - **v2.3.20** (2025-09-06): Main page access permission fixes and enhanced debugging
   - Fixed main page access permission issues
@@ -469,6 +481,20 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.22 - 2025-09-06
+
+- **Completely Fixed Main Page Access Permission Issues**: Fully resolved access permission problems on main pages
+- **Further Enhanced Permission Checking**: Further strengthened permission checking functionality and improved debugging features
+- **Significantly Improved Admin Interface**: Significantly enhanced admin interface stability and user experience
+- **Overall Security**: General plugin stability and security improvements
+
+### v2.3.21 - 2025-09-06
+
+- **Fixed Main Page Access Permission Issues**: Resolved access permission problems on main pages
+- **Enhanced Permission Checking**: Strengthened permission checking functionality and added debugging features
+- **Improved Admin Interface**: Enhanced admin interface stability and user experience
+- **Overall Security**: General plugin stability and security improvements
 
 ### v2.3.20 - 2025-09-06
 
