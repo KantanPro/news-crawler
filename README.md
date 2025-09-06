@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.24-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.24)
+[![Version](https://img.shields.io/badge/version-2.3.25-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.25)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,15 +168,14 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.3.25** (2025-09-06): License validation debug information and improved error responses
+  - Added detailed debug information (`debug_info`) to license validation error responses
+  - Unified and enriched API connection failure responses, including `api_url`, `site_url`, and `plugin_version`
+  - Improved stability and troubleshooting experience
+
 - **v2.3.24** (2025-09-06): Fix menu disappearing on reload and stability improvements
   - Fixed issue where the menu disappears after reload
   - General stability improvements
-
-- **v2.3.23** (2025-09-06): Complete main page access permission fixes and enhanced debugging
-  - Completely fixed main page access permission issues
-  - Further enhanced permission checking functionality and improved debugging features
-  - Significantly improved admin interface stability and user experience
-  - Overall plugin stability and security improvements
 
 - **v2.3.22** (2025-09-06): Main page access permission fixes and enhanced debugging
   - Fixed main page access permission issues
