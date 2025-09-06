@@ -475,31 +475,39 @@ class NewsCrawler_License_Manager {
         error_log( 'NewsCrawler License: Full license key: ' . $license_key );
         error_log( 'NewsCrawler License: Plugin version: ' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) );
         
-        // KLMプラグインの存在確認
-        error_log( 'NewsCrawler License: Checking for KLM plugin...' );
-        error_log( 'NewsCrawler License: KTP_License_Manager class exists: ' . ( class_exists( 'KTP_License_Manager' ) ? 'YES' : 'NO' ) );
+        // KLMプラグインの存在確認（フォールバック用途にのみ使用）
+        error_log( 'NewsCrawler License: Checking for KLM plugin (for fallback)...' );
+        $klm_available = class_exists( 'KTP_License_Manager' );
+        error_log( 'NewsCrawler License: KTP_License_Manager class exists: ' . ( $klm_available ? 'YES' : 'NO' ) );
         
-        // KLMプラグインが存在する場合、直接KLMのメソッドを呼び出す
-        if ( class_exists( 'KTP_License_Manager' ) ) {
-            error_log( 'NewsCrawler License: KLM plugin found, using direct method call' );
-            return $this->verify_license_with_klm_direct( $license_key );
-        }
-        
-        $response = wp_remote_post( $klm_api_url, array(
+        $args = array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => array(
-                'license_key' => $license_key,
-                'site_url'    => $site_url,
+            // data-urlencode 相当の確実なエンコード
+            'body' => http_build_query( array(
+                'license_key'    => $license_key,
+                'site_url'       => $site_url,
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
-            ),
+            ), '', '&', PHP_QUERY_RFC3986 ),
             'timeout' => 30,
-            'sslverify' => true  // 本番環境ではSSL証明書を検証
-        ) );
+            'sslverify' => true
+        );
+
+        error_log( 'NewsCrawler License: Outbound payload (urlencoded): ' . $args['body'] );
+
+        $response = wp_remote_post( $klm_api_url, $args );
 
         if ( is_wp_error( $response ) ) {
+            // ネットワークエラー時はKLMプラグインがあればフォールバック
+            if ( $klm_available ) {
+                error_log( 'NewsCrawler License: WP_Error during verification, trying KLM direct fallback' );
+                $direct = $this->verify_license_with_klm_direct( $license_key );
+                if ( isset( $direct['success'] ) && $direct['success'] ) {
+                    return $direct;
+                }
+            }
             $error_message = $response->get_error_message();
             error_log( 'NewsCrawler License: WP_Error during verification - ' . $error_message );
             
@@ -534,6 +542,14 @@ class NewsCrawler_License_Manager {
         
         // HTTPステータスコードのチェック
         if ( $response_code !== 200 ) {
+            // HTTPエラー時もKLMプラグインがあればフォールバック
+            if ( $klm_available ) {
+                error_log( 'NewsCrawler License: HTTP error response, trying KLM direct fallback' );
+                $direct = $this->verify_license_with_klm_direct( $license_key );
+                if ( isset( $direct['success'] ) && $direct['success'] ) {
+                    return $direct;
+                }
+            }
             error_log( 'NewsCrawler License: HTTP error response - ' . $response_code );
             return array(
                 'success' => false,
@@ -576,6 +592,14 @@ class NewsCrawler_License_Manager {
                 'message' => $data['message'] ?? __( 'ライセンスが正常に認証されました。', 'news-crawler' )
             );
         } else {
+            // APIから失敗が返ってきた場合も、KLMプラグインでの直接検証を試す（設定差異対策）
+            if ( $klm_available ) {
+                error_log( 'NewsCrawler License: API indicates failure, trying KLM direct fallback' );
+                $direct = $this->verify_license_with_klm_direct( $license_key );
+                if ( isset( $direct['success'] ) && $direct['success'] ) {
+                    return $direct;
+                }
+            }
             // エラーメッセージの詳細な処理
             $error_message = '';
             $error_code = '';
