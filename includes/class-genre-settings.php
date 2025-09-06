@@ -4632,7 +4632,7 @@ $('#cancel-edit').click(function() {
                         <li><?php echo esc_html__( 'ライセンスキーに関する問題がございましたら、サポートまでお問い合わせください。', 'news-crawler' ); ?></li>
                     </ul>
                     <p>
-                        <a href="https://www.kantanpro.com/" target="_blank" class="button button-primary">
+                        <a href="https://www.kantanpro.com/klm-news-crawler" target="_blank" class="button button-primary">
                             <?php echo esc_html__( 'ライセンスを購入', 'news-crawler' ); ?>
                         </a>
                         <a href="mailto:support@kantanpro.com" class="button button-secondary">
