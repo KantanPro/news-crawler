@@ -1236,7 +1236,7 @@ class NewsCrawler {
         }
         
         $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
-        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        $result .= "\n投稿ID: " . (is_wp_error($post_id) ? 'エラー' : ($post_id ?: 'なし'));
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
         
@@ -1319,7 +1319,7 @@ class NewsCrawler {
         }
         
         $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
-        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        $result .= "\n投稿ID: " . (is_wp_error($post_id) ? 'エラー' : ($post_id ?: 'なし'));
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
         
@@ -1517,7 +1517,7 @@ class NewsCrawler {
         }
 
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
-        $result .= "\n投稿ID: " . ($post_id ?? 'なし');
+        $result .= "\n投稿ID: " . (is_wp_error($post_id) ? 'エラー' : ($post_id ?: 'なし'));
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
 
