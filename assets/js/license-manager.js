@@ -115,8 +115,8 @@
                 return;
             }
             
-            // 直接的なAJAX処理を実行（WordPressのAJAX処理をバイパス）
-            this.performDirectToggle($button, $spinner);
+            // 正規のWordPress AJAX経路で実行（nonce付き・admin-ajax.php）
+            this.performToggleDevLicense($button, $spinner);
         },
 
         /**
