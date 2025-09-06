@@ -17,7 +17,8 @@ class NewsCrawlerSettingsManager {
     public function __construct() {
         error_log( 'NewsCrawler Settings: Constructor called' );
         
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // メニュー登録は無効化（class-genre-settings.phpで統合管理）
+        // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_test_api_connection', array($this, 'test_api_connection'));
@@ -89,6 +90,8 @@ class NewsCrawlerSettingsManager {
                 'nonce'   => $nonce,
                 'dev_license_key' => $dev_license_key,
                 'is_development' => $is_dev,
+                'debug_mode' => (defined('WP_DEBUG') && WP_DEBUG) || $is_dev,
+                'plugin_version' => defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : '2.1.5',
                 'strings' => array(
                     'verifying' => __( '認証中...', 'news-crawler' ),
                     'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),

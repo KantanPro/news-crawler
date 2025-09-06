@@ -394,6 +394,15 @@
                         // デバッグ情報がある場合は表示
                         if (response.data && response.data.debug_info) {
                             console.log('Debug info:', response.data.debug_info);
+                            // デバッグモードの場合は詳細情報を表示
+                            if (typeof news_crawler_license_ajax !== 'undefined' && news_crawler_license_ajax.debug_mode) {
+                                errorMessage += '\n\n【デバッグ情報】\n' + JSON.stringify(response.data.debug_info, null, 2);
+                            }
+                        }
+                        
+                        // エラーコードがある場合は追加
+                        if (response.data && response.data.error_code) {
+                            errorMessage += '\nエラーコード: ' + response.data.error_code;
                         }
                         
                         NewsCrawlerLicenseManager.showError(errorMessage);
@@ -622,8 +631,38 @@
         showError: function(message) {
             // エラーメッセージを表示する処理
             if (typeof message === 'string' && message.length > 0) {
-                alert(message);
+                // 改行が含まれている場合は詳細なモーダルで表示
+                if (message.includes('\n') || message.length > 100) {
+                    this.showDetailedError(message);
+                } else {
+                    alert(message);
+                }
             }
+        },
+
+        /**
+         * 詳細なエラーメッセージの表示
+         */
+        showDetailedError: function(message) {
+            // 既存のモーダルを削除
+            $('.news-crawler-error-modal').remove();
+            
+            var modalHtml = '<div class="news-crawler-error-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">' +
+                '<div style="background: white; border-radius: 5px; padding: 20px; max-width: 80%; max-height: 80%; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">' +
+                '<h3 style="margin-top: 0; color: #d63638; display: flex; align-items: center;">' +
+                '<span class="dashicons dashicons-warning" style="margin-right: 10px;"></span>' +
+                'ライセンス認証エラー' +
+                '</h3>' +
+                '<div style="margin: 15px 0; padding: 15px; background: #f6f7f7; border-radius: 3px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">' +
+                message +
+                '</div>' +
+                '<div style="text-align: right; margin-top: 15px;">' +
+                '<button type="button" class="button button-primary" onclick="jQuery(\'.news-crawler-error-modal\').remove();">OK</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            
+            $('body').append(modalHtml);
         },
 
         /**

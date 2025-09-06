@@ -13,7 +13,8 @@ if (!defined('ABSPATH')) {
 class News_Crawler_Eyecatch_Admin {
     
     public function __construct() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // メニュー登録は無効化（class-genre-settings.phpで統合管理）
+        // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('wp_ajax_generate_eyecatch', array($this, 'ajax_generate_eyecatch'));
     }

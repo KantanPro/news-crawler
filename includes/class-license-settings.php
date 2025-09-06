@@ -301,29 +301,46 @@ class NewsCrawler_License_Settings {
                                 <p style="margin: 5px 0; font-size: 13px; color: #646970;">
                                     <?php echo esc_html__( 'WordPressのデバッグログから、News Crawlerライセンス関連のエラーを表示します。', 'news-crawler' ); ?>
                                 </p>
-                                <div style="background: #f6f7f7; padding: 10px; border-radius: 3px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+                                <div style="background: #f6f7f7; padding: 10px; border-radius: 3px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;">
                                     <?php
                                     $log_file = WP_CONTENT_DIR . '/debug.log';
                                     if ( file_exists( $log_file ) ) {
                                         $log_content = file_get_contents( $log_file );
                                         $lines = explode( "\n", $log_content );
+                                        
+                                        // ライセンス関連のログをフィルタリング（より広範囲に）
                                         $license_lines = array_filter( $lines, function( $line ) {
-                                            return strpos( $line, 'NewsCrawler License:' ) !== false;
+                                            return strpos( $line, 'NewsCrawler License:' ) !== false || 
+                                                   strpos( $line, 'KTP License API:' ) !== false ||
+                                                   strpos( $line, 'License verification' ) !== false ||
+                                                   strpos( $line, 'ライセンス' ) !== false;
                                         } );
                                         
-                                        $recent_lines = array_slice( $license_lines, -10 ); // 最新の10行
+                                        $recent_lines = array_slice( $license_lines, -20 ); // 最新の20行
                                         
                                         if ( ! empty( $recent_lines ) ) {
                                             foreach ( $recent_lines as $line ) {
-                                                echo esc_html( $line ) . "\n";
+                                                // エラーレベルのログをハイライト
+                                                if ( strpos( $line, 'ERROR' ) !== false || strpos( $line, 'エラー' ) !== false ) {
+                                                    echo '<div style="color: #d63638; background: #fcf0f1; padding: 2px 4px; margin: 1px 0; border-left: 3px solid #d63638;">' . esc_html( $line ) . '</div>';
+                                                } elseif ( strpos( $line, 'WARNING' ) !== false || strpos( $line, '警告' ) !== false ) {
+                                                    echo '<div style="color: #dba617; background: #fcf9e8; padding: 2px 4px; margin: 1px 0; border-left: 3px solid #dba617;">' . esc_html( $line ) . '</div>';
+                                                } else {
+                                                    echo '<div style="padding: 2px 4px; margin: 1px 0;">' . esc_html( $line ) . '</div>';
+                                                }
                                             }
                                         } else {
-                                            echo esc_html__( 'ライセンス関連のログが見つかりません。', 'news-crawler' );
+                                            echo '<div style="color: #646970; font-style: italic;">' . esc_html__( 'ライセンス関連のログが見つかりません。', 'news-crawler' ) . '</div>';
                                         }
                                     } else {
-                                        echo esc_html__( 'デバッグログファイルが見つかりません。', 'news-crawler' );
+                                        echo '<div style="color: #d63638;">' . esc_html__( 'デバッグログファイルが見つかりません。WP_DEBUGを有効にしてください。', 'news-crawler' ) . '</div>';
                                     }
                                     ?>
+                                </div>
+                                <div style="margin-top: 10px; text-align: right;">
+                                    <button type="button" class="button button-secondary" onclick="location.reload();" style="font-size: 11px;">
+                                        <?php echo esc_html__( 'ログを更新', 'news-crawler' ); ?>
+                                    </button>
                                 </div>
                             </div>
                         </div>

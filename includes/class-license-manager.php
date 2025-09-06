@@ -539,9 +539,24 @@ class NewsCrawler_License_Manager {
                 $detailed_message .= ' (エラーコード: ' . $error_code . ')';
             }
             
-            // レスポンスデータの詳細を追加
-            if ( isset( $data ) && is_array( $data ) ) {
-                $detailed_message .= ' [サーバーレスポンス: ' . json_encode( $data ) . ']';
+            // レスポンスデータの詳細を追加（デバッグモードまたは開発環境の場合）
+            if ( ( defined( 'WP_DEBUG' ) && WP_DEBUG ) || $this->is_development_environment() ) {
+                if ( isset( $data ) && is_array( $data ) ) {
+                    $detailed_message .= "\n\n【詳細なサーバーレスポンス】\n" . json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+                }
+                
+                // API接続情報も追加
+                $detailed_message .= "\n\n【接続情報】\n";
+                $detailed_message .= "API URL: " . $klm_api_url . "\n";
+                $detailed_message .= "サイトURL: " . $site_url . "\n";
+                $detailed_message .= "プラグインバージョン: " . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . "\n";
+                $detailed_message .= "HTTPステータス: " . $response_code . "\n";
+                $detailed_message .= "レスポンスボディ: " . $body;
+            } else {
+                // 本番環境では簡潔なメッセージのみ
+                if ( isset( $data ) && is_array( $data ) ) {
+                    $detailed_message .= ' [サーバーレスポンス: ' . json_encode( $data ) . ']';
+                }
             }
             
             return array(
