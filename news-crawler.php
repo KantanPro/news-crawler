@@ -47,6 +47,15 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 
 
+// アップデータを早期初期化（plugins_loaded の最初期）
+add_action('plugins_loaded', function() {
+    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
+        new NewsCrawlerUpdater();
+        define('NEWS_CRAWLER_UPDATER_INIT', true);
+    }
+}, 1);
+
+
 // プラグイン初期化
 function news_crawler_init() {
     // 国際化の初期化（翻訳読み込みを最初に実行）
@@ -304,8 +313,9 @@ function news_crawler_init_components() {
     }
     
     // 更新チェッククラスを初期化（WordPress標準のUpdate URIと併用）
-    if (class_exists('NewsCrawlerUpdater')) {
+    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         new NewsCrawlerUpdater();
+        define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
     
     // ライセンス管理クラスを初期化

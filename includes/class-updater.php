@@ -72,6 +72,10 @@ class NewsCrawlerUpdater {
      * Check for updates
      */
     public function check_for_updates($transient) {
+        // $transient が null の場合は防御的に初期化
+        if ($transient === null) {
+            $transient = new stdClass();
+        }
         // プラグインの更新チェックが無効化されている場合はスキップ
         if (isset($transient->no_update) && is_array($transient->no_update) && isset($transient->no_update[$this->plugin_basename])) {
             return $transient;
@@ -105,7 +109,9 @@ class NewsCrawlerUpdater {
             }
             
             $transient->response[$this->plugin_basename] = (object) array(
+                'id' => $this->plugin_slug,
                 'slug' => $this->plugin_slug,
+                'plugin' => $this->plugin_basename,
                 'new_version' => $latest_version['version'],
                 'url' => $this->github_repo_url,
                 'package' => $latest_version['download_url'],
