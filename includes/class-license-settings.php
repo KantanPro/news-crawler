@@ -164,7 +164,7 @@ class NewsCrawler_License_Settings {
                                    style="width: 400px;"
                                    placeholder="KTPM-XXXXXX-XXXXXX-XXXX"
                                    autocomplete="off"
-                                   pattern="[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}"
+                                   pattern="[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}"
                                    title="[プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]形式で入力してください">
 
                             <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
@@ -192,9 +192,9 @@ class NewsCrawler_License_Settings {
                     <p class="description" style="padding-left: 8px; margin-top: 5px;">
                         <?php echo esc_html__( 'KantanPro License Managerから取得したライセンスキーを入力してください。', 'news-crawler' ); ?>
                         <br>
-                        <strong><?php echo esc_html__( '対応ライセンス形式', 'news-crawler' ); ?>:</strong> [プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]
+                        <strong><?php echo esc_html__( '対応ライセンス形式', 'news-crawler' ); ?>:</strong> [プレフィックス]-[6桁数字]-[7-10文字の英数字記号（スペース含む）]-[4-6文字の英数字]
                         <br>
-                        <strong><?php echo esc_html__( '例', 'news-crawler' ); ?>:</strong> KTPM-227598-MF7RORXLQ9-30381D, NCRL-080629-BRX<9D1+-C69B
+                        <strong><?php echo esc_html__( '例', 'news-crawler' ); ?>:</strong> KTPM-227598-MF7RORXLQ9-30381D, NCRL-080629-BRX<9D1+-C69B, NCRL-094228-ZGZ>A E2-FAD0
                     </p>
 
                     <!-- デバッグ情報（WP_DEBUGが有効な場合のみ表示） -->

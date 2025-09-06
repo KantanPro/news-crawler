@@ -294,8 +294,8 @@ class NewsCrawler_License_Manager {
         $license_key = trim( $license_key );
         
         // ライセンスキーの形式チェック
-        // 正規表現: /^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}$/
-        $pattern = '/^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-]{7,10}-[A-Z0-9]{4,6}$/';
+        // 正規表現: /^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}$/
+        $pattern = '/^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}$/';
         
         if ( empty( $license_key ) ) {
             return array(
@@ -306,6 +306,12 @@ class NewsCrawler_License_Manager {
         }
         
         if ( ! preg_match( $pattern, $license_key ) ) {
+            // デバッグログの追加
+            error_log( 'NewsCrawler License: ライセンスキー形式チェック失敗: ' . $license_key );
+            error_log( 'NewsCrawler License: 正規表現パターン: /^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}$/' );
+            error_log( 'NewsCrawler License: ライセンスキー長: ' . strlen( $license_key ) );
+            error_log( 'NewsCrawler License: ライセンスキー文字列詳細: ' . json_encode( $license_key ) );
+            
             return array(
                 'valid' => false,
                 'error_code' => 'invalid_format',
@@ -465,6 +471,9 @@ class NewsCrawler_License_Manager {
                 'error_code' => 'json_parse_error'
             );
         }
+
+        // KLM API レスポンスの詳細ログ
+        error_log( 'NewsCrawler License: KLM API レスポンス: ' . print_r( $data, true ) );
 
         if ( isset( $data['success'] ) && $data['success'] ) {
             error_log( 'NewsCrawler License: Verification successful - ' . json_encode( $data ) );
