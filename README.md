@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.15-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.15)
+[![Version](https://img.shields.io/badge/version-2.3.16-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.16)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,12 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.16** (2025-09-06): License testing functionality and management improvements
+  - Added license testing functionality for enhanced license key verification
+  - Improved license status confirmation features in admin interface
+  - Enhanced debugging capabilities and error handling
+  - Improved license management user experience
 
 - **v2.3.15** (2025-09-06): KantanPro License Manager (KLM) integration and API improvements
   - Complete implementation of KantanPro License Manager (KLM) integration
@@ -439,6 +445,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **v1.9.16**: Automatic cron setup and improved reliability
 
 ## Changelog
+
+### v2.3.16 - 2025-09-06
+
+- **Added License Testing Functionality**: Enhanced license key verification with testing capabilities
+- **Improved License Management**: Better license status confirmation features in admin interface
+- **Enhanced Debugging**: Improved debugging capabilities and error handling
+- **Better User Experience**: Enhanced license management user experience
 
 ### v2.3.15 - 2025-09-06
 
