@@ -69,8 +69,13 @@ class NewsCrawlerGenreSettings {
     }
     
     public function add_admin_menu() {
+        // デバッグ情報を追加
+        error_log('NewsCrawler: Adding admin menu - User ID = ' . get_current_user_id());
+        error_log('NewsCrawler: User can manage_options = ' . (current_user_can('manage_options') ? 'true' : 'false'));
+        
         // メニューの重複登録を防ぐ
         if (get_option('news_crawler_menu_registered', false)) {
+            error_log('NewsCrawler: Menu already registered, skipping');
             return;
         }
         
@@ -87,6 +92,7 @@ class NewsCrawlerGenreSettings {
         
         // メニュー登録完了フラグを設定
         update_option('news_crawler_menu_registered', true);
+        error_log('NewsCrawler: Menu registration completed successfully');
         
         // 投稿設定サブメニュー
         add_submenu_page(
@@ -772,6 +778,17 @@ class NewsCrawlerGenreSettings {
     }
     
     public function main_admin_page() {
+        // デバッグ情報を追加
+        error_log('NewsCrawler Main Page: User ID = ' . get_current_user_id());
+        error_log('NewsCrawler Main Page: User can manage_options = ' . (current_user_can('manage_options') ? 'true' : 'false'));
+        error_log('NewsCrawler Main Page: User roles = ' . print_r(wp_get_current_user()->roles, true));
+        
+        // 権限チェック
+        if ( ! current_user_can( 'manage_options' ) ) {
+            error_log('NewsCrawler Main Page: Access denied - insufficient permissions');
+            wp_die( __( 'この設定ページにアクセスする権限がありません。', 'news-crawler' ) );
+        }
+        
         // ライセンス状態をチェック
         if (class_exists('NewsCrawler_License_Manager')) {
             $license_manager = NewsCrawler_License_Manager::get_instance();
