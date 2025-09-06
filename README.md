@@ -168,7 +168,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.3.40** (2025-09-06): Cache clear functionality and AJAX improvements
+- **v2.3.40** (2025-09-06): Settings management UI improvements and cache clear functionality
+  - Added data attributes to settings management class tabs for improved UI/UX
   - Added cache clear functionality with AJAX processing implementation
   - Implemented administrator permissions and security checks for cache clearing
   - Added cache clear button to settings management screen
