@@ -370,7 +370,8 @@
                 data: {
                     action: 'news_crawler_verify_license',
                     license_key: licenseKey,
-                    nonce: news_crawler_license_ajax.nonce
+                    nonce: news_crawler_license_ajax.nonce,
+                    _ajax_nonce: news_crawler_license_ajax.nonce
                 },
                 dataType: 'json',
                 timeout: 60000, // 60秒のタイムアウト
