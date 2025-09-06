@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.38-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.38)
+[![Version](https://img.shields.io/badge/version-2.3.39-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.39)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,12 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.39** (2025-09-06): Settings management improvements and API testing
+  - Organized settings management class API, functionality, quality, and update information section slugs
+  - Clarified configuration sections corresponding to each tab
+  - Added API connection testing functionality
+  - Enhanced settings management user experience and debugging capabilities
 
 - **v2.3.38** (2025-09-06): Enhanced license verification with fallback processing
   - Improved license verification process with KLM plugin existence checking
