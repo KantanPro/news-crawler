@@ -168,6 +168,17 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
+- **v2.3.15** (2025-09-06): KantanPro License Manager (KLM) integration and API improvements
+  - Complete implementation of KantanPro License Manager (KLM) integration
+  - Added license key preprocessing with trim() for whitespace removal
+  - Implemented strict license key format validation using regular expressions
+  - Unified Content-Type to application/x-www-form-urlencoded
+  - Enhanced error handling for all specified error cases
+  - Detailed license format descriptions and examples in admin interface
+  - Added debug endpoint information
+  - Significantly improved license verification stability and user experience
+  - Modified API calls according to KLM requirements for enhanced integration stability
+
 - **v2.3.14** (2025-09-06): License key validation improvements and API verification enhancements
   - Simplified license key format checking and added API verification for NCRL- prefixed keys
   - Improved development environment validation logic with fallback processing for API connection failures
@@ -438,6 +449,18 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 - **Enhanced Admin Interface**: Detailed license format descriptions and examples
 - **Added Debug Endpoint Information**: Included debug endpoint details for troubleshooting
 - **Significantly Improved License Verification**: Enhanced stability and user experience
+
+### v2.3.15 - 2025-09-06
+
+- Complete implementation of KantanPro License Manager (KLM) integration
+- Added license key preprocessing with trim() for whitespace removal
+- Implemented strict license key format validation using regular expressions
+- Unified Content-Type to application/x-www-form-urlencoded
+- Enhanced error handling for all specified error cases
+- Detailed license format descriptions and examples in admin interface
+- Added debug endpoint information
+- Significantly improved license verification stability and user experience
+- Modified API calls according to KLM requirements for enhanced integration stability
 
 ### v2.3.14 - 2025-09-06
 
