@@ -168,11 +168,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.3.43** (2025-09-06): Settings management improvements and version information enhancements
-  - Improved post settings page titles and added version information to license and OGP settings pages
-  - Added automatic migration functionality from old option names to new option names
-  - Implemented flexible permission resolution for settings saving
-  - Enhanced admin interface display and user experience
+- **v2.3.43** (2025-09-06): WordPress standard update notifications and stability improvements
+  - Fully integrated with WordPress standard update notifications; initialized updater early at `plugins_loaded` (priority 1)
+  - Defensive initialization during update checks (safely initialize when `$transient === null`)
+  - Added `id` and `plugin` keys to update response for more reliable matching
+  - Improved post creation result message error handling for post ID (shows "エラー" when WP_Error)
+  - Minor settings management improvements (display and permission handling stability)
 
 - **v2.3.42** (2025-09-06): Admin script loading and update system improvements
   - Improved admin script loading conditions to load scripts on News Crawler related pages
