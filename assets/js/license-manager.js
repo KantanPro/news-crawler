@@ -372,11 +372,21 @@
                     license_key: licenseKey,
                     nonce: news_crawler_license_ajax.nonce
                 },
+                dataType: 'json',
                 timeout: 60000, // 60秒のタイムアウト
                 success: function(response) {
                     console.log('License verification response:', response);
                     
-                    if (response.success) {
+                    // 文字列で返った場合のフォールバック解析
+                    try {
+                        if (typeof response === 'string') {
+                            response = JSON.parse(response);
+                        }
+                    } catch (e) {
+                        console.error('Response JSON parse fallback failed:', e);
+                    }
+
+                    if (response && response.success) {
                         NewsCrawlerLicenseManager.showSuccess('ライセンスが正常に認証されました。');
                         // ページをリロードしてステータスを更新
                         setTimeout(function() {
@@ -385,29 +395,30 @@
                     } else {
                         var errorMessage = 'ライセンスの認証に失敗しました。';
                         
-                        if (response.data && response.data.message) {
+                        var data = response ? (response.data || response) : null;
+                        if (data && data.message) {
+                            errorMessage = data.message;
+                        } else if (response && response.message) {
                             errorMessage = response.data.message;
-                        } else if (response.message) {
-                            errorMessage = response.message;
                         }
                         
                         // レスポンス全体をコンソールに出力
                         console.error('License verification failed - Full response:', response);
                         
                         // デバッグ情報がある場合は表示
-                        if (response.data && response.data.debug_info) {
-                            console.log('Debug info:', response.data.debug_info);
-                            errorMessage += '\n\n【デバッグ情報】\n' + JSON.stringify(response.data.debug_info, null, 2);
+                        if (data && data.debug_info) {
+                            console.log('Debug info:', data.debug_info);
+                            errorMessage += '\n\n【デバッグ情報】\n' + JSON.stringify(data.debug_info, null, 2);
                         }
                         
                         // エラーコードがある場合は追加
-                        if (response.data && response.data.error_code) {
-                            errorMessage += '\nエラーコード: ' + response.data.error_code;
+                        if (data && data.error_code) {
+                            errorMessage += '\nエラーコード: ' + data.error_code;
                         }
                         
                         // レスポンスデータ全体を追加（デバッグ用）
-                        if (response.data) {
-                            errorMessage += '\n\n【レスポンスデータ】\n' + JSON.stringify(response.data, null, 2);
+                        if (data) {
+                            errorMessage += '\n\n【レスポンスデータ】\n' + JSON.stringify(data, null, 2);
                         }
                         
                         // 常に詳細なモーダルで表示
