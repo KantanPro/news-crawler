@@ -225,7 +225,7 @@ class NewsCrawlerOGPSettings {
         
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html(defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''); ?> - OGP設定</h1>
+            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - OGP設定</h1>
             
             <form method="post" action="options.php">
                 <?php
@@ -259,5 +259,17 @@ class NewsCrawlerOGPSettings {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * プラグインのバージョンを動的に取得
+     */
+    private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : (defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : '');
     }
 }

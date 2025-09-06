@@ -116,7 +116,7 @@ class NewsCrawlerGenreSettings {
         }
         
         add_menu_page(
-            'News Crawler ' . NEWS_CRAWLER_VERSION,
+            'News Crawler ' . $this->get_plugin_version(),
             'News Crawler',
             $menu_capability,
             'news-crawler-main',
@@ -4666,8 +4666,12 @@ $('#cancel-edit').click(function() {
      * プラグインのバージョンを動的に取得
      */
     private function get_plugin_version() {
-        // 定数から直接取得（より確実）
-        return NEWS_CRAWLER_VERSION;
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
     
     /**

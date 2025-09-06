@@ -392,7 +392,7 @@ class NewsCrawlerSettingsManager {
         $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html(NEWS_CRAWLER_VERSION); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
+            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -1138,7 +1138,7 @@ class NewsCrawlerSettingsManager {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示
@@ -1342,8 +1342,12 @@ class NewsCrawlerSettingsManager {
      * プラグインのバージョンを動的に取得
      */
     private function get_plugin_version() {
-        // 定数から直接取得（より確実）
-        return NEWS_CRAWLER_VERSION;
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
+        $plugin_data = get_plugin_data($plugin_file, false, false);
+        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
     
     /**
