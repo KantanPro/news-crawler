@@ -2888,8 +2888,13 @@ class NewsCrawler {
                 // フォールバックが十分なら簡易要約を返却
                 return wp_trim_words($fallback_clean, 70, '...');
             }
-            error_log('NewsCrawler: 記事要約生成スキップ - 元コンテンツが短すぎます: ' . ($article['title'] ?? ''));
-            return '';
+            // 最低限のフォールバック（タイトルや短文）で要約を生成して投稿を継続
+            $title_fallback = isset($article['title']) ? trim($article['title']) : '';
+            $minimal = !empty($fallback_clean) ? $fallback_clean : $title_fallback;
+            if (empty($minimal)) {
+                $minimal = '詳細は元記事をご覧ください。';
+            }
+            return wp_trim_words($minimal, 30, '...');
         }
 
         // 要約生成前にコンテンツをさらにクリーンアップ
@@ -2897,8 +2902,10 @@ class NewsCrawler {
 
         // クリーンアップ後のコンテンツが短すぎる場合はスキップ
         if (mb_strlen($clean_content) < 20) {
-            error_log('NewsCrawler: 記事要約生成スキップ - クリーンアップ後のコンテンツが短すぎます: ' . $article['title']);
-            return '';
+            // ここでも最低限のフォールバックを返す（タイトルや短文）
+            $title_fallback = isset($article['title']) ? trim($article['title']) : '';
+            $minimal = !empty($title_fallback) ? $title_fallback : (!empty($article['description']) ? $article['description'] : '詳細は元記事をご覧ください。');
+            return wp_trim_words($minimal, 30, '...');
         }
 
         try {
@@ -2943,8 +2950,12 @@ class NewsCrawler {
 
                         // 要約が短すぎる場合はスキップ
                         if (mb_strlen($summary) < 20) {
-                            error_log('NewsCrawler: 記事要約生成スキップ - 要約が短すぎます: ' . $article['title']);
-                            return '';
+                            // APIが返した要約が短すぎる場合もフォールバック
+                            $fb = !empty($clean_content) ? $clean_content : (isset($article['title']) ? $article['title'] : '');
+                            if (empty($fb)) {
+                                $fb = '詳細は元記事をご覧ください。';
+                            }
+                            return wp_trim_words($fb, 50, '...');
                         }
 
                         // 改行をスペースに変換して整形
