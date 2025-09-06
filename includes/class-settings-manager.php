@@ -361,11 +361,11 @@ class NewsCrawlerSettingsManager {
             <?php endif; ?>
             
             <div class="nav-tab-wrapper">
-                <a href="#api-settings" class="nav-tab nav-tab-active" data-tab="api-settings">API設定</a>
-                <a href="#feature-settings" class="nav-tab" data-tab="feature-settings">機能設定</a>
-                <a href="#quality-settings" class="nav-tab" data-tab="quality-settings">品質管理</a>
-                <a href="#update-info" class="nav-tab" data-tab="update-info">更新情報</a>
-                <a href="#system-info" class="nav-tab" data-tab="system-info">システム情報</a>
+                <a href="#api-settings" class="nav-tab nav-tab-active">API設定</a>
+                <a href="#feature-settings" class="nav-tab">機能設定</a>
+                <a href="#quality-settings" class="nav-tab">品質管理</a>
+                <a href="#update-info" class="nav-tab">更新情報</a>
+                <a href="#system-info" class="nav-tab">システム情報</a>
             </div>
             
             <form method="post" action="options.php">
@@ -418,6 +418,11 @@ class NewsCrawlerSettingsManager {
         .tab-content.active {
             display: block;
         }
+        .submit {
+            margin-top: 20px;
+            padding: 20px 0;
+            border-top: 1px solid #ddd;
+        }
         .card {
             background: #fff;
             border: 1px solid #ccd0d4;
@@ -455,7 +460,7 @@ class NewsCrawlerSettingsManager {
             // タブ切り替え
             $('.nav-tab').click(function(e) {
                 e.preventDefault();
-                var target = $(this).data('tab');
+                var target = $(this).attr('href').substring(1);
                 
                 $('.nav-tab').removeClass('nav-tab-active');
                 $(this).addClass('nav-tab-active');
@@ -933,13 +938,22 @@ class NewsCrawlerSettingsManager {
         $current_version = NEWS_CRAWLER_VERSION;
         $latest_version = get_transient('news_crawler_latest_version');
         
+        // GitHub APIから取得できない場合は、現在のバージョンを最新として表示
         if (!$latest_version) {
-            echo '<div class="card">';
-            echo '<h3>更新チェック</h3>';
-            echo '<p>最新バージョンの確認中...</p>';
-            echo '<button type="button" id="check-updates" class="button">今すぐチェック</button>';
-            echo '</div>';
-            return;
+            $latest_version = array(
+                'version' => $current_version,
+                'published_at' => date('Y-m-d H:i:s'),
+                'description' => '現在のバージョン情報'
+            );
+        }
+        
+        // バージョンが現在のバージョンより古い場合は、現在のバージョンを使用
+        if (version_compare($latest_version['version'], $current_version, '<')) {
+            $latest_version = array(
+                'version' => $current_version,
+                'published_at' => date('Y-m-d H:i:s'),
+                'description' => '現在のバージョン情報'
+            );
         }
         
         $needs_update = version_compare($current_version, $latest_version['version'], '<');
@@ -971,6 +985,14 @@ class NewsCrawlerSettingsManager {
             echo '</div>';
             echo '</div>';
         }
+        
+        // キャッシュクリアボタンを追加
+        echo '<div class="card">';
+        echo '<h3>キャッシュ管理</h3>';
+        echo '<p>バージョン情報のキャッシュをクリアできます。</p>';
+        echo '<button type="button" id="clear-cache" class="button">キャッシュクリア</button>';
+        echo '<input type="hidden" id="news_crawler_nonce" value="' . wp_create_nonce('news_crawler_nonce') . '">';
+        echo '</div>';
         
     }
     
@@ -1218,5 +1240,26 @@ class NewsCrawlerSettingsManager {
     private function get_plugin_version() {
         // 定数から直接取得（より確実）
         return NEWS_CRAWLER_VERSION;
+    }
+    
+    /**
+     * キャッシュクリアのAJAX処理
+     */
+    public function clear_cache_ajax() {
+        // セキュリティチェック
+        if (!wp_verify_nonce($_POST['nonce'], 'news_crawler_nonce')) {
+            wp_die('セキュリティチェックに失敗しました。');
+        }
+        
+        // 管理者権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません。');
+        }
+        
+        // キャッシュをクリア
+        delete_transient('news_crawler_latest_version');
+        delete_transient('news_crawler_latest_version_backup');
+        
+        wp_send_json_success('キャッシュをクリアしました。');
     }
 }

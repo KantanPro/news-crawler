@@ -89,4 +89,29 @@ jQuery(document).ready(function($) {
             targetTab.click();
         }
     }
+    
+    // キャッシュクリア機能
+    $('#clear-cache').on('click', function() {
+        if (confirm('キャッシュをクリアしますか？')) {
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'news_crawler_clear_cache',
+                    nonce: $('#news_crawler_nonce').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        showSuccess('キャッシュをクリアしました。');
+                        location.reload();
+                    } else {
+                        showError('キャッシュのクリアに失敗しました。');
+                    }
+                },
+                error: function() {
+                    showError('キャッシュのクリアに失敗しました。');
+                }
+            });
+        }
+    });
 });

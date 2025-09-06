@@ -63,6 +63,9 @@ add_action('wp_ajax_nopriv_news_crawler_toggle_dev_license', 'news_crawler_ajax_
 add_action('wp_ajax_news_crawler_test_ajax', 'news_crawler_test_ajax');
 add_action('wp_ajax_nopriv_news_crawler_test_ajax', 'news_crawler_test_ajax');
 
+// キャッシュクリアのAJAX処理
+add_action('wp_ajax_news_crawler_clear_cache', 'news_crawler_clear_cache_ajax');
+
 // 直接的なAJAX処理（WordPressのAJAX処理をバイパス）
 add_action('wp_loaded', 'news_crawler_handle_direct_ajax');
 
@@ -149,6 +152,24 @@ function news_crawler_test_ajax() {
     }
     
     wp_send_json_success(array('message' => 'Test AJAX handler is working'));
+}
+
+function news_crawler_clear_cache_ajax() {
+    // セキュリティチェック
+    if (!wp_verify_nonce($_POST['nonce'], 'news_crawler_nonce')) {
+        wp_die('セキュリティチェックに失敗しました。');
+    }
+    
+    // 管理者権限チェック
+    if (!current_user_can('manage_options')) {
+        wp_die('権限がありません。');
+    }
+    
+    // キャッシュをクリア
+    delete_transient('news_crawler_latest_version');
+    delete_transient('news_crawler_latest_version_backup');
+    
+    wp_send_json_success('キャッシュをクリアしました。');
 }
 
 function news_crawler_ajax_toggle_dev_license() {
