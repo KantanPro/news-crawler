@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.35-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.35)
+[![Version](https://img.shields.io/badge/version-2.3.36-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.36)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,11 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.36** (2025-09-06): License key regex improvements and enhanced validation
+  - Updated license key regex to allow pipe (|) characters in the middle block
+  - Improved development environment license key validation with fallback to KLM API
+  - Enhanced license key verification flexibility and reliability
 
 - **v2.3.35** (2025-09-06): License key normalization improvements
   - Added license key normalization processing to convert full-width characters to half-width
