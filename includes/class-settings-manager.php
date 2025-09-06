@@ -938,7 +938,8 @@ class NewsCrawlerSettingsManager {
                     wp_send_json_error('YouTube APIキーが設定されていません。');
                 }
                 
-                $url = "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true&key=" . urlencode($api_key);
+                // 公開データの取得でAPIキーのみの接続検証（mine=true はOAuth必須のため不適切）
+                $url = "https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=" . urlencode($api_key);
                 $response = wp_remote_get($url);
                 
                 if (is_wp_error($response)) {
@@ -950,8 +951,10 @@ class NewsCrawlerSettingsManager {
                 
                 if (isset($data['error'])) {
                     wp_send_json_error('YouTube API エラー: ' . $data['error']['message']);
-                } else {
+                } elseif (isset($data['items']) && is_array($data['items'])) {
                     wp_send_json_success('YouTube API接続成功！');
+                } else {
+                    wp_send_json_error('YouTube API エラー: 予期しない応答');
                 }
                 break;
                 
@@ -961,10 +964,9 @@ class NewsCrawlerSettingsManager {
                     wp_send_json_error('OpenAI APIキーが設定されていません。');
                 }
                 
-                $response = wp_remote_post('https://api.openai.com/v1/models', array(
+                $response = wp_remote_get('https://api.openai.com/v1/models', array(
                     'headers' => array(
-                        'Authorization' => 'Bearer ' . $api_key,
-                        'Content-Type' => 'application/json'
+                        'Authorization' => 'Bearer ' . $api_key
                     ),
                     'timeout' => 30
                 ));
