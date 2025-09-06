@@ -359,7 +359,7 @@ class NewsCrawlerUpdater {
     /**
      * Before update actions
      */
-    public function before_update($response, $hook_extra, $result) {
+    public function before_update($response, $hook_extra, $result = null) {
         if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
             // 更新前の処理
             $this->cleanup_old_files();
