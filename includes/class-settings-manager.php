@@ -45,7 +45,8 @@ class NewsCrawlerSettingsManager {
      * 管理画面スクリプトを読み込み
      */
     public function enqueue_admin_scripts($hook) {
-        if ($hook === 'toplevel_page_news-crawler-settings') {
+        // News Crawler設定ページでは管理用JSを必ず読み込む
+        if ($hook === 'toplevel_page_news-crawler-settings' || strpos($hook, 'news-crawler') !== false) {
             wp_enqueue_script(
                 'news-crawler-settings-admin',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/settings-admin.js',
@@ -60,7 +61,7 @@ class NewsCrawlerSettingsManager {
             ));
         }
         
-        // News Crawler関連のページでスクリプトを読み込み
+        // News Crawler関連のページでライセンス管理スクリプトを読み込み
         if (strpos($hook, 'news-crawler') !== false) {
             wp_enqueue_script(
                 'news-crawler-license-manager',
@@ -940,24 +941,31 @@ class NewsCrawlerSettingsManager {
      */
     public function display_update_info() {
         $current_version = NEWS_CRAWLER_VERSION;
-        $latest_version = get_transient('news_crawler_latest_version');
-        
-        // GitHub APIから取得できない場合は、現在のバージョンを最新として表示
-        if (!$latest_version) {
-            $latest_version = array(
-                'version' => $current_version,
-                'published_at' => date('Y-m-d H:i:s'),
-                'description' => '現在のバージョン情報'
-            );
+        // Updaterから更新状況を取得
+        $latest_version = false;
+        if (class_exists('NewsCrawlerUpdater')) {
+            $updater = new NewsCrawlerUpdater();
+            $status = $updater->get_update_status();
+            if ($status && isset($status['status']) && $status['status'] === 'success') {
+                $latest_version = array(
+                    'version' => $status['latest_version'],
+                    'published_at' => date('Y-m-d H:i:s'),
+                    'description' => ''
+                );
+            }
         }
-        
-        // バージョンが現在のバージョンより古い場合は、現在のバージョンを使用
-        if (version_compare($latest_version['version'], $current_version, '<')) {
-            $latest_version = array(
-                'version' => $current_version,
-                'published_at' => date('Y-m-d H:i:s'),
-                'description' => '現在のバージョン情報'
-            );
+        // フォールバック
+        if (!$latest_version) {
+            $cached = get_transient('news_crawler_latest_version');
+            if ($cached) {
+                $latest_version = $cached;
+            } else {
+                $latest_version = array(
+                    'version' => $current_version,
+                    'published_at' => date('Y-m-d H:i:s'),
+                    'description' => ''
+                );
+            }
         }
         
         $needs_update = version_compare($current_version, $latest_version['version'], '<');
