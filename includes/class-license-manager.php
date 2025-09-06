@@ -426,25 +426,27 @@ class NewsCrawler_License_Manager {
             $error_message = $response->get_error_message();
             error_log( 'NewsCrawler License: WP_Error during verification - ' . $error_message );
             
+            $base = array(
+                'success' => false,
+                'error_code' => 'connection_error',
+                'debug_info' => array(
+                    'api_url' => $klm_api_url,
+                    'site_url' => $site_url,
+                    'wp_error' => $error_message,
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                )
+            );
+            
             // ネットワーク接続エラーの詳細な分類
             if ( strpos( $error_message, 'timeout' ) !== false ) {
-                return array(
-                    'success' => false,
-                    'message' => __( 'ライセンスサーバーへの接続がタイムアウトしました。ネットワーク接続を確認してください。', 'news-crawler' ),
-                    'error_code' => 'connection_error'
-                );
+                $base['message'] = __( 'ライセンスサーバーへの接続がタイムアウトしました。ネットワーク接続を確認してください。', 'news-crawler' );
+                return $base;
             } elseif ( strpos( $error_message, 'connection' ) !== false || strpos( $error_message, 'resolve' ) !== false ) {
-                return array(
-                    'success' => false,
-                    'message' => __( 'ライセンスサーバーに接続できません。ネットワーク接続を確認してください。', 'news-crawler' ),
-                    'error_code' => 'connection_error'
-                );
+                $base['message'] = __( 'ライセンスサーバーに接続できません。ネットワーク接続を確認してください。', 'news-crawler' );
+                return $base;
             } else {
-                return array(
-                    'success' => false,
-                    'message' => __( 'ライセンスサーバーとの通信に失敗しました。', 'news-crawler' ) . ' ' . $error_message,
-                    'error_code' => 'connection_error'
-                );
+                $base['message'] = __( 'ライセンスサーバーとの通信に失敗しました。', 'news-crawler' ) . ' ' . $error_message;
+                return $base;
             }
         }
 
@@ -459,7 +461,14 @@ class NewsCrawler_License_Manager {
             return array(
                 'success' => false,
                 'message' => __( 'ライセンスサーバーからエラーレスポンスが返されました。', 'news-crawler' ) . ' (HTTP ' . $response_code . ')',
-                'error_code' => 'server_error'
+                'error_code' => 'server_error',
+                'debug_info' => array(
+                    'response_code' => $response_code,
+                    'response_body' => $body,
+                    'api_url' => $klm_api_url,
+                    'site_url' => $site_url,
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                )
             );
         }
         
@@ -470,7 +479,12 @@ class NewsCrawler_License_Manager {
             return array(
                 'success' => false,
                 'message' => __( 'ライセンスサーバーからの応答の解析に失敗しました。', 'news-crawler' ),
-                'error_code' => 'json_parse_error'
+                'error_code' => 'json_parse_error',
+                'debug_info' => array(
+                    'response_body' => $body,
+                    'api_url' => $klm_api_url,
+                    'site_url' => $site_url
+                )
             );
         }
 
