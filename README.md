@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.43-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.43)
+[![Version](https://img.shields.io/badge/version-2.3.44-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.44)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,12 +168,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.3.43** (2025-09-06): WordPress standard update notifications and stability improvements
-  - Fully integrated with WordPress standard update notifications; initialized updater early at `plugins_loaded` (priority 1)
-  - Defensive initialization during update checks (safely initialize when `$transient === null`)
-  - Added `id` and `plugin` keys to update response for more reliable matching
-  - Improved post creation result message error handling for post ID (shows "エラー" when WP_Error)
-  - Minor settings management improvements (display and permission handling stability)
+- **v2.3.44** (2025-09-06): Final adjustments for WordPress standard update notifications
+  - Adjusted early initialization and defensive initialization for updater
+  - Verified consistency of `id` and `plugin` keys in update response
+  - Additional refinement for post ID display and messages
+  - Documentation updates (README and descriptions)
 
 - **v2.3.42** (2025-09-06): Admin script loading and update system improvements
   - Improved admin script loading conditions to load scripts on News Crawler related pages
