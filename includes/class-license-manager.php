@@ -454,6 +454,16 @@ class NewsCrawler_License_Manager {
         }
 
         $site_url = home_url(); // KLM側の要求に合わせてhome_url()を使用
+        // 上級者向け: 送信site_urlのオーバーライド（定数/フィルタ/オプション）
+        if ( defined( 'NEWS_CRAWLER_LICENSE_SITE_URL' ) && NEWS_CRAWLER_LICENSE_SITE_URL ) {
+            $site_url = NEWS_CRAWLER_LICENSE_SITE_URL;
+        } else {
+            $override = get_option( 'news_crawler_license_site_url_override' );
+            if ( ! empty( $override ) ) {
+                $site_url = $override;
+            }
+        }
+        $site_url = apply_filters( 'news_crawler_license_site_url', $site_url );
         
         // KLMプラグインのAPIエンドポイントを使用
         $klm_api_url = $this->api_endpoints['verify'];
