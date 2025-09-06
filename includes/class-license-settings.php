@@ -85,6 +85,11 @@ class NewsCrawler_License_Settings {
             $this->handle_license_clear();
         }
 
+        // デバッグの処理
+        if ( isset( $_POST['news_crawler_license_debug'] ) && wp_verify_nonce( $_POST['news_crawler_license_debug_nonce'], 'news_crawler_license_debug' ) ) {
+            $this->handle_license_debug();
+        }
+
         // ライセンスマネージャーのインスタンスを取得
         $license_manager = NewsCrawler_License_Manager::get_instance();
         $license_status = $license_manager->get_license_status();
@@ -185,6 +190,15 @@ class NewsCrawler_License_Settings {
                                 <?php wp_nonce_field( 'news_crawler_license_clear', 'news_crawler_license_clear_nonce' ); ?>
                                 <input type="hidden" name="news_crawler_license_clear" value="1">
                                 <?php submit_button( __( 'ライセンスをクリア', 'news-crawler' ), 'secondary', 'clear_license', false, ['style' => 'margin: 0; background-color: #dc3232; border-color: #dc3232; color: white;'] ); ?>
+                            </form>
+                        <?php endif; ?>
+
+                        <!-- デバッグフォーム -->
+                        <?php if ( ! empty( get_option( 'news_crawler_license_key' ) ) ) : ?>
+                            <form method="post" action="" style="margin: 0;">
+                                <?php wp_nonce_field( 'news_crawler_license_debug', 'news_crawler_license_debug_nonce' ); ?>
+                                <input type="hidden" name="news_crawler_license_debug" value="1">
+                                <?php submit_button( __( 'KLMデバッグ実行', 'news-crawler' ), 'secondary', 'debug_license', false, ['style' => 'margin: 0; background-color: #0073aa; border-color: #0073aa; color: white;'] ); ?>
                             </form>
                         <?php endif; ?>
                     </div>
@@ -402,6 +416,35 @@ class NewsCrawler_License_Settings {
         $license_manager->deactivate_license();
         
         add_settings_error( 'news_crawler_license', 'license_cleared', __( 'ライセンス情報がクリアされました。', 'news-crawler' ), 'success' );
+    }
+
+    /**
+     * ライセンスデバッグの処理
+     */
+    private function handle_license_debug() {
+        $license_key = get_option( 'news_crawler_license_key' );
+        
+        if ( empty( $license_key ) ) {
+            add_settings_error( 'news_crawler_license', 'no_license_key', __( 'ライセンスキーが設定されていません。', 'news-crawler' ), 'error' );
+            return;
+        }
+
+        // ライセンスマネージャーのインスタンスを取得
+        $license_manager = NewsCrawler_License_Manager::get_instance();
+        
+        // KLMデバッグエンドポイントを実行
+        $result = $license_manager->debug_license_with_klm( $license_key );
+        
+        if ( $result['success'] ) {
+            $debug_info = $result['data'];
+            $message = __( 'KLMデバッグ情報を取得しました。', 'news-crawler' );
+            if ( isset( $debug_info['message'] ) ) {
+                $message .= ' ' . $debug_info['message'];
+            }
+            add_settings_error( 'news_crawler_license', 'debug_success', $message, 'success' );
+        } else {
+            add_settings_error( 'news_crawler_license', 'debug_failed', __( 'KLMデバッグの実行に失敗しました。', 'news-crawler' ) . ' ' . $result['message'], 'error' );
+        }
     }
 }
 

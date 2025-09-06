@@ -39,7 +39,8 @@ class NewsCrawler_License_Manager {
     private $api_endpoints = array(
         'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
         'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
-        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create'
+        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
+        'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
     );
 
     /**
@@ -384,7 +385,7 @@ class NewsCrawler_License_Manager {
             );
         }
 
-        $site_url = get_site_url();
+        $site_url = home_url(); // KLM側の要求に合わせてhome_url()を使用
         
         // KLMプラグインのAPIエンドポイントを使用
         $klm_api_url = $this->api_endpoints['verify'];
@@ -410,12 +411,11 @@ class NewsCrawler_License_Manager {
                 'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => http_build_query( array(
+            'body' => array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
-                'plugin_slug' => 'news-crawler'
-            ) ),
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+            ),
             'timeout' => 30,
             'sslverify' => true  // 本番環境ではSSL証明書を検証
         ) );
@@ -527,6 +527,8 @@ class NewsCrawler_License_Manager {
                     break;
             }
             
+            // KLM側のログ形式に合わせたエラーログ
+            error_log( 'KTP License API: ライセンス検証失敗 - ' . $license_key . ' - 理由: ' . $error_message );
             error_log( 'NewsCrawler License: Verification failed - Error code: ' . $error_code . ', Error message: ' . $error_message );
             
             return array(
@@ -1315,7 +1317,7 @@ class NewsCrawler_License_Manager {
     private function verify_license_via_api( $license_key ) {
         error_log( 'NewsCrawler License: verify_license_via_api called' );
         
-        $site_url = get_site_url();
+        $site_url = home_url(); // KLM側の要求に合わせてhome_url()を使用
         $klm_api_url = $this->api_endpoints['verify'];
         
         error_log( 'NewsCrawler License: Attempting direct API call to ' . $klm_api_url );
@@ -1325,12 +1327,11 @@ class NewsCrawler_License_Manager {
                 'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => http_build_query( array(
+            'body' => array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
-                'plugin_slug' => 'news-crawler'
-            ) ),
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+            ),
             'timeout' => 30,
             'sslverify' => true
         ) );
@@ -1361,6 +1362,65 @@ class NewsCrawler_License_Manager {
     }
 
     /**
+     * Debug license with KLM debug endpoint
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to debug
+     * @return array Debug result
+     */
+    public function debug_license_with_klm( $license_key ) {
+        error_log( 'NewsCrawler License: Debugging license with KLM: ' . $license_key );
+        
+        $debug_url = $this->api_endpoints['debug'];
+        $site_url = home_url();
+        
+        $response = wp_remote_post( $debug_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+            ),
+            'body' => array(
+                'license_key' => $license_key,
+                'site_url'    => $site_url,
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+            ),
+            'timeout' => 30,
+            'sslverify' => true
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'NewsCrawler License: Debug API call failed: ' . $response->get_error_message() );
+            return array(
+                'success' => false,
+                'message' => __( 'KLMデバッグAPIへの接続に失敗しました: ', 'news-crawler' ) . $response->get_error_message(),
+                'error_code' => 'debug_connection_failed'
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        error_log( 'NewsCrawler License: Debug API response code: ' . $response_code );
+        error_log( 'NewsCrawler License: Debug API response body: ' . $body );
+
+        if ( $response_code === 200 && $data ) {
+            return array(
+                'success' => true,
+                'data' => $data,
+                'message' => __( 'デバッグ情報を取得しました。', 'news-crawler' )
+            );
+        }
+
+        return array(
+            'success' => false,
+            'message' => __( 'KLMデバッグAPIからの応答が無効です。', 'news-crawler' ),
+            'response_code' => $response_code,
+            'response_body' => $body
+        );
+    }
+
+    /**
      * Test KLM API connection
      *
      * @since 2.1.5
@@ -1376,12 +1436,11 @@ class NewsCrawler_License_Manager {
                 'Content-Type' => 'application/x-www-form-urlencoded',
                 'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
             ),
-            'body' => http_build_query( array(
+            'body' => array(
                 'license_key' => 'TEST-CONNECTION',
-                'site_url'    => get_site_url(),
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
-                'plugin_slug' => 'news-crawler'
-            ) ),
+                'site_url'    => home_url(),
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+            ),
             'timeout' => 10,
             'sslverify' => true
         ) );
