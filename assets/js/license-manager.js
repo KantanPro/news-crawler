@@ -403,6 +403,13 @@
                             errorMessage = response.data.message;
                         }
                         
+                        // nonce関連の失敗は通常フォーム送信にフォールバック
+                        if (data && (data.error_code === 'nonce_invalid' || data.error_code === 'nonce_missing')) {
+                            NewsCrawlerLicenseManager.showNotification('セキュリティ検証に失敗しました。通常送信で再試行します。', 'error');
+                            NewsCrawlerLicenseManager.fallbackLicenseSubmit();
+                            return;
+                        }
+
                         // レスポンス全体をコンソールに出力
                         console.error('License verification failed - Full response:', response);
                         
@@ -430,6 +437,13 @@
                     console.error('License verification error:', xhr, status, error);
                     console.error('Response text:', xhr.responseText);
                     
+                    // セキュリティ文言やparsererrorは通常フォーム送信にフォールバック
+                    if (status === 'parsererror' || (xhr && typeof xhr.responseText === 'string' && xhr.responseText.indexOf('Security check failed') !== -1)) {
+                        NewsCrawlerLicenseManager.showNotification('通信形式エラーを検出。通常送信で再試行します。', 'error');
+                        NewsCrawlerLicenseManager.fallbackLicenseSubmit();
+                        return;
+                    }
+
                     var errorMessage = '通信エラーが発生しました。\n\n';
                     errorMessage += '【エラー詳細】\n';
                     errorMessage += 'ステータス: ' + status + '\n';
@@ -477,6 +491,21 @@
                     NewsCrawlerLicenseManager.hideLoading();
                 }
             });
+        },
+
+        /**
+         * AJAXがセキュリティ/解析エラーで失敗した場合のフォールバック送信
+         */
+        fallbackLicenseSubmit: function() {
+            var $form = $('#news-crawler-license-form');
+            // 自身のsubmitハンドラを解除して通常送信
+            $form.off('submit');
+            // ローディング非表示
+            this.hideLoading();
+            // ネイティブ送信
+            if ($form.length && $form[0]) {
+                $form[0].submit();
+            }
         },
 
         /**
