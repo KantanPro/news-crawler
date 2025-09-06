@@ -308,8 +308,9 @@ class NewsCrawler_License_Manager {
         }
         
         // ライセンスキーの形式チェック
-        // 正規表現: /^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}$/
-        $pattern = '/^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\- ]{7,10}-[A-Z0-9]{4,6}$/';
+        // 正規表現: 中央ブロックに | を許可
+        // 旧キー互換のため < > + = - | とスペースを許容
+        $pattern = '/^[A-Z]{3,4}-\d{6}-[A-Z0-9<>\+\=\-\| ]{7,10}-[A-Z0-9]{4,6}$/';
         
         if ( empty( $license_key ) ) {
             return array(
@@ -365,6 +366,16 @@ class NewsCrawler_License_Manager {
     }
 
     /**
+     * Soft check: Looks like a license key pattern without enforcing inner block charset strictly
+     * Accepts: PREFIX-6digits-7to12anyVisibleChars-4to8alnum (to tolerate pasted variations)
+     */
+    private function looks_like_license_key( $license_key ) {
+        // Visible characters excluding newlines, keep spaces (allow '|')
+        $pattern = '/^[A-Z]{3,5}-\d{6}-[\x20-\x7E]{7,12}-[A-Z0-9]{4,8}$/';
+        return (bool) preg_match( $pattern, $license_key );
+    }
+
+    /**
      * Verify license with KantanPro License Manager
      *
      * @since 2.1.5
@@ -375,16 +386,26 @@ class NewsCrawler_License_Manager {
         // ライセンスキーの前処理と形式チェック
         $validation = $this->validate_license_key_format( $license_key );
         if ( ! $validation['valid'] ) {
-            error_log( 'NewsCrawler License: License key validation failed - ' . $validation['message'] );
-            return array(
-                'success' => false,
-                'message' => $validation['message'],
-                'error_code' => $validation['error_code']
-            );
+            $normalized_key = $this->normalize_license_key( trim( $license_key ) );
+            if ( ! $this->is_development_environment() ) {
+                // 本番環境では厳格検証をスキップし、KLMに委譲（入力ミスはKLM側のinvalidで返る）
+                error_log( 'NewsCrawler License: Strict validation failed in production. Delegating to KLM API.' );
+                $license_key = $normalized_key;
+            } else if ( $this->looks_like_license_key( $normalized_key ) ) {
+                error_log( 'NewsCrawler License: Strict validation failed, but soft check passed (dev). Delegating to KLM API.' );
+                $license_key = $normalized_key;
+            } else {
+                error_log( 'NewsCrawler License: License key validation failed - ' . $validation['message'] );
+                return array(
+                    'success' => false,
+                    'message' => $validation['message'],
+                    'error_code' => $validation['error_code']
+                );
+            }
+        } else {
+            // 検証済みのライセンスキーを使用
+            $license_key = $validation['license_key'];
         }
-        
-        // 検証済みのライセンスキーを使用
-        $license_key = $validation['license_key'];
         // 開発環境でのテスト用ライセンスチェック
         if ( $this->is_development_environment() ) {
             $dev_license_key = $this->get_development_license_key();
