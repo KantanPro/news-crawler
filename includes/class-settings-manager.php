@@ -1103,6 +1103,12 @@ class NewsCrawlerSettingsManager {
                             <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
                         </form>
 
+                        <?php if ( isset($license_manager) && $license_manager->is_development_environment() ) : ?>
+                            <button id="use-dev-license" class="button button-secondary" type="button" style="margin: 0;">
+                                <?php echo esc_html__( 'テスト用ライセンスを自動入力', 'news-crawler' ); ?>
+                            </button>
+                        <?php endif; ?>
+
                         <!-- ライセンス状態再確認フォーム -->
                         <?php if ( ! empty( get_option( 'news_crawler_license_key' ) ) ) : ?>
                             <form method="post" action="" style="margin: 0;">

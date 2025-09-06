@@ -1130,13 +1130,13 @@ class NewsCrawler_License_Manager {
             error_log( 'NewsCrawler License: Nonce from POST = ' . (isset($_POST['nonce']) ? $_POST['nonce'] : 'not set') );
             error_log( 'NewsCrawler License: Expected nonce = ' . wp_create_nonce('news_crawler_license_nonce') );
             
-            // nonceの検証をより詳細にログ出力
-            if ( ! isset( $_POST['nonce'] ) ) {
+            // nonceの検証をより詳細にログ出力（_ajax_nonce も許容）
+            if ( ! isset( $_POST['nonce'] ) && ! isset( $_POST['_ajax_nonce'] ) ) {
                 error_log( 'NewsCrawler License: Nonce not found in POST data' );
                 wp_send_json_error( array( 'message' => 'Security check failed. Please try again.' ) );
             }
-            
-            $nonce = sanitize_text_field( $_POST['nonce'] );
+
+            $nonce = sanitize_text_field( isset( $_POST['nonce'] ) ? $_POST['nonce'] : ( $_POST['_ajax_nonce'] ?? '' ) );
             $expected_nonce = wp_create_nonce('news_crawler_license_nonce');
             
             error_log( 'NewsCrawler License: Received nonce: ' . $nonce );
