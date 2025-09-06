@@ -111,7 +111,7 @@ class NewsCrawlerUpdater {
                 'package' => $latest_version['download_url'],
                 'requires' => '5.0',
                 'requires_php' => '7.4',
-                'tested' => '6.4',
+                'tested' => '6.9.1',
                 'last_updated' => $latest_version['published_at'],
                 'sections' => array(
                     'description' => $latest_version['description'],
@@ -324,7 +324,7 @@ class NewsCrawlerUpdater {
         $result->last_updated = $latest_version['published_at'];
         $result->requires = '5.0';
         $result->requires_php = '7.4';
-        $result->tested = '6.4';
+        $result->tested = '6.9.1';
         $result->download_link = $latest_version['download_url'];
         $result->sections = array(
             'description' => $latest_version['description'],
