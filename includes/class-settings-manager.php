@@ -106,21 +106,28 @@ class NewsCrawlerSettingsManager {
      * 設定を初期化
      */
     public function admin_init() {
-        register_setting($this->option_name, $this->option_name, array($this, 'sanitize_settings'));
+        // WordPress 5.5+ では配列形式で sanitize_callback を渡すのが推奨/安全
+        register_setting(
+            $this->option_name,
+            $this->option_name,
+            array(
+                'sanitize_callback' => array($this, 'sanitize_settings')
+            )
+        );
         
-        // API設定セクション
+        // API設定セクション（APIタブ用スラッグ）
         add_settings_section(
             'api_settings',
             'API設定',
             array($this, 'api_section_callback'),
-            'news-crawler-settings'
+            'news-crawler-settings-api'
         );
         
         add_settings_field(
             'youtube_api_key',
             'YouTube API キー',
             array($this, 'youtube_api_key_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-api',
             'api_settings'
         );
         
@@ -128,23 +135,23 @@ class NewsCrawlerSettingsManager {
             'openai_api_key',
             'OpenAI API キー',
             array($this, 'openai_api_key_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-api',
             'api_settings'
         );
         
-        // 機能設定セクション
+        // 機能設定セクション（機能タブ用スラッグ）
         add_settings_section(
             'feature_settings',
             '機能設定',
             array($this, 'feature_section_callback'),
-            'news-crawler-settings'
+            'news-crawler-settings-features'
         );
         
         add_settings_field(
             'auto_featured_image',
             'アイキャッチ自動生成',
             array($this, 'auto_featured_image_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-features',
             'feature_settings'
         );
         
@@ -152,23 +159,23 @@ class NewsCrawlerSettingsManager {
             'featured_image_method',
             'アイキャッチ生成方法',
             array($this, 'featured_image_method_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-features',
             'feature_settings'
         );
         
-        // 更新情報セクション
+        // 更新情報セクション（更新情報タブ用スラッグ）
         add_settings_section(
             'update_info',
             '更新情報',
             array($this, 'update_info_section_callback'),
-            'news-crawler-settings'
+            'news-crawler-settings-update'
         );
         
         add_settings_field(
             'auto_summary_generation',
             'AI要約自動生成',
             array($this, 'auto_summary_generation_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-features',
             'feature_settings'
         );
         
@@ -176,23 +183,23 @@ class NewsCrawlerSettingsManager {
             'summary_generation_model',
             '要約生成モデル',
             array($this, 'summary_generation_model_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-features',
             'feature_settings'
         );
         
-        // 品質管理設定セクション
+        // 品質管理設定セクション（品質タブ用スラッグ）
         add_settings_section(
             'quality_settings',
             '品質管理設定',
             array($this, 'quality_section_callback'),
-            'news-crawler-settings'
+            'news-crawler-settings-quality'
         );
         
         add_settings_field(
             'duplicate_check_strictness',
             '重複チェック厳密度',
             array($this, 'duplicate_check_strictness_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-quality',
             'quality_settings'
         );
         
@@ -200,7 +207,7 @@ class NewsCrawlerSettingsManager {
             'duplicate_check_period',
             '重複チェック期間',
             array($this, 'duplicate_check_period_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-quality',
             'quality_settings'
         );
         
@@ -208,7 +215,7 @@ class NewsCrawlerSettingsManager {
             'age_limit_enabled',
             '期間制限機能',
             array($this, 'age_limit_enabled_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-quality',
             'quality_settings'
         );
         
@@ -216,7 +223,7 @@ class NewsCrawlerSettingsManager {
             'age_limit_days',
             '期間制限日数',
             array($this, 'age_limit_days_callback'),
-            'news-crawler-settings',
+            'news-crawler-settings-quality',
             'quality_settings'
         );
     }
@@ -365,39 +372,30 @@ class NewsCrawlerSettingsManager {
                 <?php settings_fields($this->option_name); ?>
                 
                 <div id="api-settings" class="tab-content active">
-                    <?php do_settings_sections('news-crawler-settings'); ?>
+                    <?php do_settings_sections('news-crawler-settings-api'); ?>
+
+                    <div class="card">
+                        <h2>API接続テスト</h2>
+                        <p>設定したAPIキーの接続をテストできます。</p>
+                        <button type="button" id="test-youtube-api" class="button">YouTube API テスト</button>
+                        <button type="button" id="test-openai-api" class="button">OpenAI API テスト</button>
+                        <div id="api-test-results" style="margin-top: 10px;"></div>
+                    </div>
+
+                    
                 </div>
                 
                 <div id="feature-settings" class="tab-content">
-                    <h2>機能設定</h2>
-                    <table class="form-table">
-                        <?php
-                        $this->render_field('auto_featured_image');
-                        $this->render_field('featured_image_method');
-                        $this->render_field('auto_summary_generation');
-                        $this->render_field('summary_generation_model');
-                        ?>
-                    </table>
+                    <?php do_settings_sections('news-crawler-settings-features'); ?>
                 </div>
                 
                 <div id="quality-settings" class="tab-content">
-                    <h2>品質管理設定</h2>
-                    <table class="form-table">
-                        <?php
-                        $this->render_field('duplicate_check_strictness');
-                        $this->render_field('duplicate_check_period');
-                        $this->render_field('age_limit_enabled');
-                        $this->render_field('age_limit_days');
-                        ?>
-                    </table>
+                    <?php do_settings_sections('news-crawler-settings-quality'); ?>
                 </div>
                 
-                        <div id="update-info" class="tab-content">
-            <h2>更新情報</h2>
-            <div class="update-info-container">
-                <?php $this->display_update_info(); ?>
-            </div>
-        </div>
+                <div id="update-info" class="tab-content">
+                    <?php do_settings_sections('news-crawler-settings-update'); ?>
+                </div>
                 
                 <div id="system-info" class="tab-content">
                     <h2>システム情報</h2>
@@ -407,19 +405,7 @@ class NewsCrawlerSettingsManager {
                 <?php submit_button(); ?>
             </form>
             
-            <div class="card">
-                <h2>API接続テスト</h2>
-                <p>設定したAPIキーの接続をテストできます。</p>
-                <button type="button" id="test-youtube-api" class="button">YouTube API テスト</button>
-                <button type="button" id="test-openai-api" class="button">OpenAI API テスト</button>
-                <div id="api-test-results" style="margin-top: 10px;"></div>
-            </div>
             
-            <div class="card">
-                <h2>設定リセット</h2>
-                <p><strong>注意:</strong> この操作により全ての設定がデフォルト値にリセットされます。</p>
-                <button type="button" id="reset-settings" class="button button-secondary">設定をリセット</button>
-            </div>
         </div>
         
         <style>
