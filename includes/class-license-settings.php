@@ -173,6 +173,9 @@ class NewsCrawler_License_Settings {
                                    title="[プレフィックス]-[6桁数字]-[7-10文字の英数字記号]-[4-6文字の英数字]形式で入力してください">
 
                             <?php submit_button( __( 'ライセンスを認証', 'news-crawler' ), 'primary', 'submit', false, ['style' => 'margin: 0;'] ); ?>
+                            <button type="button" id="test-license-btn" class="button button-secondary" style="margin-left: 10px;">
+                                <?php echo esc_html__( 'ライセンスをテスト', 'news-crawler' ); ?>
+                            </button>
                         </form>
 
                         <!-- ライセンス状態再確認フォーム -->

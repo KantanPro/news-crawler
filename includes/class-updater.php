@@ -50,6 +50,7 @@ class NewsCrawlerUpdater {
         // WordPress更新システムにフック
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
+        add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
         add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 10, 3);
         
@@ -356,13 +357,32 @@ class NewsCrawlerUpdater {
     }
     
     /**
+     * Before update actions
+     */
+    public function before_update($response, $hook_extra, $result) {
+        if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
+            // 更新前の処理
+            $this->cleanup_old_files();
+            
+            // プラグインの一時的な無効化（更新中）
+            if (is_plugin_active($this->plugin_basename)) {
+                deactivate_plugins($this->plugin_basename, true);
+            }
+        }
+        
+        return $response;
+    }
+    
+    /**
      * After update actions
      */
     public function after_update($response, $hook_extra, $result) {
         if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
             // 更新後の処理
             delete_transient('news_crawler_latest_version');
+            delete_transient('news_crawler_latest_version_backup');
             delete_site_transient('update_plugins');
+            delete_site_transient('update_plugins_checked');
             delete_transient('news_crawler_last_check');
             
             // プラグイン情報の再読み込みを強制
@@ -373,9 +393,16 @@ class NewsCrawlerUpdater {
                 wp_cache_flush();
             }
             
-            // プラグインの状態をリセット
-            deactivate_plugins($this->plugin_basename);
-            activate_plugin($this->plugin_basename);
+            // オブジェクトキャッシュをクリア
+            if (function_exists('wp_cache_flush_group')) {
+                wp_cache_flush_group('plugins');
+            }
+            
+            // 更新後の整合性チェック
+            $this->verify_update_integrity();
+            
+            // プラグインの状態をリセット（無効化/有効化は行わない）
+            // WordPressの更新システムが適切に処理するため
             
         }
         
@@ -460,6 +487,100 @@ class NewsCrawlerUpdater {
         $debug_info['scheduled_check'] = wp_next_scheduled('news_crawler_update_check');
         
         return $debug_info;
+    }
+    
+    /**
+     * Verify update integrity
+     */
+    private function verify_update_integrity() {
+        $plugin_dir = NEWS_CRAWLER_PLUGIN_DIR;
+        
+        // 必須ファイルの存在チェック
+        $required_files = array(
+            'news-crawler.php',
+            'includes/class-updater.php',
+            'includes/class-settings-manager.php',
+            'includes/class-youtube-crawler.php'
+        );
+        
+        $missing_files = array();
+        foreach ($required_files as $file) {
+            if (!file_exists($plugin_dir . $file)) {
+                $missing_files[] = $file;
+            }
+        }
+        
+        if (!empty($missing_files)) {
+            error_log('News Crawler: Update integrity check failed. Missing files: ' . implode(', ', $missing_files));
+            return false;
+        }
+        
+        // プラグインのバージョン情報をチェック
+        if (!defined('NEWS_CRAWLER_VERSION')) {
+            error_log('News Crawler: Update integrity check failed. Version constant not defined.');
+            return false;
+        }
+        
+        // プラグインの基本機能が動作するかチェック
+        if (!class_exists('NewsCrawlerUpdater')) {
+            error_log('News Crawler: Update integrity check failed. Updater class not found.');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Cleanup old files before update
+     */
+    private function cleanup_old_files() {
+        $plugin_dir = NEWS_CRAWLER_PLUGIN_DIR;
+        
+        // 古いファイルやディレクトリをクリーンアップ
+        $old_files = array(
+            'news-crawler-cron.log',
+            'news-crawler-cron.sh',
+            'CHANGELOG.md',
+            'README.md'
+        );
+        
+        foreach ($old_files as $file) {
+            $file_path = $plugin_dir . $file;
+            if (file_exists($file_path)) {
+                if (is_file($file_path)) {
+                    unlink($file_path);
+                } elseif (is_dir($file_path)) {
+                    $this->recursive_rmdir($file_path);
+                }
+            }
+        }
+        
+        // 一時ファイルのクリーンアップ
+        $temp_files = glob($plugin_dir . '*.tmp');
+        foreach ($temp_files as $temp_file) {
+            if (file_exists($temp_file)) {
+                unlink($temp_file);
+            }
+        }
+    }
+    
+    /**
+     * Recursively remove directory
+     */
+    private function recursive_rmdir($dir) {
+        if (is_dir($dir)) {
+            $objects = scandir($dir);
+            foreach ($objects as $object) {
+                if ($object != "." && $object != "..") {
+                    if (is_dir($dir . "/" . $object)) {
+                        $this->recursive_rmdir($dir . "/" . $object);
+                    } else {
+                        unlink($dir . "/" . $object);
+                    }
+                }
+            }
+            rmdir($dir);
+        }
     }
     
     /**

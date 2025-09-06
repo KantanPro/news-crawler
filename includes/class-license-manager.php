@@ -77,6 +77,7 @@ class NewsCrawler_License_Manager {
         add_action( 'wp_ajax_news_crawler_verify_license', array( $this, 'ajax_verify_license' ) );
         add_action( 'wp_ajax_news_crawler_get_license_info', array( $this, 'ajax_get_license_info' ) );
         add_action( 'wp_ajax_news_crawler_clear_license', array( $this, 'ajax_clear_license' ) );
+        add_action( 'wp_ajax_news_crawler_test_license', array( $this, 'ajax_test_license' ) );
         
         // AJAXハンドラーの登録をinitフックで実行
         add_action( 'init', array( $this, 'register_ajax_handlers' ) );
@@ -394,6 +395,7 @@ class NewsCrawler_License_Manager {
         error_log( 'NewsCrawler License: Attempting to connect to ' . $klm_api_url );
         error_log( 'NewsCrawler License: Site URL: ' . $site_url );
         error_log( 'NewsCrawler License: License key: ' . substr( $license_key, 0, 8 ) . '...' );
+        error_log( 'NewsCrawler License: Full license key: ' . $license_key );
         error_log( 'NewsCrawler License: Plugin version: ' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) );
         
         // KLMプラグインの存在確認
@@ -531,9 +533,20 @@ class NewsCrawler_License_Manager {
             error_log( 'KTP License API: ライセンス検証失敗 - ' . $license_key . ' - 理由: ' . $error_message );
             error_log( 'NewsCrawler License: Verification failed - Error code: ' . $error_code . ', Error message: ' . $error_message );
             
+            // デバッグ情報を含む詳細なエラーメッセージを作成
+            $detailed_message = $error_message;
+            if ( ! empty( $error_code ) ) {
+                $detailed_message .= ' (エラーコード: ' . $error_code . ')';
+            }
+            
+            // レスポンスデータの詳細を追加
+            if ( isset( $data ) && is_array( $data ) ) {
+                $detailed_message .= ' [サーバーレスポンス: ' . json_encode( $data ) . ']';
+            }
+            
             return array(
                 'success' => false,
-                'message' => $error_message,
+                'message' => $detailed_message,
                 'error_code' => $error_code,
                 'debug_info' => array(
                     'response_data' => $data,
@@ -543,6 +556,83 @@ class NewsCrawler_License_Manager {
                 )
             );
         }
+    }
+
+    /**
+     * Test license verification with detailed debugging
+     *
+     * @since 2.1.5
+     * @param string $license_key License key to test
+     * @return array Test result with detailed information
+     */
+    public function test_license_verification( $license_key ) {
+        error_log( 'NewsCrawler License: Starting detailed license test for key: ' . $license_key );
+        
+        // ライセンスキーの前処理と形式チェック
+        $validation = $this->validate_license_key_format( $license_key );
+        if ( ! $validation['valid'] ) {
+            return array(
+                'success' => false,
+                'message' => 'ライセンスキー形式エラー: ' . $validation['message'],
+                'error_code' => $validation['error_code'],
+                'test_type' => 'format_validation'
+            );
+        }
+        
+        $site_url = home_url();
+        $klm_api_url = $this->api_endpoints['verify'];
+        
+        error_log( 'NewsCrawler License: Test - API URL: ' . $klm_api_url );
+        error_log( 'NewsCrawler License: Test - Site URL: ' . $site_url );
+        error_log( 'NewsCrawler License: Test - License key: ' . $license_key );
+        
+        // API接続テスト
+        $response = wp_remote_post( $klm_api_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+            ),
+            'body' => array(
+                'license_key' => $license_key,
+                'site_url'    => $site_url,
+                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+            ),
+            'timeout' => 30,
+            'sslverify' => true
+        ) );
+        
+        if ( is_wp_error( $response ) ) {
+            $error_message = $response->get_error_message();
+            error_log( 'NewsCrawler License: Test - WP_Error: ' . $error_message );
+            
+            return array(
+                'success' => false,
+                'message' => 'API接続エラー: ' . $error_message,
+                'error_code' => 'connection_error',
+                'test_type' => 'api_connection',
+                'wp_error' => $error_message
+            );
+        }
+        
+        $response_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        
+        error_log( 'NewsCrawler License: Test - Response code: ' . $response_code );
+        error_log( 'NewsCrawler License: Test - Response body: ' . $body );
+        
+        $data = json_decode( $body, true );
+        
+        return array(
+            'success' => isset( $data['success'] ) ? $data['success'] : false,
+            'message' => isset( $data['message'] ) ? $data['message'] : 'Unknown response',
+            'error_code' => isset( $data['error_code'] ) ? $data['error_code'] : '',
+            'test_type' => 'api_response',
+            'response_code' => $response_code,
+            'response_body' => $body,
+            'parsed_data' => $data,
+            'api_url' => $klm_api_url,
+            'site_url' => $site_url
+        );
     }
 
     /**
@@ -863,6 +953,36 @@ class NewsCrawler_License_Manager {
             error_log( 'NewsCrawler License: AJAX license activation failed: ' . $result['message'] );
             wp_send_json_error( array( 'message' => $result['message'] ) );
         }
+    }
+
+    /**
+     * AJAX handler for testing license verification with detailed debugging
+     *
+     * @since 2.1.5
+     */
+    public function ajax_test_license() {
+        error_log( 'NewsCrawler License: ajax_test_license called' );
+        
+        // nonce検証
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'news_crawler_license_nonce' ) ) {
+            wp_send_json_error( array( 'message' => __( 'セキュリティチェックに失敗しました。', 'news-crawler' ) ) );
+        }
+        
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( '権限がありません。', 'news-crawler' ) ) );
+        }
+        
+        $license_key = sanitize_text_field( $_POST['license_key'] ?? '' );
+        
+        if ( empty( $license_key ) ) {
+            wp_send_json_error( array( 'message' => __( 'ライセンスキーを入力してください。', 'news-crawler' ) ) );
+        }
+        
+        error_log( 'NewsCrawler License: Starting detailed license test for: ' . $license_key );
+        $result = $this->test_license_verification( $license_key );
+        error_log( 'NewsCrawler License: Test result: ' . json_encode( $result ) );
+        
+        wp_send_json_success( $result );
     }
 
     /**

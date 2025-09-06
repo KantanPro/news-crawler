@@ -49,6 +49,12 @@
                 NewsCrawlerLicenseManager.recheckLicense();
             });
 
+            // ライセンステスト
+            $(document).on('click', '#test-license-btn', function(e) {
+                e.preventDefault();
+                NewsCrawlerLicenseManager.testLicense();
+            });
+
             // ライセンスクリア
             $(document).on('click', 'input[name="clear_license"]', function(e) {
                 e.preventDefault();
@@ -432,6 +438,81 @@
                     NewsCrawlerLicenseManager.hideLoading();
                 }
             });
+        },
+
+        /**
+         * ライセンステスト（詳細デバッグ）
+         */
+        testLicense: function() {
+            var $form = $('#news-crawler-license-form');
+            var $licenseKey = $('#news_crawler_license_key');
+            var licenseKey = $licenseKey.val().trim();
+            
+            if (!licenseKey) {
+                this.showError('ライセンスキーを入力してください。');
+                $licenseKey.focus();
+                return;
+            }
+
+            // ローディング表示
+            this.showLoading('ライセンスをテスト中...');
+
+            $.ajax({
+                url: news_crawler_license_ajax.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'news_crawler_test_license',
+                    license_key: licenseKey,
+                    nonce: news_crawler_license_ajax.nonce
+                },
+                timeout: 60000,
+                success: function(response) {
+                    console.log('License test response:', response);
+                    
+                    if (response.success) {
+                        var testData = response.data;
+                        var message = 'テスト結果: ' + testData.message;
+                        
+                        if (testData.error_code) {
+                            message += '\nエラーコード: ' + testData.error_code;
+                        }
+                        
+                        if (testData.response_code) {
+                            message += '\nHTTPステータス: ' + testData.response_code;
+                        }
+                        
+                        if (testData.parsed_data) {
+                            message += '\nサーバーレスポンス: ' + JSON.stringify(testData.parsed_data, null, 2);
+                        }
+                        
+                        NewsCrawlerLicenseManager.showTestResult(message, testData.success);
+                    } else {
+                        NewsCrawlerLicenseManager.showError('テスト実行に失敗しました: ' + (response.data ? response.data.message : 'Unknown error'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('License test error:', xhr, status, error);
+                    NewsCrawlerLicenseManager.showError('テスト実行中にエラーが発生しました: ' + error);
+                },
+                complete: function() {
+                    NewsCrawlerLicenseManager.hideLoading();
+                }
+            });
+        },
+
+        /**
+         * テスト結果の表示
+         */
+        showTestResult: function(message, isSuccess) {
+            var $resultDiv = $('#test-result');
+            if ($resultDiv.length === 0) {
+                $resultDiv = $('<div id="test-result" style="margin: 10px 0; padding: 10px; border-radius: 4px;"></div>');
+                $('#news-crawler-license-form').after($resultDiv);
+            }
+            
+            $resultDiv.removeClass('notice-success notice-error')
+                     .addClass(isSuccess ? 'notice-success' : 'notice-error')
+                     .html('<pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">' + message + '</pre>');
         },
 
         /**
