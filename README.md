@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.47-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.47)
+[![Version](https://img.shields.io/badge/version-2.3.48-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.48)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.48** (2025-09-07): Major news crawling functionality improvements and stability enhancements
+  - Added RSS feed auto-discovery functionality for automatic feed detection on non-RSS sites
+  - Enhanced error handling for HTML page retrieval with improved fallback processing for connection failures
+  - Implemented exponential backoff for various requests with retry functionality for timeouts
+  - Updated User-Agent to latest Chrome for more natural requests
+  - Optimized redirect count and HTTP version for improved connection stability
+  - Significantly improved news crawling reliability and success rate
 
 - **v2.3.47** (2025-09-06): Plugin version management improvements
   - Enhanced version management functionality with dynamic version retrieval in settings classes
