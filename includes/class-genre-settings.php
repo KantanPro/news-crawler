@@ -34,7 +34,16 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_delete', array($this, 'delete_genre_setting'));
         add_action('wp_ajax_genre_settings_load', array($this, 'load_genre_setting'));
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
+        add_action('wp_ajax_genre_settings_enqueue_execute', array($this, 'enqueue_genre_execution'));
+        add_action('wp_ajax_get_genre_job_status', array($this, 'get_genre_job_status'));
+        add_action('wp_ajax_news_crawler_run_job_now', array($this, 'run_genre_job_now'));
+        add_action('news_crawler_execute_genre_job', array($this, 'run_genre_job'), 10, 2);
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
+        // 非同期実行用のエンドポイント
+        add_action('wp_ajax_genre_settings_enqueue_execute', array($this, 'enqueue_genre_execution'));
+        add_action('wp_ajax_get_genre_job_status', array($this, 'get_genre_job_status'));
+        // 非同期ジョブ実行用のフック
+        add_action('news_crawler_execute_genre_job', array($this, 'run_genre_job'), 10, 2);
 
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         
@@ -1835,7 +1844,7 @@ $('#cancel-edit').click(function() {
             }
         }
         
-        // 投稿作成ボタンクリック
+        // 投稿作成ボタンクリック（同期実行・長時間タイムアウト対応）
         function executeGenreSetting(genreId, genreName) {
             var button = jQuery('#execute-btn-' + genreId);
             var originalText = button.text();
@@ -1848,117 +1857,35 @@ $('#cancel-edit').click(function() {
                 url: ajaxurl,
                 type: 'POST',
                 dataType: 'json',
-                timeout: 300000, // 5分のタイムアウト（ニュースクロールには時間がかかる場合がある）
+                timeout: 600000, // 10分
                 data: {
                     action: 'genre_settings_execute',
                     nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
                     genre_id: genreId
                 },
                 success: function(response) {
-                    console.log('AJAX Success Response:', response);
-                    
                     if (response && response.success) {
                         var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + response.data;
                         jQuery('#execution-result-content').html(successMessage);
-                        // 自動リロードを無効化（ユーザーが結果を確認できるように）
-                        // setTimeout(function() {
-                        //     location.reload();
-                        // }, 1200);
                     } else if (response && response.data) {
                         jQuery('#execution-result-content').html('❌ エラー: ' + response.data);
                     } else {
-                        var debugInfo = '❌ エラー: 不明な応答形式です\n\n';
-                        debugInfo += 'デバッグ情報:\n';
-                        debugInfo += 'Response: ' + JSON.stringify(response) + '\n';
-                        debugInfo += 'Response Type: ' + typeof response + '\n';
-                        debugInfo += 'Response Success: ' + (response ? response.success : 'undefined') + '\n';
-                        debugInfo += 'Response Data: ' + (response ? response.data : 'undefined');
-                        jQuery('#execution-result-content').html(debugInfo);
+                        jQuery('#execution-result-content').html('❌ エラー: 不明な応答形式です');
                     }
                 },
                 error: function(xhr, status, error) {
-                    // JSONパース失敗時でも成功応答を復旧表示するフォールバック
-                    if (status === 'parsererror' && xhr && xhr.responseText) {
-                        try {
-                            var parsed = JSON.parse(xhr.responseText);
-                            if (parsed && parsed.success) {
-                                jQuery('#execution-result-content').html(parsed.data);
-                                return;
-                            } else if (parsed && parsed.data) {
-                                jQuery('#execution-result-content').html('エラー: ' + parsed.data);
-                                return;
-                            }
-                        } catch (e) {
-                            // 成功テキストがプレーンで返ってきた場合の簡易検出
-                            if (/\b投稿ID\b|\b作成しました\b|\b成功\b|\b完了\b/.test(xhr.responseText)) {
-                                jQuery('#execution-result-content').html(xhr.responseText);
-                                return;
-                            }
-                        }
-                    }
-                    
-                    // HTTPステータスが200の場合は成功として扱う
-                    if (xhr.status === 200 && xhr.responseText) {
-                        try {
-                            var parsed = JSON.parse(xhr.responseText);
-                            if (parsed && parsed.success) {
-                                jQuery('#execution-result-content').html(parsed.data);
-                                return;
-                            } else if (parsed && parsed.data) {
-                                jQuery('#execution-result-content').html('エラー: ' + parsed.data);
-                                return;
-                            }
-                        } catch (e) {
-                            // PHPの警告メッセージを除去して成功メッセージを抽出
-                            var cleanResponse = xhr.responseText.replace(/Warning:.*?\n/g, '').replace(/Notice:.*?\n/g, '').replace(/Fatal error:.*?\n/g, '');
-                            
-                            // プレーンテキストで成功メッセージが返ってきた場合
-                            if (/\b投稿ID\b|\b作成しました\b|\b成功\b|\b完了\b/.test(cleanResponse)) {
-                                var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + cleanResponse;
-                                jQuery('#execution-result-content').html(successMessage);
-                                return;
-                            }
-                            
-                            // 警告メッセージが含まれていても成功メッセージがある場合
-                            if (/\b投稿ID\b|\b作成しました\b|\b成功\b|\b完了\b/.test(xhr.responseText)) {
-                                var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + xhr.responseText;
-                                jQuery('#execution-result-content').html(successMessage);
-                                return;
-                            }
-                        }
-                    }
-                    
                     var errorMessage = '実行中にエラーが発生しました。';
-                    var debugInfo = '';
-                    
-                    if (xhr.responseJSON && xhr.responseJSON.data) {
-                        errorMessage = xhr.responseJSON.data;
-                    } else if (xhr.statusText && xhr.statusText !== 'OK') {
+                    if (xhr && xhr.statusText && xhr.statusText !== 'OK') {
                         errorMessage = '通信エラー: ' + xhr.statusText;
+                    } else if (status === 'timeout') {
+                        errorMessage = 'リクエストがタイムアウトしました（10分）。';
                     } else if (error && error !== 'OK') {
                         errorMessage = 'エラー: ' + error;
-                    } else if (xhr.responseText) {
-                        errorMessage = 'サーバーレスポンス: ' + xhr.responseText.substring(0, 200);
-                    } else if (status === 'timeout') {
-                        errorMessage = 'リクエストがタイムアウトしました（5分）。ニュースクロール処理に時間がかかりすぎています。';
-                    } else {
-                        errorMessage = 'レスポンスが空です';
-                        debugInfo = '\n\nデバッグ情報:\n';
-                        debugInfo += 'Status: ' + status + '\n';
-                        debugInfo += 'Error: ' + error + '\n';
-                        debugInfo += 'XHR Status: ' + xhr.status + '\n';
-                        debugInfo += 'XHR Status Text: ' + xhr.statusText + '\n';
-                        debugInfo += 'Response Text Length: ' + (xhr.responseText ? xhr.responseText.length : 0) + '\n';
-                        debugInfo += 'Response Text: ' + (xhr.responseText || '空') + '\n';
-                        debugInfo += 'Response JSON: ' + (xhr.responseJSON ? JSON.stringify(xhr.responseJSON) : 'undefined');
                     }
-                    
-                    jQuery('#execution-result-content').html('❌ エラー: ' + errorMessage + debugInfo);
+                    jQuery('#execution-result-content').html('❌ エラー: ' + errorMessage);
                 },
                 complete: function() {
                     button.prop('disabled', false).text(originalText);
-                    
-                    // 結果エリアまでスクロール
                     jQuery('html, body').animate({
                         scrollTop: jQuery('#execution-result').offset().top - 50
                     }, 500);
@@ -2210,9 +2137,9 @@ $('#cancel-edit').click(function() {
             
             $limit_text = !empty($limit_factors) ? ' (' . implode(', ', $limit_factors) . ')' : '';
             
-            $available_posts_display = '<span style="font-weight: bold;">' . esc_html($possible_posts) . ' 件</span>' . $limit_text . '<br>'
+            $available_posts_display = '<span style="font-weight: bold;">実際の投稿可能数: ' . esc_html($possible_posts) . ' 件</span>' . $limit_text . '<br>'
                 . '<small>候補: ' . esc_html($available_candidates) . ' / 空き: ' . esc_html($slots) . ' / 上限: ' . esc_html($per_crawl_cap) . '<br>'
-                . 'グローバル: ' . esc_html($global_available) . ' / 候補あり: ' . esc_html($enabled_genres_with_candidates) . ' / 実際可能: ' . esc_html($actual_possible_posts) . '</small>';
+                . 'グローバル空き: ' . esc_html($global_available) . ' / 候補ありジャンル: ' . esc_html($enabled_genres_with_candidates) . ' / グローバル実際可能: ' . esc_html($actual_possible_posts) . '</small>';
 
             echo '<td>' . $available_posts_display . '</td>';
             
@@ -2346,6 +2273,11 @@ $('#cancel-edit').click(function() {
         $genre_settings[$genre_id] = $setting;
         
         update_option($this->option_name, $genre_settings);
+
+        // 候補件数キャッシュをクリアして、次回の表示で再評価
+        if (!empty($genre_id)) {
+            delete_transient('news_crawler_available_count_' . $genre_id);
+        }
         
         // 保存後の確認
         $saved_settings = get_option($this->option_name, array());
@@ -2398,6 +2330,9 @@ $('#cancel-edit').click(function() {
         
         unset($genre_settings[$genre_id]);
         update_option($this->option_name, $genre_settings);
+
+        // 候補件数キャッシュをクリア
+        delete_transient('news_crawler_available_count_' . $genre_id);
         
         // 自動投稿関連のデータをクリーンアップ
         delete_option('news_crawler_last_execution_' . $genre_id);
@@ -2453,6 +2388,9 @@ $('#cancel-edit').click(function() {
             }
             
             $setting = $genre_settings[$genre_id];
+
+            // 個別実行ガード（短時間だけグローバル実行を抑止）
+            set_transient('news_crawler_single_run_guard', 1, 60);
             
             // デバッグ情報を追加
             $debug_info = array();
@@ -2484,20 +2422,127 @@ $('#cancel-edit').click(function() {
             // 出力バッファをクリアしてからJSONレスポンスを送信
             ob_end_clean();
             
+            // 個別実行ガードを解除
+            delete_transient('news_crawler_single_run_guard');
+            
             // レスポンス送信前にログ出力
             error_log('NewsCrawler: wp_send_json_success実行前');
             wp_send_json_success($final_result);
             error_log('NewsCrawler: wp_send_json_success実行後');
             
         } catch (Exception $e) {
+            // ガード解除
+            delete_transient('news_crawler_single_run_guard');
             // エラーが発生した場合も出力バッファをクリア
             ob_end_clean();
             wp_send_json_error('実行中にエラーが発生しました: ' . $e->getMessage() . "\n\nスタックトレース:\n" . $e->getTraceAsString());
         } catch (Error $e) {
+            // ガード解除
+            delete_transient('news_crawler_single_run_guard');
             // PHP 7+ のFatal Errorもキャッチ
             ob_end_clean();
             wp_send_json_error('致命的なエラーが発生しました: ' . $e->getMessage() . "\n\nスタックトレース:\n" . $e->getTraceAsString());
         }
+    }
+
+    /**
+     * 非同期実行: ジョブをキューに登録して即時にジョブIDを返す
+     */
+    public function enqueue_genre_execution() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        $genre_id = sanitize_text_field($_POST['genre_id'] ?? '');
+        if (empty($genre_id)) {
+            wp_send_json_error('ジャンルIDが不正です');
+        }
+        $job_id = 'job_' . $genre_id . '_' . time();
+        // 個別実行ガード（短時間だけグローバル実行を抑止）
+        set_transient('news_crawler_single_run_guard', 1, 60);
+        set_transient('news_crawler_job_status_' . $job_id, array(
+            'status' => 'queued',
+            'message' => 'キュー投入完了'
+        ), 600);
+        // すぐに実行をスケジュール
+        wp_schedule_single_event(time() + 1, 'news_crawler_execute_genre_job', array($genre_id, $job_id));
+        wp_send_json_success($job_id);
+    }
+
+    /**
+     * 非同期実行: ジョブの進捗を取得
+     */
+    public function get_genre_job_status() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        $job_id = sanitize_text_field($_POST['job_id'] ?? '');
+        if (empty($job_id)) {
+            wp_send_json_error('ジョブIDが不正です');
+        }
+        $status = get_transient('news_crawler_job_status_' . $job_id);
+        if (!$status) {
+            wp_send_json_error('ジョブが見つかりません');
+        }
+        wp_send_json_success($status);
+    }
+
+    /**
+     * 非同期実行: 実際のジョブ本体（WP-Cronで起動）
+     */
+    public function run_genre_job($genre_id, $job_id) {
+        $genre_settings = $this->get_genre_settings();
+        if (!isset($genre_settings[$genre_id])) {
+            set_transient('news_crawler_job_status_' . $job_id, array('status' => 'error', 'message' => '設定が見つかりません'), 300);
+            delete_transient('news_crawler_single_run_guard');
+            return;
+        }
+        $setting = $genre_settings[$genre_id];
+        $debug_info = array();
+        $debug_info[] = 'ジャンル設定実行開始: ' . $setting['genre_name'];
+        $debug_info[] = 'コンテンツタイプ: ' . $setting['content_type'];
+        $debug_info[] = 'キーワード数: ' . count($setting['keywords']);
+        try {
+            if ($setting['content_type'] === 'news') {
+                $debug_info[] = 'ニュースソース数: ' . count($setting['news_sources'] ?? array());
+                $result = $this->execute_news_crawling($setting);
+            } elseif ($setting['content_type'] === 'youtube') {
+                $debug_info[] = 'YouTubeチャンネル数: ' . count($setting['youtube_channels'] ?? array());
+                $result = $this->execute_youtube_crawling($setting);
+            } else {
+                throw new Exception('不正なコンテンツタイプ: ' . $setting['content_type']);
+            }
+            // 投稿可能数（候補件数）のキャッシュを即時無効化
+            delete_transient('news_crawler_available_count_' . $setting['id']);
+            $final = implode("\n", $debug_info) . "\n\n" . $result;
+            set_transient('news_crawler_job_status_' . $job_id, array('status' => 'done', 'message' => $final), 300);
+        } catch (Exception $e) {
+            set_transient('news_crawler_job_status_' . $job_id, array('status' => 'error', 'message' => $e->getMessage()), 300);
+        } finally {
+            delete_transient('news_crawler_single_run_guard');
+        }
+    }
+
+    /**
+     * WP-Cronが動いていない環境向けの即時実行エンドポイント（管理者限定）
+     */
+    public function run_genre_job_now() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        $genre_id = sanitize_text_field($_POST['genre_id'] ?? '');
+        $job_id = sanitize_text_field($_POST['job_id'] ?? '');
+        if (empty($genre_id) || empty($job_id)) {
+            wp_send_json_error('パラメータが不正です');
+        }
+        $this->run_genre_job($genre_id, $job_id);
+        $status = get_transient('news_crawler_job_status_' . $job_id);
+        if (!$status) {
+            wp_send_json_error('ジョブ状態が取得できません');
+        }
+        wp_send_json_success($status);
     }
     
     /**
@@ -3869,6 +3914,11 @@ $('#cancel-edit').click(function() {
      * 強制実行用の自動投稿処理（開始実行日時の制限を無視、既存の自動投稿設定のスケジュールを復元・維持）
      */
     private function execute_auto_posting_forced() {
+        // 個別実行ガード: 個別の「投稿を作成」操作中はグローバル実行しない
+        if (get_transient('news_crawler_single_run_guard')) {
+            error_log('NewsCrawler: Single-run guard active. Skipping forced auto posting.');
+            return;
+        }
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
@@ -3986,10 +4036,14 @@ $('#cancel-edit').click(function() {
             return 0;
         }
         
-        // 最初のチャンネルとキーワードでテスト実行
-        $channel_id = $youtube_channels[0];
-        $keyword = $keywords[0];
-        
+        // 複数チャンネル×複数キーワードを軽量評価（早期終了）
+        $max_channels = min(2, count($youtube_channels));
+        $max_keywords = min(3, count($keywords));
+        for ($i = 0; $i < $max_channels; $i++) {
+            $channel_id = $youtube_channels[$i];
+            for ($k = 0; $k < $max_keywords; $k++) {
+                $keyword = $keywords[$k];
+                // API
         $api_url = 'https://www.googleapis.com/youtube/v3/search';
         $params = array(
             'key' => $youtube_api_key,
@@ -3997,32 +4051,60 @@ $('#cancel-edit').click(function() {
             'q' => $keyword,
             'part' => 'snippet',
             'order' => 'date',
-            'maxResults' => 5,
+                    'maxResults' => 3,
             'type' => 'video',
-            'publishedAfter' => date('c', strtotime('-7 days')) // 過去7日間
+                    'publishedAfter' => date('c', strtotime('-14 days'))
         );
-        
         $url = add_query_arg($params, $api_url);
-        
         $response = wp_remote_get($url, array(
-            'timeout' => 30,
+                    'timeout' => 15,
             'sslverify' => false,
             'httpversion' => '1.1',
-            'user-agent' => 'News Crawler Plugin/1.0'
-        ));
-        
-        if (is_wp_error($response)) {
-            return 0;
+                    'redirection' => 3,
+                    'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+                ));
+                if (!is_wp_error($response)) {
+                    $data = json_decode(wp_remote_retrieve_body($response), true);
+                    if ($data && isset($data['items']) && count($data['items']) > 0) {
+                        return min(3, count($data['items']));
+                    }
+                }
+                // RSSフォールバック
+                $rss_url = 'https://www.youtube.com/feeds/videos.xml?channel_id=' . urlencode($channel_id);
+                $rss_count = 0;
+                if (!class_exists('SimplePie')) {
+                    require_once(ABSPATH . WPINC . '/class-simplepie.php');
+                }
+                $feed = new SimplePie();
+                $feed->set_feed_url($rss_url);
+                if (method_exists($feed, 'set_useragent')) {
+                    $feed->set_useragent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+                }
+                $cache_dir = $this->get_simplepie_cache_dir();
+                if (!empty($cache_dir)) {
+                    $feed->set_cache_location($cache_dir);
+                    $feed->enable_cache(true);
+                } else {
+                    $feed->enable_cache(false);
+                }
+                $feed->set_cache_duration(300);
+                $feed->init();
+                if (!$feed->error()) {
+                    $items = $feed->get_items();
+                    $kw = (string)$keyword;
+                    foreach (array_slice($items, 0, 5) as $item) {
+                        $title = (string)$item->get_title();
+                        if ($kw !== '' && stripos($title, $kw) !== false) {
+                            $rss_count++;
+                        }
+                    }
+                    if ($rss_count > 0) {
+                        return min(3, $rss_count);
+                    }
+                }
+            }
         }
-        
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        
-        if (!$data || !isset($data['items'])) {
             return 0;
-        }
-        
-        return count($data['items']);
     }
     
     /**
@@ -4036,17 +4118,33 @@ $('#cancel-edit').click(function() {
             return 0;
         }
         
-        // 最初のニュースソースでテスト実行
-        $news_source = $news_sources[0];
-        $keyword = $keywords[0];
+        // 複数ソース × 複数キーワードを軽量にチェック（早期終了）
+        $max_sources = min(3, count($news_sources));
+        $max_keywords = min(3, count($keywords));
         
-        // RSSフィードの場合はSimplePieを使用
-        if (filter_var($news_source, FILTER_VALIDATE_URL) && $this->is_rss_feed($news_source)) {
-            return $this->test_rss_feed_availability($news_source, $keyword);
+        for ($i = 0; $i < $max_sources; $i++) {
+            $news_source = $news_sources[$i];
+            if (!filter_var($news_source, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+            $is_rss = $this->is_rss_feed($news_source);
+            for ($k = 0; $k < $max_keywords; $k++) {
+                $keyword = $keywords[$k];
+                try {
+                    $matches = $is_rss
+                        ? $this->test_rss_feed_availability($news_source, $keyword)
+                        : $this->test_webpage_availability($news_source, $keyword);
+                } catch (Exception $e) {
+                    $matches = 0;
+                }
+                if ($matches > 0) {
+                    // 1件以上見つかったら十分とみなし早期終了
+                    return min(3, intval($matches));
+                }
+            }
         }
         
-        // 通常のWebサイトの場合はHTMLパース
-        return $this->test_webpage_availability($news_source, $keyword);
+        return 0;
     }
     
     /**
@@ -4055,15 +4153,18 @@ $('#cancel-edit').click(function() {
     private function is_rss_feed($url) {
         $response = wp_remote_get($url, array(
             'timeout' => 10,
-            'sslverify' => false
+            'sslverify' => false,
+            'httpversion' => '1.1',
+            'redirection' => 5,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ));
         
         if (is_wp_error($response)) {
             return false;
         }
         
-        $body = wp_remote_retrieve_body($response);
-        return strpos($body, '<rss') !== false || strpos($body, '<feed') !== false;
+        $body = (string) wp_remote_retrieve_body($response);
+        return ($body !== '') && (strpos($body, '<rss') !== false || strpos($body, '<feed') !== false);
     }
     
     /**
@@ -4076,7 +4177,16 @@ $('#cancel-edit').click(function() {
         
         $feed = new SimplePie();
         $feed->set_feed_url($url);
-        $feed->set_cache_location(WP_CONTENT_DIR . '/cache');
+        if (method_exists($feed, 'set_useragent')) {
+            $feed->set_useragent('News Crawler Plugin/1.0');
+        }
+        $cache_dir = $this->get_simplepie_cache_dir();
+        if (!empty($cache_dir)) {
+            $feed->set_cache_location($cache_dir);
+            $feed->enable_cache(true);
+        } else {
+            $feed->enable_cache(false);
+        }
         $feed->set_cache_duration(300); // 5分
         $feed->init();
         
@@ -4088,15 +4198,30 @@ $('#cancel-edit').click(function() {
         $matching_items = 0;
         
         foreach ($items as $item) {
-            $title = $item->get_title();
-            $content = $item->get_content();
-            
-            if (stripos($title, $keyword) !== false || stripos($content, $keyword) !== false) {
+            $title = (string)$item->get_title();
+            $content = (string)$item->get_content();
+            $kw = (string)$keyword;
+            if ($kw !== '' && (stripos($title, $kw) !== false || stripos($content, $kw) !== false)) {
                 $matching_items++;
             }
         }
         
         return $matching_items;
+    }
+
+    /**
+     * SimplePie用のキャッシュディレクトリを返す（書き込み可能な場合のみ）
+     */
+    private function get_simplepie_cache_dir() {
+        $cache_dir = WP_CONTENT_DIR . '/cache';
+        if (!file_exists($cache_dir)) {
+            // 作成試行
+            @mkdir($cache_dir, 0755, true);
+        }
+        if (is_dir($cache_dir) && is_writable($cache_dir)) {
+            return $cache_dir;
+        }
+        return '';
     }
     
     /**
@@ -4106,7 +4231,9 @@ $('#cancel-edit').click(function() {
         $response = wp_remote_get($url, array(
             'timeout' => 15,
             'sslverify' => false,
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'httpversion' => '1.1',
+            'redirection' => 5
         ));
         
         if (is_wp_error($response)) {
@@ -4117,8 +4244,22 @@ $('#cancel-edit').click(function() {
         
         // キーワードマッチングのテスト（簡易版）
         $matching_count = 0;
-        if (stripos($body, $keyword) !== false) {
+        $kw = (string)$keyword;
+        if ($kw !== '' && stripos((string)$body, $kw) !== false) {
             $matching_count = 1; // 最低1件は存在することを示す
+        } else {
+            // 非RSSの場合の簡易フィード自動探索: /feed, /rss, /atom
+            $candidates = array('feed', 'rss', 'atom');
+            foreach ($candidates as $path) {
+                $feed_url = rtrim($url, '/') . '/' . $path;
+                $is_feed = $this->is_rss_feed($feed_url);
+                if ($is_feed) {
+                    $feed_matches = $this->test_rss_feed_availability($feed_url, $keyword);
+                    if ($feed_matches > 0) {
+                        return 1;
+                    }
+                }
+            }
         }
         
         return $matching_count;

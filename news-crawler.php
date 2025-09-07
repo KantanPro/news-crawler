@@ -2104,13 +2104,28 @@ class NewsCrawler {
         // RSSフィードかどうかを判定
         if ($this->is_rss_feed($source)) {
             return $this->fetch_rss_articles($source, $max_results);
-        } else {
-            // ニュース記事タイプかどうかを判定
+        }
+
+        // HTML/リストページ経由の取得を試行（失敗時はRSS系フィードを探索してフォールバック）
+        try {
             if ($this->is_news_article_type($source)) {
                 return $this->fetch_news_articles_deep($source, $max_results);
             } else {
                 return $this->fetch_html_articles($source, $max_results);
             }
+        } catch (Exception $e) {
+            // フィード自動探索でフォールバック
+            $feed = $this->discover_feed_url($source);
+            if (!empty($feed)) {
+                try {
+                    return $this->fetch_rss_articles($feed, $max_results);
+                } catch (Exception $e2) {
+                    error_log('NewsCrawler: RSSフォールバックも失敗 - ' . $feed . ' - ' . $e2->getMessage());
+                    return array();
+                }
+            }
+            error_log('NewsCrawler: HTML取得に失敗し、フィードも見つからず - ' . $source . ' - ' . $e->getMessage());
+            return array();
         }
     }
     
@@ -2120,7 +2135,10 @@ class NewsCrawler {
     private function is_rss_feed($url) {
         $response = wp_remote_get($url, array(
             'timeout' => 10,
-            'sslverify' => false
+            'sslverify' => false,
+            'httpversion' => '1.1',
+            'redirection' => 5,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ));
         
         if (is_wp_error($response)) {
@@ -2160,7 +2178,9 @@ class NewsCrawler {
         $response = wp_remote_get($url, array(
             'timeout' => 10,
             'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0'
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'httpversion' => '1.1',
+            'redirection' => 5
         ));
         
         if (is_wp_error($response)) {
@@ -2267,13 +2287,27 @@ class NewsCrawler {
      * ニュースソースから記事リンクを抽出
      */
     private function extract_article_links($source_url, $max_links = 20) {
-        $response = wp_remote_get($source_url, array(
-            'timeout' => 20, // タイムアウトを短縮
-            'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0',
-            'redirection' => 3, // リダイレクト回数を制限
-            'httpversion' => '1.1'
-        ));
+        // 指数バックオフ付きでソースページを取得
+        $max_retries = 3;
+        $base_delay = 2;
+        $response = null;
+        for ($attempt = 0; $attempt < $max_retries; $attempt++) {
+            $response = wp_remote_get($source_url, array(
+                'timeout' => 20,
+                'sslverify' => false,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'redirection' => 5,
+                'httpversion' => '1.1'
+            ));
+            if (!is_wp_error($response)) {
+                break;
+            }
+            $msg = $response->get_error_message();
+            if (stripos($msg, 'timed out') === false && stripos($msg, 'timeout') === false && stripos($msg, 'couldn\'t connect') === false && stripos($msg, 'could not resolve host') === false) {
+                break;
+            }
+            sleep(pow($base_delay, $attempt));
+        }
         
         if (is_wp_error($response)) {
             error_log('NewsCrawler: ソースページ取得エラー: ' . $response->get_error_message() . ' - ' . $source_url);
@@ -2421,13 +2455,27 @@ class NewsCrawler {
      * 個別記事ページから詳細コンテンツを取得
      */
     private function fetch_individual_article($article_url) {
-        $response = wp_remote_get($article_url, array(
-            'timeout' => 15, // タイムアウトを短縮
-            'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0',
-            'redirection' => 3, // リダイレクト回数を制限
-            'httpversion' => '1.1'
-        ));
+        // 指数バックオフ付きで記事ページを取得
+        $max_retries = 3;
+        $base_delay = 2;
+        $response = null;
+        for ($attempt = 0; $attempt < $max_retries; $attempt++) {
+            $response = wp_remote_get($article_url, array(
+                'timeout' => 20,
+                'sslverify' => false,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'redirection' => 5,
+                'httpversion' => '1.1'
+            ));
+            if (!is_wp_error($response)) {
+                break;
+            }
+            $msg = $response->get_error_message();
+            if (stripos($msg, 'timed out') === false && stripos($msg, 'timeout') === false && stripos($msg, 'couldn\'t connect') === false && stripos($msg, 'could not resolve host') === false) {
+                break;
+            }
+            sleep(pow($base_delay, $attempt));
+        }
         
         if (is_wp_error($response)) {
             error_log('NewsCrawler: 記事取得エラー: ' . $response->get_error_message() . ' - ' . $article_url);
@@ -2567,6 +2615,20 @@ class NewsCrawler {
         
         return $content;
     }
+
+    /**
+     * 非RSSサイトで/feed 等のフィード自動探索
+     */
+    private function discover_feed_url($base_url) {
+        $candidates = array('feed', 'rss', 'atom');
+        foreach ($candidates as $path) {
+            $feed_url = rtrim($base_url, '/') . '/' . $path;
+            if ($this->is_rss_feed($feed_url)) {
+                return $feed_url;
+            }
+        }
+        return '';
+    }
     
     /**
      * 説明文を抽出
@@ -2673,6 +2735,9 @@ class NewsCrawler {
 
         $feed = new SimplePie();
         $feed->set_feed_url($url);
+        if (method_exists($feed, 'set_useragent')) {
+            $feed->set_useragent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        }
         $feed->set_cache_location(WP_CONTENT_DIR . '/cache');
         $feed->set_cache_duration(300); // 5分
         $feed->enable_order_by_date(true);
@@ -2739,11 +2804,27 @@ class NewsCrawler {
      * HTMLページから記事を取得
      */
     private function fetch_html_articles($url, $max_results = 20) {
-        $response = wp_remote_get($url, array(
-            'timeout' => 30,
-            'sslverify' => false,
-            'user-agent' => 'News Crawler Plugin/1.0'
-        ));
+        // 指数バックオフ付きでHTMLページを取得
+        $max_retries = 3;
+        $base_delay = 2;
+        $response = null;
+        for ($attempt = 0; $attempt < $max_retries; $attempt++) {
+            $response = wp_remote_get($url, array(
+                'timeout' => 30,
+                'sslverify' => false,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'httpversion' => '1.1',
+                'redirection' => 5
+            ));
+            if (!is_wp_error($response)) {
+                break;
+            }
+            $msg = $response->get_error_message();
+            if (stripos($msg, 'timed out') === false && stripos($msg, 'timeout') === false && stripos($msg, 'couldn\'t connect') === false && stripos($msg, 'could not resolve host') === false) {
+                break;
+            }
+            sleep(pow($base_delay, $attempt));
+        }
         
         if (is_wp_error($response)) {
             throw new Exception('HTMLページの取得に失敗しました: ' . $response->get_error_message());

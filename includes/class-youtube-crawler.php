@@ -400,12 +400,16 @@ class NewsCrawlerYouTubeCrawler {
         
         foreach ($channels as $channel) {
             try {
-                // 各チャンネルから最新の動画を1件のみ取得
-                $videos = $this->fetch_channel_videos($channel, 1);
+                // 各チャンネルから最新の動画を複数件取得（ヒット率向上）
+                $per_channel_fetch = max(1, min(5, $max_videos));
+                $videos = $this->fetch_channel_videos($channel, $per_channel_fetch);
                 if ($videos && is_array($videos)) {
                     foreach ($videos as $video) {
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
+                            if (count($matched_videos) >= $max_videos) {
+                                break 2; // 目標数に達したら全体ループを早期終了
+                            }
                         }
                     }
                 }
@@ -481,12 +485,16 @@ class NewsCrawlerYouTubeCrawler {
         
         foreach ($channels as $channel) {
             try {
-                // 各チャンネルから最新の動画を1件のみ取得
-                $videos = $this->fetch_channel_videos($channel, 1);
+                // 各チャンネルから最新の動画を複数件取得（ヒット率向上）
+                $per_channel_fetch = max(1, min(5, $max_videos));
+                $videos = $this->fetch_channel_videos($channel, $per_channel_fetch);
                 if ($videos && is_array($videos)) {
                     foreach ($videos as $video) {
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
+                            if (count($matched_videos) >= $max_videos) {
+                                break 2; // 目標数に達したら全体ループを早期終了
+                            }
                         }
                     }
                 }
@@ -905,10 +913,39 @@ class NewsCrawlerYouTubeCrawler {
         );
         
         $url = add_query_arg($params, $api_url);
-        $response = wp_remote_get($url, array('timeout' => 30));
+        
+        // 指数バックオフ付きリトライ
+        $max_retries = 3;
+        $base_delay = 2; // 秒
+        $response = null;
+        for ($attempt = 0; $attempt < $max_retries; $attempt++) {
+            $response = wp_remote_get($url, array(
+                'timeout' => 30,
+                'sslverify' => false,
+                'httpversion' => '1.1',
+                'redirection' => 5,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            ));
+            if (!is_wp_error($response)) {
+                break;
+            }
+            // タイムアウト/接続失敗のみ再試行
+            $msg = $response->get_error_message();
+            if (stripos($msg, 'timed out') === false && stripos($msg, 'timeout') === false && stripos($msg, 'couldn\'t connect') === false && stripos($msg, 'could not resolve host') === false) {
+                break;
+            }
+            sleep(pow($base_delay, $attempt));
+        }
         
         if (is_wp_error($response)) {
-            throw new Exception('APIリクエストに失敗しました: ' . $response->get_error_message());
+            // APIに到達できない場合はRSSフィードにフォールバック
+            $rss_videos = $this->fetch_channel_videos_via_rss($channel_id, $max_results);
+            if (!empty($rss_videos)) {
+                return $rss_videos;
+            }
+            // RSSでも取得できない場合はエラーにせず空配列を返す（環境依存のネットワーク遮断を考慮）
+            error_log('YouTubeCrawler: APIエラー後のRSSフォールバックも失敗（channel: ' . $channel_id . '）。空配列を返します。理由: ' . $response->get_error_message());
+            return array();
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
@@ -922,7 +959,14 @@ class NewsCrawlerYouTubeCrawler {
                 throw new Exception('YouTube APIのクォータ（利用制限）を超過しています。24時間後に再試行してください。');
             }
             
-            throw new Exception('APIリクエストが失敗しました。HTTPステータス: ' . $response_code . '、レスポンス: ' . substr($body, 0, 500));
+            // HTTPエラー時もRSSフィードにフォールバック
+            $rss_videos = $this->fetch_channel_videos_via_rss($channel_id, $max_results);
+            if (!empty($rss_videos)) {
+                return $rss_videos;
+            }
+            // RSSでも取得できない場合は空配列を返す
+            error_log('YouTubeCrawler: API HTTPエラー後のRSSフォールバックも失敗（channel: ' . $channel_id . '）。空配列を返します。HTTP: ' . $response_code);
+            return array();
         }
         
         $body = wp_remote_retrieve_body($response);
@@ -972,6 +1016,93 @@ class NewsCrawlerYouTubeCrawler {
         
         return $videos;
     }
+
+    /**
+     * YouTubeチャンネルRSSフィードから最新動画を取得（API障害時フォールバック）
+     */
+    private function fetch_channel_videos_via_rss($channel_id, $max_results = 20) {
+        $rss_url = 'https://www.youtube.com/feeds/videos.xml?channel_id=' . urlencode($channel_id);
+        $response = wp_remote_get($rss_url, array(
+            'timeout' => 20,
+            'sslverify' => false,
+            'httpversion' => '1.1',
+            'redirection' => 5,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        ));
+        if (is_wp_error($response)) {
+            return array();
+        }
+        $body = wp_remote_retrieve_body($response);
+        if (empty($body)) {
+            return array();
+        }
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($body);
+        if ($xml === false) {
+            return array();
+        }
+        // 名前空間
+        $yt = $xml->getNamespaces(true);
+        $ytNs = isset($yt['yt']) ? $yt['yt'] : 'http://www.youtube.com/xml/schemas/2015';
+        $mediaNs = isset($yt['media']) ? $yt['media'] : 'http://search.yahoo.com/mrss/';
+        
+        $videos = array();
+        $count = 0;
+        foreach ($xml->entry as $entry) {
+            if ($count >= $max_results) break;
+            // videoId
+            $videoId = '';
+            $childrenYt = $entry->children($ytNs);
+            if (isset($childrenYt->videoId)) {
+                $videoId = (string)$childrenYt->videoId;
+            }
+            if (empty($videoId) && isset($entry->id)) {
+                // id から抽出
+                $idStr = (string)$entry->id; // 例: yt:video:VIDEOID
+                if (preg_match('#video:([A-Za-z0-9_-]{6,})#', $idStr, $m)) {
+                    $videoId = $m[1];
+                }
+            }
+            if (empty($videoId)) {
+                continue;
+            }
+            $title = isset($entry->title) ? (string)$entry->title : '';
+            $published = isset($entry->published) ? (string)$entry->published : '';
+            $channelTitle = '';
+            if (isset($entry->author) && isset($entry->author->name)) {
+                $channelTitle = (string)$entry->author->name;
+            } elseif (isset($xml->title)) {
+                $channelTitle = (string)$xml->title;
+            }
+            // description
+            $desc = '';
+            $media = $entry->children($mediaNs);
+            if (isset($media->group) && isset($media->group->description)) {
+                $desc = (string)$media->group->description;
+            }
+            // サムネイル
+            $thumb = '';
+            if (isset($media->group) && isset($media->group->thumbnail)) {
+                $attrs = $media->group->thumbnail->attributes();
+                if (isset($attrs['url'])) {
+                    $thumb = (string)$attrs['url'];
+                }
+            }
+            $videos[] = array(
+                'video_id' => $videoId,
+                'title' => $title,
+                'description' => $desc,
+                'channel_title' => $channelTitle,
+                'channel_id' => $channel_id,
+                'published_at' => !empty($published) ? date('Y-m-d H:i:s', strtotime($published)) : '',
+                'thumbnail' => $thumb,
+                'duration' => '',
+                'view_count' => 0
+            );
+            $count++;
+        }
+        return $videos;
+    }
     
     private function fetch_video_details($video_id) {
         // APIキーの検証
@@ -988,7 +1119,28 @@ class NewsCrawlerYouTubeCrawler {
         );
         
         $url = add_query_arg($params, $api_url);
-        $response = wp_remote_get($url, array('timeout' => 30));
+        
+        // 指数バックオフ付きリトライ
+        $max_retries = 3;
+        $base_delay = 2;
+        $response = null;
+        for ($attempt = 0; $attempt < $max_retries; $attempt++) {
+            $response = wp_remote_get($url, array(
+                'timeout' => 30,
+                'sslverify' => false,
+                'httpversion' => '1.1',
+                'redirection' => 5,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            ));
+            if (!is_wp_error($response)) {
+                break;
+            }
+            $msg = $response->get_error_message();
+            if (stripos($msg, 'timed out') === false && stripos($msg, 'timeout') === false && stripos($msg, 'couldn\'t connect') === false && stripos($msg, 'could not resolve host') === false) {
+                break;
+            }
+            sleep(pow($base_delay, $attempt));
+        }
         
         if (is_wp_error($response)) {
             error_log('YouTube Video Details: APIリクエストに失敗しました: ' . $response->get_error_message());
