@@ -36,6 +36,8 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_enqueue_execute', array($this, 'enqueue_genre_execution'));
         add_action('wp_ajax_get_genre_job_status', array($this, 'get_genre_job_status'));
+        add_action('wp_ajax_recalculate_candidates_now', array($this, 'recalculate_candidates_now'));
+        add_action('wp_ajax_recalculate_all_candidates_now', array($this, 'recalculate_all_candidates_now'));
         add_action('wp_ajax_news_crawler_run_job_now', array($this, 'run_genre_job_now'));
         add_action('news_crawler_execute_genre_job', array($this, 'run_genre_job'), 10, 2);
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
@@ -1089,7 +1091,7 @@ class NewsCrawlerGenreSettings {
                 
                 <!-- ジャンル設定リスト -->
                 <div class="card" style="max-width: none; margin-top: 20px;">
-                    <h2>保存済み投稿設定</h2>
+                    <h2>保存済み投稿設定 <button type="button" class="button" title="全リストの投稿可能数を再評価" onclick="recalculateAllCandidates()" style="margin-left:8px;">&#x21BB;</button></h2>
                     <div id="genre-settings-list">
                         <?php $this->render_genre_settings_list($genre_settings); ?>
                     </div>
@@ -1892,6 +1894,35 @@ $('#cancel-edit').click(function() {
                 }
             });
         }
+
+        // 個別再評価機能は使用しません（削除）
+        </script>
+        <script>
+        // 全リストの投稿可能数を再評価
+        function recalculateAllCandidates() {
+            jQuery('#execution-result').show();
+            jQuery('#execution-result-content').html('全リストの投稿可能数を再評価しています...');
+            jQuery.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                dataType: 'json',
+                timeout: 300000,
+                data: {
+                    action: 'recalculate_all_candidates_now',
+                    nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>'
+                },
+                success: function(res) {
+                    if (res && res.success) {
+                        location.reload();
+                    } else {
+                        alert('再評価に失敗しました: ' + (res && res.data ? res.data : '不明なエラー'));
+                    }
+                },
+                error: function(xhr, status) {
+                    alert('再評価通信エラー: ' + status);
+                }
+            });
+        }
         </script>
         
         <style>
@@ -2543,6 +2574,59 @@ $('#cancel-edit').click(function() {
             wp_send_json_error('ジョブ状態が取得できません');
         }
         wp_send_json_success($status);
+    }
+
+    /**
+     * 候補数の再評価（キャッシュ無視して即時計算し直す）
+     */
+    public function recalculate_candidates_now() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        $genre_id = sanitize_text_field($_POST['genre_id'] ?? '');
+        if (empty($genre_id)) {
+            wp_send_json_error('ジャンルIDが不正です');
+        }
+        $genre_settings = $this->get_genre_settings();
+        if (!isset($genre_settings[$genre_id])) {
+            wp_send_json_error('指定された設定が見つかりません');
+        }
+        $setting = $genre_settings[$genre_id];
+        // 候補件数キャッシュ削除
+        delete_transient('news_crawler_available_count_' . $genre_id);
+        // 即時計算
+        try {
+            $available = intval($this->test_news_source_availability($setting));
+        } catch (Exception $e) {
+            $available = 0;
+        }
+        set_transient('news_crawler_available_count_' . $genre_id, $available, 5 * MINUTE_IN_SECONDS);
+        wp_send_json_success(array('available' => $available));
+    }
+
+    /**
+     * 全ジャンルの候補数を再評価（キャッシュ無視）
+     */
+    public function recalculate_all_candidates_now() {
+        check_ajax_referer('genre_settings_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('権限がありません');
+        }
+        $genre_settings = $this->get_genre_settings();
+        if (empty($genre_settings)) {
+            wp_send_json_success('ジャンル設定がありません');
+        }
+        foreach ($genre_settings as $gid => $setting) {
+            delete_transient('news_crawler_available_count_' . $gid);
+            try {
+                $available = intval($this->test_news_source_availability($setting));
+            } catch (Exception $e) {
+                $available = 0;
+            }
+            set_transient('news_crawler_available_count_' . $gid, $available, 5 * MINUTE_IN_SECONDS);
+        }
+        wp_send_json_success('OK');
     }
     
     /**
