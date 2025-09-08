@@ -57,6 +57,41 @@ add_action('plugins_loaded', function() {
 }, 1);
 
 
+// 標準の更新通知が表示されない場合のフォールバック通知
+add_action('admin_notices', function() {
+    if (!current_user_can('update_plugins')) {
+        return;
+    }
+
+    // すでに WordPress 標準の更新通知がある場合は何もしない
+    $plugin_basename = plugin_basename(__FILE__);
+    $wp_update_transient = get_site_transient('update_plugins');
+    if (!empty($wp_update_transient) && isset($wp_update_transient->response[$plugin_basename])) {
+        return;
+    }
+
+    // Updater が保存した最新情報のキャッシュを参照（ネットワーク通信は行わない）
+    $latest = get_transient('news_crawler_latest_version');
+    if ($latest === false) {
+        $latest = get_transient('news_crawler_latest_version_backup');
+    }
+
+    if (!is_array($latest) || empty($latest['version'])) {
+        return;
+    }
+
+    // 現在バージョンより新しければフォールバック通知を表示
+    if (version_compare(NEWS_CRAWLER_VERSION, $latest['version'], '<')) {
+        $update_core_url = admin_url('update-core.php');
+        $force_check_url = admin_url('plugins.php?force-check=1');
+        echo '<div class="notice notice-warning is-dismissible">';
+        echo '<p><strong>News Crawler の新しいバージョン ' . esc_html($latest['version']) . ' が利用可能です。</strong></p>';
+        echo '<p><a class="button button-primary" href="' . esc_url($update_core_url) . '">今すぐ更新</a> ';
+        echo '<a class="button" href="' . esc_url($force_check_url) . '">更新情報を再取得</a></p>';
+        echo '</div>';
+    }
+});
+
 // プラグイン初期化
 function news_crawler_init() {
     // 国際化の初期化（翻訳読み込みを最初に実行）
