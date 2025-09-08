@@ -1985,8 +1985,8 @@ $('#cancel-edit').click(function() {
                                 var response = JSON.parse(xhr.responseText);
                                 if (response.data) {
                                     errorMessage += '\n詳細: ' + response.data;
-                                }
-                            } catch (e) {
+                            }
+                        } catch (e) {
                                 errorMessage += '\nレスポンス: ' + xhr.responseText.substring(0, 200);
                             }
                         }
@@ -2713,8 +2713,8 @@ $('#cancel-edit').click(function() {
             
             // API接続テストでエラーが検出された場合は、候補数の再計算を実行しない
             if (strpos($result, '❌ エラー:') === false) {
-                // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
-                delete_transient('news_crawler_available_count_' . $setting['id']);
+            // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
+            delete_transient('news_crawler_available_count_' . $setting['id']);
             }
             
             // デバッグログにレスポンス内容を記録
@@ -4506,11 +4506,11 @@ $('#cancel-edit').click(function() {
             return 0;
         }
         
-        // 各ソースに対して全てのキーワードをチェック
+        // 早期終了機能：1つのソースで1件マッチしたら終了
         $max_sources = min(3, count($news_sources));
         $total_matches = 0;
         
-        error_log('News Crawler Debug: Testing ' . $max_sources . ' sources with all ' . count($keywords) . ' keywords');
+        error_log('News Crawler Debug: Testing ' . $max_sources . ' sources with early exit enabled');
         
         for ($i = 0; $i < $max_sources; $i++) {
             $news_source = $news_sources[$i];
@@ -4521,8 +4521,7 @@ $('#cancel-edit').click(function() {
             $is_rss = $this->is_rss_feed($news_source);
             error_log('News Crawler Debug: Testing source ' . ($i+1) . ': ' . $news_source . ' (RSS: ' . ($is_rss ? 'Yes' : 'No') . ')');
             
-            $source_matches = 0;
-            // このソースに対して全てのキーワードをチェック
+            // このソースに対してキーワードをチェック（早期終了）
             foreach ($keywords as $keyword) {
                 error_log('News Crawler Debug: Testing keyword: ' . $keyword);
                 try {
@@ -4530,19 +4529,20 @@ $('#cancel-edit').click(function() {
                         ? $this->test_rss_feed_availability($news_source, $keyword)
                         : $this->test_webpage_availability($news_source, $keyword);
                     error_log('News Crawler Debug: Matches found for keyword "' . $keyword . '": ' . $matches);
-                    $source_matches += $matches;
+                    
+                    if ($matches > 0) {
+                        // 1件でもマッチしたら早期終了
+                        error_log('News Crawler Debug: Early exit - found ' . $matches . ' matches for keyword "' . $keyword . '" in source ' . $news_source);
+                        return 1; // 早期終了で1を返す
+                    }
                 } catch (Exception $e) {
                     error_log('News Crawler Debug: Exception in test: ' . $e->getMessage());
                 }
             }
-            
-            error_log('News Crawler Debug: Source ' . $news_source . ' total matches: ' . $source_matches);
-            $total_matches += $source_matches;
         }
         
-        $result = min(10, $total_matches); // 最大10件まで
-        error_log('News Crawler Debug: Total matches across all sources: ' . $total_matches . ' (capped at ' . $result . ')');
-        return $result;
+        error_log('News Crawler Debug: No matches found across all sources');
+        return 0;
     }
     
     /**
