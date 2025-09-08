@@ -1217,6 +1217,12 @@ class NewsCrawler {
      * ニュースクロールを実行
      */
     public function crawl_news() {
+        // まずOpenAI API接続テストを実行
+        $api_test = $this->test_openai_api_connection();
+        if (is_wp_error($api_test)) {
+            return '❌ エラー: ' . $api_test->get_error_message();
+        }
+        
         $options = get_option($this->option_name, array());
         $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
@@ -1280,6 +1286,13 @@ class NewsCrawler {
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
+                
+                // OpenAI API認証エラーの場合は処理を停止
+                if (is_wp_error($post_id) && $post_id->get_error_code() === 'openai_auth_error') {
+                    $result = "❌ エラー: " . $error_message;
+                    $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
+                    return $result;
+                }
             }
         } else {
             $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
@@ -1301,6 +1314,12 @@ class NewsCrawler {
      * オプション指定でニュースクロールを実行
      */
     public function crawl_news_with_options($options) {
+        // まずOpenAI API接続テストを実行
+        $api_test = $this->test_openai_api_connection();
+        if (is_wp_error($api_test)) {
+            return '❌ エラー: ' . $api_test->get_error_message();
+        }
+        
         $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         $max_articles = isset($options['max_articles']) && !empty($options['max_articles']) ? $options['max_articles'] : 3;
@@ -1363,6 +1382,13 @@ class NewsCrawler {
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
+                
+                // OpenAI API認証エラーの場合は処理を停止
+                if (is_wp_error($post_id) && $post_id->get_error_code() === 'openai_auth_error') {
+                    $result = "❌ エラー: " . $error_message;
+                    $result .= "\n\n=== デバッグ情報 ===\n" . implode("\n", $debug_info);
+                    return $result;
+                }
             }
         } else {
             $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
@@ -1626,6 +1652,13 @@ class NewsCrawler {
     }
     
     private function create_video_summary_post($videos, $categories, $status) {
+        // まずOpenAI API接続テストを実行
+        $api_test = $this->test_openai_api_connection();
+        if (is_wp_error($api_test)) {
+            error_log('NewsCrawler: create_video_summary_post - API接続テスト失敗: ' . $api_test->get_error_message());
+            return new WP_Error('openai_auth_error', 'OpenAI APIエラー: ' . $api_test->get_error_message());
+        }
+
         $cat_ids = array();
         foreach ($categories as $category) {
             $cat_ids[] = $this->get_or_create_category($category);
@@ -2974,16 +3007,102 @@ class NewsCrawler {
     }
     
     /**
-     * 各記事の詳細な要約を生成
+     * OpenAI API接続テスト
      */
-    private function generate_article_summary($article) {
-        // OpenAI APIキーを取得
+    public function test_openai_api_connection() {
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
 
-        if (empty($api_key) || empty($article['content'])) {
-            // APIキーがない場合や本文が空の場合でも、フォールバック要約にクリーンアップを適用
-            $raw = $article['content'] ?: $article['description'] ?: '';
+        // デバッグ情報をログに出力
+        error_log('NewsCrawler: API接続テスト開始');
+        error_log('NewsCrawler: basic_settings存在: ' . (empty($basic_settings) ? 'false' : 'true'));
+        error_log('NewsCrawler: APIキー長: ' . strlen($api_key));
+        error_log('NewsCrawler: APIキー先頭: ' . substr($api_key, 0, 10) . '...');
+
+        if (empty($api_key)) {
+            // 代替の設定からもAPIキーを取得してみる
+            $alt_settings = get_option('news_crawler_settings', array());
+            $alt_api_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
+            error_log('NewsCrawler: 代替設定からAPIキー取得: ' . (empty($alt_api_key) ? '失敗' : '成功'));
+            
+            if (!empty($alt_api_key)) {
+                $api_key = $alt_api_key;
+                error_log('NewsCrawler: 代替APIキーを使用');
+            } else {
+                return new WP_Error('no_api_key', 'OpenAI APIキーが設定されていません');
+            }
+        }
+
+        // 簡単なテストリクエストを送信
+        $test_prompt = 'テスト';
+        $request_body = json_encode(array(
+            'model' => 'gpt-3.5-turbo',
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => $test_prompt
+                )
+            ),
+            'max_tokens' => 10,
+            'temperature' => 0.7
+        ));
+
+        error_log('NewsCrawler: リクエスト送信開始');
+        error_log('NewsCrawler: リクエストボディ: ' . $request_body);
+
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json',
+            ),
+            'body' => $request_body,
+            'timeout' => 30,
+            'sslverify' => true
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('NewsCrawler: wp_remote_postエラー: ' . $response->get_error_message());
+            return new WP_Error('api_error', 'OpenAI API接続エラー: ' . $response->get_error_message());
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        
+        error_log('NewsCrawler: レスポンスコード: ' . $response_code);
+        error_log('NewsCrawler: レスポンスボディ: ' . $response_body);
+
+        if ($response_code === 401) {
+            return new WP_Error('auth_error', 'OpenAI API認証エラー: HTTP 401 - APIキーを確認してください。レスポンス: ' . $response_body);
+        } elseif ($response_code !== 200) {
+            return new WP_Error('api_error', 'OpenAI APIエラー: HTTP ' . $response_code . ' - レスポンス: ' . $response_body);
+        }
+
+        error_log('NewsCrawler: API接続テスト成功');
+        return true; // 接続成功
+    }
+
+    /**
+     * 各記事の詳細な要約を生成
+     */
+    private function generate_article_summary($article) {
+        // OpenAI APIキーを取得（複数の設定から確認）
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+
+        if (empty($api_key)) {
+            // 代替の設定からもAPIキーを取得してみる
+            $alt_settings = get_option('news_crawler_settings', array());
+            $api_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
+        }
+
+        if (empty($api_key)) {
+            // APIキーがない場合は例外を投げる（API接続テストで既にチェック済み）
+            throw new Exception('OpenAI APIキーが設定されていません');
+        }
+
+        if (empty($article['content'])) {
+            // 本文が空の場合はフォールバック要約を試す
+            $raw = $article['description'] ?: '';
             $clean_fallback = $this->clean_content_for_summary($raw);
             if (empty($clean_fallback)) {
                 return '';
@@ -3083,6 +3202,10 @@ class NewsCrawler {
                         $summary = str_replace(array("\r\n", "\r", "\n"), ' ', $summary);
                         return $summary;
                     }
+                } elseif ($response_code === 401) {
+                    // HTTP 401エラーの場合は記事作成を停止
+                    error_log('NewsCrawler: OpenAI API認証エラー (HTTP 401) - 記事作成を停止します');
+                    throw new Exception('OpenAI API認証エラー: HTTP 401 - APIキーを確認してください');
                 }
             }
         } catch (Exception $e) {
@@ -3208,6 +3331,15 @@ class NewsCrawler {
      * ニュース記事の投稿を作成
      */
     private function create_news_summary_post($articles, $categories, $status) {
+        // まずOpenAI API接続テストを実行
+        error_log('NewsCrawler: create_news_summary_post - API接続テスト開始');
+        $api_test = $this->test_openai_api_connection();
+        if (is_wp_error($api_test)) {
+            error_log('NewsCrawler: create_news_summary_post - API接続テスト失敗: ' . $api_test->get_error_message());
+            return new WP_Error('openai_auth_error', 'OpenAI APIエラー: ' . $api_test->get_error_message());
+        }
+        error_log('NewsCrawler: create_news_summary_post - API接続テスト成功');
+
         // デバッグ: 受け取ったステータスをログに記録
         error_log('NewsCrawler: create_news_summary_post called with status: ' . $status);
 
@@ -3224,22 +3356,28 @@ class NewsCrawler {
         $genre_name_for_title = 'ニュース';
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
         if ($current_genre_setting && isset($current_genre_setting['genre_name']) && !empty($current_genre_setting['genre_name'])) {
-            $genre_name_for_title = $current_genre_setting['genre_name'];
+            // 配列の場合は最初の要素を取得、文字列の場合はそのまま使用
+            if (is_array($current_genre_setting['genre_name'])) {
+                $genre_name_for_title = $current_genre_setting['genre_name'][0] ?? 'ニュース';
+            } else {
+                $genre_name_for_title = $current_genre_setting['genre_name'];
+            }
         }
         $post_title = '【' . $genre_name_for_title . '】以降はＡＩで生成';
 
         $post_content = '';
         $valid_articles = array(); // 要約が生成できた記事のみを格納
 
-        foreach ($articles as $article) {
-            // 記事要約を生成
-            $article_summary = $this->generate_article_summary($article);
+        try {
+            foreach ($articles as $article) {
+                // 記事要約を生成
+                $article_summary = $this->generate_article_summary($article);
 
-            // 要約が生成できなかった場合はスキップ
-            if (empty($article_summary)) {
-                error_log('NewsCrawler: 要約生成に失敗したため記事をスキップ: ' . $article['title']);
-                continue;
-            }
+                // 要約が生成できなかった場合はスキップ
+                if (empty($article_summary)) {
+                    error_log('NewsCrawler: 要約生成に失敗したため記事をスキップ: ' . $article['title']);
+                    continue;
+                }
 
             // 要約が生成できた記事を有効記事として追加
             $valid_articles[] = $article;
@@ -3290,6 +3428,16 @@ class NewsCrawler {
                 $post_content .= '<p><small>' . implode(' | ', $meta_info) . '</small></p>';
                 $post_content .= '<!-- /wp:paragraph -->';
             }
+            }
+        } catch (Exception $e) {
+            // OpenAI API関連のエラーの場合は記事作成を停止
+            if (strpos($e->getMessage(), 'OpenAI API認証エラー') !== false || 
+                strpos($e->getMessage(), 'OpenAI APIキーが設定されていません') !== false) {
+                error_log('NewsCrawler: OpenAI APIエラーにより記事作成を停止: ' . $e->getMessage());
+                return new WP_Error('openai_auth_error', 'OpenAI APIエラー: ' . $e->getMessage());
+            }
+            // その他のエラーは再スロー
+            throw $e;
         }
 
         // 有効な記事がない場合は投稿を作成しない（上位に明確なエラーを返す）
@@ -3298,6 +3446,13 @@ class NewsCrawler {
             $message = '要約生成できた記事がありませんでした（元記事数: ' . $original_count . '）。設定や要約閾値を見直してください。';
             error_log('NewsCrawler: ' . $message);
             return new WP_Error('no_valid_articles', $message);
+        }
+        
+        // コンテンツが空の場合は投稿を作成しない
+        if (empty($post_content)) {
+            $message = '投稿コンテンツが生成されませんでした。記事の取得または要約生成に失敗した可能性があります。';
+            error_log('NewsCrawler: ' . $message);
+            return new WP_Error('empty_content', $message);
         }
         
         // 仕上げの全体サニタイズ（念のため）

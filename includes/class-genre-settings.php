@@ -708,9 +708,10 @@ class NewsCrawlerGenreSettings {
         }
         
         if (isset($input['duplicate_check_period'])) {
-            $allowed_periods = array('7', '14', '30', '60', '90');
-            $period = sanitize_text_field($input['duplicate_check_period']);
-            $sanitized['duplicate_check_period'] = in_array($period, $allowed_periods) ? $period : '30';
+            // 数値入力と文字列選択の両方に対応
+            $period = intval($input['duplicate_check_period']);
+            // 品質管理ページでは1-365日の範囲を許可
+            $sanitized['duplicate_check_period'] = max(1, min(365, $period));
         }
         
         // コンテンツ取得期間制限設定の処理
@@ -722,6 +723,16 @@ class NewsCrawlerGenreSettings {
             $allowed_months = array('3', '6', '12', '18', '24', '36', '60');
             $months = sanitize_text_field($input['content_age_limit_months']);
             $sanitized['content_age_limit_months'] = in_array($months, $allowed_months) ? $months : '12';
+        }
+        
+        // 品質管理設定の処理（期間制限機能と期間制限日数）
+        if (isset($input['age_limit_enabled'])) {
+            $sanitized['age_limit_enabled'] = (bool) $input['age_limit_enabled'];
+        }
+        
+        if (isset($input['age_limit_days'])) {
+            $days = max(1, min(365, intval($input['age_limit_days'])));
+            $sanitized['age_limit_days'] = $days;
         }
         
         return $sanitized;
@@ -887,6 +898,12 @@ class NewsCrawlerGenreSettings {
         ?>
         <div class="wrap">
             <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 投稿設定</h1>
+            
+            <?php if (isset($_GET['settings-updated'])): ?>
+                <div class="notice notice-success is-dismissible">
+                    <p>設定を保存しました。</p>
+                </div>
+            <?php endif; ?>
             
             <!-- デバッグ情報表示エリア -->
             <div id="debug-info" style="margin-bottom: 20px; display: none;">
@@ -1089,9 +1106,17 @@ class NewsCrawlerGenreSettings {
                     </form>
                 </div>
                 
+                <!-- 再評価ボタン -->
+                <div style="margin: 15px 0 10px 0; text-align: right;">
+                    <button type="button" class="button button-primary" onclick="recalculateAllCandidates()" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 16px;">&#x21BB;</span>
+                        <span>投稿可能数を再評価</span>
+                    </button>
+                </div>
+                
                 <!-- ジャンル設定リスト -->
-                <div class="card" style="max-width: none; margin-top: 20px;">
-                    <h2>保存済み投稿設定 <button type="button" class="button" title="全リストの投稿可能数を再評価" onclick="recalculateAllCandidates()" style="margin-left:8px;">&#x21BB;</button></h2>
+                <div class="card" style="max-width: none; margin-top: 10px;">
+                    <h2>保存済み投稿設定</h2>
                     <div id="genre-settings-list">
                         <?php $this->render_genre_settings_list($genre_settings); ?>
                     </div>
@@ -1376,9 +1401,8 @@ $('#content-type').trigger('change');
                     data: formData,
                     success: function(response) {
                         if (response.success) {
-                            // 自動リロードを無効化（ユーザーが結果を確認できるように）
-                            // location.reload();
-                            alert('設定が保存されました');
+                            // ページをリロードしてWordPressの標準通知を表示
+                            window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'settings-updated=1';
                         } else {
                             alert('エラー: ' + response.data);
                         }
@@ -1447,6 +1471,13 @@ $('#cancel-edit').click(function() {
             
             // 強制実行
             $('#force-execution').click(function() {
+                if (!confirm('自動投稿を強制実行します。時間がかかる場合があります。続行しますか？')) {
+                    return;
+                }
+                
+                // 進捗ポップアップを表示
+                showForceProgressPopup();
+                
                 var button = $(this);
                 var resultDiv = $('#test-result');
                 var resultContent = $('#test-result-content');
@@ -1459,11 +1490,13 @@ $('#cancel-edit').click(function() {
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
+                    timeout: 600000, // 10分
                     data: {
                         action: 'force_auto_posting_execution',
                         nonce: '<?php echo wp_create_nonce('auto_posting_force_nonce'); ?>'
                     },
                     success: function(response) {
+                        hideForceProgressPopup();
                         if (response && response.success) {
                             var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
                             resultContent.html(successMessage);
@@ -1846,14 +1879,18 @@ $('#cancel-edit').click(function() {
             }
         }
         
-        // 投稿作成ボタンクリック（同期実行・長時間タイムアウト対応）
+        // 投稿作成ボタンクリック（進捗ポップアップ対応）
         function executeGenreSetting(genreId, genreName) {
+            if (!confirm('「' + genreName + '」の投稿を作成します。時間がかかる場合があります。続行しますか？')) {
+                return;
+            }
+            
+            // 進捗ポップアップを表示
+            showCreateProgressPopup(genreName);
+            
             var button = jQuery('#execute-btn-' + genreId);
             var originalText = button.text();
-            
             button.prop('disabled', true).text('実行中...');
-            jQuery('#execution-result').show();
-            jQuery('#execution-result-content').html('「' + genreName + '」の投稿作成を開始しています...');
             
             jQuery.ajax({
                 url: ajaxurl,
@@ -1867,15 +1904,20 @@ $('#cancel-edit').click(function() {
                 },
                 success: function(response) {
                     if (response && response.success) {
-                        var successMessage = '✅ 投稿作成が正常に完了しました！\n\n' + response.data;
-                        jQuery('#execution-result-content').html(successMessage);
+                        // ポップアップ内に完了メッセージを表示
+                        showCreateSuccessPopup(genreName, response.data);
+                        // 候補数キャッシュをクリア
+                        delete_transient('news_crawler_available_count_' + genreId);
                     } else if (response && response.data) {
-                        jQuery('#execution-result-content').html('❌ エラー: ' + response.data);
+                        hideCreateProgressPopup();
+                        alert('❌ エラー: ' + response.data);
                     } else {
-                        jQuery('#execution-result-content').html('❌ エラー: 不明な応答形式です');
+                        hideCreateProgressPopup();
+                        alert('❌ エラー: 不明な応答形式です');
                     }
                 },
                 error: function(xhr, status, error) {
+                    hideCreateProgressPopup();
                     var errorMessage = '実行中にエラーが発生しました。';
                     if (xhr && xhr.statusText && xhr.statusText !== 'OK') {
                         errorMessage = '通信エラー: ' + xhr.statusText;
@@ -1884,13 +1926,10 @@ $('#cancel-edit').click(function() {
                     } else if (error && error !== 'OK') {
                         errorMessage = 'エラー: ' + error;
                     }
-                    jQuery('#execution-result-content').html('❌ エラー: ' + errorMessage);
+                    alert('❌ エラー: ' + errorMessage);
                 },
                 complete: function() {
                     button.prop('disabled', false).text(originalText);
-                    jQuery('html, body').animate({
-                        scrollTop: jQuery('#execution-result').offset().top - 50
-                    }, 500);
                 }
             });
         }
@@ -1900,28 +1939,254 @@ $('#cancel-edit').click(function() {
         <script>
         // 全リストの投稿可能数を再評価
         function recalculateAllCandidates() {
-            jQuery('#execution-result').show();
-            jQuery('#execution-result-content').html('全リストの投稿可能数を再評価しています...');
-            jQuery.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                dataType: 'json',
-                timeout: 300000,
-                data: {
-                    action: 'recalculate_all_candidates_now',
-                    nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>'
-                },
-                success: function(res) {
-                    if (res && res.success) {
-                        location.reload();
-                    } else {
-                        alert('再評価に失敗しました: ' + (res && res.data ? res.data : '不明なエラー'));
+            if (!confirm('全ジャンルの候補数を再評価します。時間がかかる場合があります。続行しますか？')) {
+                                return;
+                            }
+            
+            // 進捗ポップアップを表示
+            showProgressPopup();
+            
+            var currentIndex = 0;
+            
+            function pollProgress() {
+                jQuery.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    timeout: 300000,
+                    data: {
+                        action: 'recalculate_all_candidates_now',
+                        nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
+                        current_index: currentIndex
+                    },
+                    success: function(res) {
+                        if (res && res.success) {
+                            updateProgress(res.data.progress, res.data.processed, res.data.total);
+                            if (res.data.completed) {
+                                hideProgressPopup();
+                                location.reload();
+                            } else {
+                                currentIndex++;
+                                // 次のジャンルを処理
+                                setTimeout(pollProgress, 100);
+                            }
+                        } else {
+                            hideProgressPopup();
+                            alert('再評価に失敗しました: ' + (res && res.data ? res.data : '不明なエラー'));
+                        }
+                    },
+                    error: function(xhr, status) {
+                        hideProgressPopup();
+                        alert('再評価通信エラー: ' + status);
                     }
-                },
-                error: function(xhr, status) {
-                    alert('再評価通信エラー: ' + status);
+                });
+            }
+            
+            pollProgress();
+        }
+        
+        function showProgressPopup() {
+            var popup = jQuery('<div id="progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
+                '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
+                '<h3>候補数再評価中...</h3>' +
+                '<div style="margin: 20px 0;">' +
+                '<div id="progress-bar" style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden;">' +
+                '<div id="progress-fill" style="height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); width: 0%; transition: width 0.3s ease;"></div>' +
+                '</div>' +
+                '<div id="progress-text" style="margin-top: 10px; font-size: 14px; color: #666;">0% (0/0)</div>' +
+                '</div>' +
+                '<div id="progress-detail" style="font-size: 12px; color: #999; margin-top: 10px;">処理中...</div>' +
+                '<div style="margin-top: 20px;">' +
+                '<button type="button" onclick="cancelRecalculateProgress()" class="button" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">キャンセル</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>');
+            jQuery('body').append(popup);
+        }
+        
+        function updateProgress(percent, processed, total) {
+            jQuery('#progress-fill').css('width', percent + '%');
+            jQuery('#progress-text').text(percent + '% (' + processed + '/' + total + ')');
+            jQuery('#progress-detail').text('ジャンル ' + processed + ' を処理中...');
+        }
+        
+        function hideProgressPopup() {
+            jQuery('#progress-popup').remove();
+        }
+        
+        function cancelRecalculateProgress() {
+            if (confirm('再評価をキャンセルしますか？')) {
+                hideProgressPopup();
+                // 再評価のポーリングを停止
+                if (window.recalculateInterval) {
+                    clearInterval(window.recalculateInterval);
+                    window.recalculateInterval = null;
                 }
-            });
+            }
+        }
+        
+        function showCreateProgressPopup(genreName) {
+            var popup = jQuery('<div id="create-progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
+                '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
+                '<h3>「' + genreName + '」の投稿作成中...</h3>' +
+                '<div style="margin: 20px 0;">' +
+                '<div id="create-progress-bar" style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden;">' +
+                '<div id="create-progress-fill" style="height: 100%; background: linear-gradient(90deg, #2196F3, #21CBF3); width: 0%; transition: width 0.3s ease;"></div>' +
+                '</div>' +
+                '<div id="create-progress-text" style="margin-top: 10px; font-size: 14px; color: #666;">処理中...</div>' +
+                '</div>' +
+                '<div id="create-progress-detail" style="font-size: 12px; color: #999; margin-top: 10px;">記事を取得・要約・投稿しています...</div>' +
+                '<div style="margin-top: 20px;">' +
+                '<button type="button" onclick="cancelCreateProgress()" class="button" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">キャンセル</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>');
+            jQuery('body').append(popup);
+            
+            // アニメーション開始
+            animateCreateProgress();
+        }
+        
+        function animateCreateProgress() {
+            var progress = 0;
+            var interval = setInterval(function() {
+                progress += Math.random() * 10;
+                if (progress > 90) progress = 90; // 90%で停止
+                jQuery('#create-progress-fill').css('width', progress + '%');
+                jQuery('#create-progress-text').text(Math.round(progress) + '%');
+                
+                // 処理段階を表示
+                if (progress < 30) {
+                    jQuery('#create-progress-detail').text('記事を取得中...');
+                } else if (progress < 60) {
+                    jQuery('#create-progress-detail').text('AI要約を生成中...');
+                } else if (progress < 90) {
+                    jQuery('#create-progress-detail').text('投稿を作成中...');
+                }
+                    }, 500);
+            
+            // グローバル変数に保存（キャンセル用）
+            window.createProgressInterval = interval;
+        }
+        
+        function hideCreateProgressPopup() {
+            if (window.createProgressInterval) {
+                clearInterval(window.createProgressInterval);
+                window.createProgressInterval = null;
+            }
+            jQuery('#create-progress-popup').remove();
+        }
+        
+        function cancelCreateProgress() {
+            if (confirm('投稿作成をキャンセルしますか？')) {
+                hideCreateProgressPopup();
+                // ボタンを元に戻す
+                jQuery('button[id^="execute-btn-"]').prop('disabled', false).each(function() {
+                    var originalText = jQuery(this).data('original-text');
+                    if (originalText) {
+                        jQuery(this).text(originalText);
+                    }
+                });
+            }
+        }
+        
+        function showForceProgressPopup() {
+            var popup = jQuery('<div id="force-progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
+                '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
+                '<h3>自動投稿を強制実行中...</h3>' +
+                '<div style="margin: 20px 0;">' +
+                '<div id="force-progress-bar" style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden;">' +
+                '<div id="force-progress-fill" style="height: 100%; background: linear-gradient(90deg, #FF9800, #FFC107); width: 0%; transition: width 0.3s ease;"></div>' +
+                '</div>' +
+                '<div id="force-progress-text" style="margin-top: 10px; font-size: 14px; color: #666;">処理中...</div>' +
+                '</div>' +
+                '<div id="force-progress-detail" style="font-size: 12px; color: #999; margin-top: 10px;">全ジャンルの投稿を処理しています...</div>' +
+                '<div style="margin-top: 20px;">' +
+                '<button type="button" onclick="cancelForceProgress()" class="button" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">キャンセル</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>');
+            jQuery('body').append(popup);
+            
+            // アニメーション開始
+            animateForceProgress();
+        }
+        
+        function animateForceProgress() {
+            var progress = 0;
+            var interval = setInterval(function() {
+                progress += Math.random() * 8;
+                if (progress > 85) progress = 85; // 85%で停止
+                jQuery('#force-progress-fill').css('width', progress + '%');
+                jQuery('#force-progress-text').text(Math.round(progress) + '%');
+                
+                // 処理段階を表示
+                if (progress < 25) {
+                    jQuery('#force-progress-detail').text('候補をチェック中...');
+                } else if (progress < 50) {
+                    jQuery('#force-progress-detail').text('記事を取得中...');
+                } else if (progress < 75) {
+                    jQuery('#force-progress-detail').text('AI要約を生成中...');
+                } else {
+                    jQuery('#force-progress-detail').text('投稿を作成中...');
+                }
+            }, 600);
+            
+            // グローバル変数に保存（キャンセル用）
+            window.forceProgressInterval = interval;
+        }
+        
+        function hideForceProgressPopup() {
+            if (window.forceProgressInterval) {
+                clearInterval(window.forceProgressInterval);
+                window.forceProgressInterval = null;
+            }
+            jQuery('#force-progress-popup').remove();
+        }
+        
+        function cancelForceProgress() {
+            if (confirm('強制実行をキャンセルしますか？')) {
+                hideForceProgressPopup();
+                // ボタンを元に戻す
+                jQuery('#force-execution').prop('disabled', false).text('強制実行（今すぐ）');
+            }
+        }
+        
+        function showCreateSuccessPopup(genreName, responseData) {
+            // 進捗ポップアップを非表示
+            hideCreateProgressPopup();
+            
+            // 投稿件数を抽出（レスポンスから数字を抽出）
+            var postCount = 0;
+            var match = responseData.match(/(\d+)件の.*投稿を作成/);
+            if (match) {
+                postCount = parseInt(match[1]);
+            }
+            
+            // OpenAI API エラー: HTTP 401が理由で投稿が0件作成された場合のチェック
+            var isOpenAIError = responseData.includes('OpenAI API エラー: HTTP 401') || responseData.includes('OpenAI API認証エラー');
+            var isZeroPosts = postCount === 0;
+            
+            var popup = jQuery('<div id="create-success-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
+                '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
+                '<h3 style="color: #4CAF50; margin-top: 0;">✅ 投稿作成完了</h3>' +
+                '<div style="margin: 20px 0; font-size: 16px;">' +
+                '<p><strong>「' + genreName + '」</strong></p>' +
+                '<p style="color: #2196F3; font-size: 18px; margin: 10px 0;">投稿を <strong>' + postCount + '</strong> 件作成しました</p>' +
+                (isOpenAIError && isZeroPosts ? '<p style="color: #FF5722; font-size: 14px; margin: 10px 0; background: #FFEBEE; padding: 10px; border-radius: 5px; border-left: 4px solid #FF5722;">⚠️ OpenAI API エラー: HTTP 401 のため投稿を作成できませんでした</p>' : '') +
+                '</div>' +
+                '<div style="margin-top: 20px;">' +
+                '<button type="button" onclick="closeCreateSuccessPopup()" class="button button-primary" style="padding: 10px 20px; font-size: 14px;">OK</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>');
+            jQuery('body').append(popup);
+        }
+        
+        function closeCreateSuccessPopup() {
+            jQuery('#create-success-popup').remove();
+            // ページをリロードして候補数を更新
+            location.reload();
         }
         </script>
         
@@ -2113,17 +2378,8 @@ $('#cancel-edit').click(function() {
             $cache_key = 'news_crawler_available_count_' . $genre_id_for_count;
             $available_candidates = get_transient($cache_key);
             if ($available_candidates === false) {
-                $available_candidates = 0;
-                try {
-                    // コンテンツタイプに応じて実際の取得可能件数を簡易調査
-                    $available_candidates = intval($this->test_news_source_availability($setting));
-                    if ($available_candidates < 0) {
+            // キャッシュがない場合は0を表示（再評価ボタンで更新）
                         $available_candidates = 0;
-                    }
-                } catch (Exception $e) {
-                    $available_candidates = 0;
-                }
-                set_transient($cache_key, $available_candidates, 5 * MINUTE_IN_SECONDS);
             }
 
             // 1回の実行での上限（ジャンル設定の取得数上限も考慮）
@@ -2442,8 +2698,11 @@ $('#cancel-edit').click(function() {
             // デバッグ情報を結果に追加
             $final_result = implode("\n", $debug_info) . "\n\n" . $result;
             
-            // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
-            delete_transient('news_crawler_available_count_' . $setting['id']);
+            // API接続テストでエラーが検出された場合は、候補数の再計算を実行しない
+            if (strpos($result, '❌ エラー:') === false) {
+                // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
+                delete_transient('news_crawler_available_count_' . $setting['id']);
+            }
             
             // デバッグログにレスポンス内容を記録
             error_log('NewsCrawler: 実行結果レスポンス準備完了');
@@ -2601,7 +2860,7 @@ $('#cancel-edit').click(function() {
         } catch (Exception $e) {
             $available = 0;
         }
-        set_transient('news_crawler_available_count_' . $genre_id, $available, 5 * MINUTE_IN_SECONDS);
+        set_transient('news_crawler_available_count_' . $genre_id, $available, 30 * MINUTE_IN_SECONDS);
         wp_send_json_success(array('available' => $available));
     }
 
@@ -2613,20 +2872,46 @@ $('#cancel-edit').click(function() {
         if (!current_user_can('manage_options')) {
             wp_send_json_error('権限がありません');
         }
+        
         $genre_settings = $this->get_genre_settings();
         if (empty($genre_settings)) {
             wp_send_json_success('ジャンル設定がありません');
         }
-        foreach ($genre_settings as $gid => $setting) {
-            delete_transient('news_crawler_available_count_' . $gid);
-            try {
-                $available = intval($this->test_news_source_availability($setting));
-            } catch (Exception $e) {
-                $available = 0;
-            }
-            set_transient('news_crawler_available_count_' . $gid, $available, 5 * MINUTE_IN_SECONDS);
+        
+        $total_genres = count($genre_settings);
+        $current_index = intval($_POST['current_index'] ?? 0);
+        
+        if ($current_index >= $total_genres) {
+            wp_send_json_success(array(
+                'progress' => 100,
+                'processed' => $total_genres,
+                'total' => $total_genres,
+                'completed' => true
+            ));
         }
-        wp_send_json_success('OK');
+        
+        // 現在のジャンルを処理
+        $genre_ids = array_keys($genre_settings);
+        $current_genre_id = $genre_ids[$current_index];
+        $setting = $genre_settings[$current_genre_id];
+        
+        delete_transient('news_crawler_available_count_' . $current_genre_id);
+        try {
+            $available = intval($this->test_news_source_availability($setting));
+        } catch (Exception $e) {
+            $available = 0;
+        }
+        set_transient('news_crawler_available_count_' . $current_genre_id, $available, 30 * MINUTE_IN_SECONDS);
+        
+        $processed = $current_index + 1;
+        $progress = round(($processed / $total_genres) * 100);
+        
+        wp_send_json_success(array(
+            'progress' => $progress,
+            'processed' => $processed,
+            'total' => $total_genres,
+            'completed' => $processed >= $total_genres
+        ));
     }
     
     /**
@@ -2652,6 +2937,17 @@ $('#cancel-edit').click(function() {
         if (!class_exists('NewsCrawler')) {
             return 'NewsCrawlerクラスが見つかりません。プラグインが正しく読み込まれていない可能性があります。';
         }
+        
+        // まずOpenAI API接続テストを実行
+        error_log('NewsCrawler: execute_news_crawling - API接続テスト開始');
+        $news_crawler = new NewsCrawler();
+        $api_test = $news_crawler->test_openai_api_connection();
+        if (is_wp_error($api_test)) {
+            error_log('NewsCrawler: execute_news_crawling - API接続テスト失敗: ' . $api_test->get_error_message());
+            // API接続テストでエラーが検出された場合は、候補数の再計算を実行しない
+            return '❌ エラー: ' . $api_test->get_error_message();
+        }
+        error_log('NewsCrawler: execute_news_crawling - API接続テスト成功');
         
         try {
             // 設定を一時的に適用
@@ -3301,15 +3597,8 @@ $('#cancel-edit').click(function() {
         $available_candidates = get_transient($cache_key);
         
         if ($available_candidates === false) {
-            // キャッシュがない場合は簡易チェック
-            try {
-                $available_candidates = intval($this->test_news_source_availability($setting));
-                if ($available_candidates < 0) {
+            // キャッシュがない場合は0を表示（再評価ボタンで更新）
                     $available_candidates = 0;
-                }
-            } catch (Exception $e) {
-                $available_candidates = 0;
-            }
         }
         
         if ($available_candidates <= 0) {
@@ -3467,15 +3756,8 @@ $('#cancel-edit').click(function() {
                 $available_candidates = get_transient($cache_key);
                 
                 if ($available_candidates === false) {
-                    // キャッシュがない場合は簡易チェック
-                    try {
-                        $available_candidates = intval($this->test_news_source_availability($setting));
-                        if ($available_candidates < 0) {
+                    // キャッシュがない場合は0を表示（再評価ボタンで更新）
                             $available_candidates = 0;
-                        }
-                    } catch (Exception $e) {
-                        $available_candidates = 0;
-                    }
                 }
                 
                 if ($available_candidates > 0) {
@@ -3501,15 +3783,8 @@ $('#cancel-edit').click(function() {
                 $available_candidates = get_transient($cache_key);
                 
                 if ($available_candidates === false) {
-                    // キャッシュがない場合は簡易チェック
-                    try {
-                        $available_candidates = intval($this->test_news_source_availability($setting));
-                        if ($available_candidates < 0) {
+                    // キャッシュがない場合は0を表示（再評価ボタンで更新）
                             $available_candidates = 0;
-                        }
-                    } catch (Exception $e) {
-                        $available_candidates = 0;
-                    }
                 }
                 
                 if ($available_candidates > 0) {
@@ -4199,36 +4474,47 @@ $('#cancel-edit').click(function() {
         $keywords = $setting['keywords'] ?? array();
         
         if (empty($news_sources) || empty($keywords)) {
+            error_log('News Crawler Debug: Empty sources or keywords - Sources: ' . print_r($news_sources, true) . ', Keywords: ' . print_r($keywords, true));
             return 0;
         }
         
-        // 複数ソース × 複数キーワードを軽量にチェック（早期終了）
+        // 各ソースに対して全てのキーワードをチェック
         $max_sources = min(3, count($news_sources));
-        $max_keywords = min(3, count($keywords));
+        $total_matches = 0;
+        
+        error_log('News Crawler Debug: Testing ' . $max_sources . ' sources with all ' . count($keywords) . ' keywords');
         
         for ($i = 0; $i < $max_sources; $i++) {
             $news_source = $news_sources[$i];
             if (!filter_var($news_source, FILTER_VALIDATE_URL)) {
+                error_log('News Crawler Debug: Invalid URL skipped: ' . $news_source);
                 continue;
             }
             $is_rss = $this->is_rss_feed($news_source);
-            for ($k = 0; $k < $max_keywords; $k++) {
-                $keyword = $keywords[$k];
+            error_log('News Crawler Debug: Testing source ' . ($i+1) . ': ' . $news_source . ' (RSS: ' . ($is_rss ? 'Yes' : 'No') . ')');
+            
+            $source_matches = 0;
+            // このソースに対して全てのキーワードをチェック
+            foreach ($keywords as $keyword) {
+                error_log('News Crawler Debug: Testing keyword: ' . $keyword);
                 try {
                     $matches = $is_rss
                         ? $this->test_rss_feed_availability($news_source, $keyword)
                         : $this->test_webpage_availability($news_source, $keyword);
+                    error_log('News Crawler Debug: Matches found for keyword "' . $keyword . '": ' . $matches);
+                    $source_matches += $matches;
                 } catch (Exception $e) {
-                    $matches = 0;
-                }
-                if ($matches > 0) {
-                    // 1件以上見つかったら十分とみなし早期終了
-                    return min(3, intval($matches));
+                    error_log('News Crawler Debug: Exception in test: ' . $e->getMessage());
                 }
             }
+            
+            error_log('News Crawler Debug: Source ' . $news_source . ' total matches: ' . $source_matches);
+            $total_matches += $source_matches;
         }
         
-        return 0;
+        $result = min(10, $total_matches); // 最大10件まで
+        error_log('News Crawler Debug: Total matches across all sources: ' . $total_matches . ' (capped at ' . $result . ')');
+        return $result;
     }
     
     /**
@@ -4275,11 +4561,15 @@ $('#cancel-edit').click(function() {
         $feed->init();
         
         if ($feed->error()) {
+            error_log('News Crawler Debug: RSS feed error for ' . $url . ': ' . $feed->error());
             return 0;
         }
         
         $items = $feed->get_items();
         $matching_items = 0;
+        $total_items = count($items);
+        
+        error_log('News Crawler Debug: RSS feed ' . $url . ' has ' . $total_items . ' items');
         
         foreach ($items as $item) {
             $title = (string)$item->get_title();
@@ -4287,9 +4577,11 @@ $('#cancel-edit').click(function() {
             $kw = (string)$keyword;
             if ($kw !== '' && (stripos($title, $kw) !== false || stripos($content, $kw) !== false)) {
                 $matching_items++;
+                error_log('News Crawler Debug: Match found in RSS - Title: ' . substr($title, 0, 50) . '...');
             }
         }
         
+        error_log('News Crawler Debug: RSS feed ' . $url . ' with keyword "' . $keyword . '" found ' . $matching_items . ' matches out of ' . $total_items . ' items');
         return $matching_items;
     }
 
@@ -4321,31 +4613,41 @@ $('#cancel-edit').click(function() {
         ));
         
         if (is_wp_error($response)) {
+            error_log('News Crawler Debug: Webpage request error for ' . $url . ': ' . $response->get_error_message());
             return 0;
         }
         
         $body = wp_remote_retrieve_body($response);
+        $body_length = strlen($body);
+        
+        error_log('News Crawler Debug: Webpage ' . $url . ' returned ' . $body_length . ' characters');
         
         // キーワードマッチングのテスト（簡易版）
         $matching_count = 0;
         $kw = (string)$keyword;
         if ($kw !== '' && stripos((string)$body, $kw) !== false) {
             $matching_count = 1; // 最低1件は存在することを示す
+            error_log('News Crawler Debug: Keyword "' . $keyword . '" found in webpage content');
         } else {
+            error_log('News Crawler Debug: Keyword "' . $keyword . '" not found in webpage content, trying feed discovery');
             // 非RSSの場合の簡易フィード自動探索: /feed, /rss, /atom
             $candidates = array('feed', 'rss', 'atom');
             foreach ($candidates as $path) {
                 $feed_url = rtrim($url, '/') . '/' . $path;
+                error_log('News Crawler Debug: Trying feed discovery: ' . $feed_url);
                 $is_feed = $this->is_rss_feed($feed_url);
                 if ($is_feed) {
+                    error_log('News Crawler Debug: Found feed at ' . $feed_url);
                     $feed_matches = $this->test_rss_feed_availability($feed_url, $keyword);
                     if ($feed_matches > 0) {
+                        error_log('News Crawler Debug: Feed discovery successful with ' . $feed_matches . ' matches');
                         return 1;
                     }
                 }
             }
         }
         
+        error_log('News Crawler Debug: Webpage ' . $url . ' with keyword "' . $keyword . '" returned ' . $matching_count . ' matches');
         return $matching_count;
     }
     
