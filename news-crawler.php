@@ -49,7 +49,8 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 
 // アップデータを早期初期化（plugins_loaded の最初期）
 add_action('plugins_loaded', function() {
-    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
+    // 管理画面またはWP-Cronのみで初期化し、フロント側の負荷を回避
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         new NewsCrawlerUpdater();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
@@ -249,10 +250,10 @@ function news_crawler_init_components() {
         }
     }
     
-    // セキュリティマネージャーの初期化
+    // セキュリティマネージャーの初期化（軽量）
     NewsCrawlerSecurityManager::get_instance();
-    // ジャンル設定管理クラスを初期化（シングルトンパターン）
-    if (class_exists('NewsCrawlerGenreSettings')) {
+    // ジャンル設定管理クラス（管理画面/cron のみ初期化）
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerGenreSettings')) {
         NewsCrawlerGenreSettings::get_instance();
     }
     
@@ -272,48 +273,48 @@ function news_crawler_init_components() {
         // メニュー登録を無効化したクラスは手動で初期化しない
     }
     
-    // アイキャッチ生成クラスを初期化
-    if (class_exists('NewsCrawlerFeaturedImageGenerator')) {
+    // アイキャッチ生成クラス（管理画面/cron のみ初期化）
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerFeaturedImageGenerator')) {
         new NewsCrawlerFeaturedImageGenerator();
     }
     
-    // アイキャッチ画像生成クラスを初期化
-    if (class_exists('News_Crawler_Eyecatch_Generator')) {
+    // アイキャッチ画像生成クラス（管理画面/cron のみ初期化）
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('News_Crawler_Eyecatch_Generator')) {
         new News_Crawler_Eyecatch_Generator();
     }
     
-    // アイキャッチ画像管理画面クラスを初期化
-    if (class_exists('News_Crawler_Eyecatch_Admin')) {
+    // アイキャッチ画像管理画面クラス（管理画面のみ）
+    if (is_admin() && class_exists('News_Crawler_Eyecatch_Admin')) {
         new News_Crawler_Eyecatch_Admin();
     }
     
-    // AI要約生成クラスを初期化
-    if (class_exists('NewsCrawlerOpenAISummarizer')) {
+    // AI要約生成クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawlerOpenAISummarizer')) {
         new NewsCrawlerOpenAISummarizer();
     }
     
-    // 投稿編集画面の要約生成クラスを初期化
-    if (class_exists('NewsCrawlerPostEditorSummary')) {
+    // 投稿編集画面の要約生成クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawlerPostEditorSummary')) {
         new NewsCrawlerPostEditorSummary();
     }
     
-    // SEOタイトル生成クラスを初期化
-    if (class_exists('NewsCrawlerSEOTitleGenerator')) {
+    // SEOタイトル生成クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawlerSEOTitleGenerator')) {
         new NewsCrawlerSEOTitleGenerator();
     }
     
-    // OGP管理クラスを初期化
+    // OGP管理クラス（フロントでも必要なため常時）
     if (class_exists('NewsCrawlerOGPManager')) {
         new NewsCrawlerOGPManager();
     }
     
-    // OGP設定クラスを初期化
-    if (class_exists('NewsCrawlerOGPSettings')) {
+    // OGP設定クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawlerOGPSettings')) {
         new NewsCrawlerOGPSettings();
     }
     
-    // 更新チェッククラスを初期化（WordPress標準のUpdate URIと併用）
-    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
+    // 更新チェッククラスを初期化（管理画面/cron のみ）
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         new NewsCrawlerUpdater();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
@@ -323,13 +324,13 @@ function news_crawler_init_components() {
         NewsCrawler_License_Manager::get_instance();
     }
     
-    // ライセンス設定クラスを初期化
-    if (class_exists('NewsCrawler_License_Settings')) {
+    // ライセンス設定クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawler_License_Settings')) {
         NewsCrawler_License_Settings::get_instance();
     }
     
-    // Cron設定クラスを初期化
-    if (class_exists('NewsCrawlerCronSettings')) {
+    // Cron設定クラス（管理画面/cron のみ）
+    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerCronSettings')) {
         new NewsCrawlerCronSettings();
     }
 }
@@ -340,6 +341,10 @@ add_action('init', 'news_crawler_ensure_cron_setup');
 add_action('wp_loaded', 'news_crawler_ensure_cron_setup');
 
 function news_crawler_ensure_cron_setup() {
+    // 管理画面またはWP-Cron以外では実行しない（フロント側での毎リクエスト実行を回避）
+    if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
+        return;
+    }
     // 自動投稿のcronが設定されているかチェック
     $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
     

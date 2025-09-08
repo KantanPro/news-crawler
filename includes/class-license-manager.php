@@ -166,6 +166,10 @@ class NewsCrawler_License_Manager {
      * @since 2.1.5
      */
     public function periodic_license_verification() {
+        // 管理画面またはWP-Cron以外では実行しない
+        if ( !is_admin() && !( defined('DOING_CRON') && DOING_CRON ) ) {
+            return;
+        }
         $license_key = get_option( 'news_crawler_license_key' );
         $last_check = get_option( 'news_crawler_last_license_check', 0 );
         

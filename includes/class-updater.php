@@ -72,6 +72,10 @@ class NewsCrawlerUpdater {
      * Check for updates
      */
     public function check_for_updates($transient) {
+        // 管理画面またはWP-Cron以外では更新チェックを行わない
+        if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
+            return $transient;
+        }
         // $transient が null の場合は防御的に初期化
         if ($transient === null) {
             $transient = new stdClass();
@@ -224,7 +228,7 @@ class NewsCrawlerUpdater {
         
         // GitHub APIから最新リリース情報を取得
         $response = wp_remote_get($this->github_api_url, array(
-            'timeout' => 30,
+            'timeout' => 10,
             'headers' => array(
                 'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
                 'Accept' => 'application/vnd.github.v3+json',
