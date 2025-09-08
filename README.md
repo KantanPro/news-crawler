@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.50-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.50)
+[![Version](https://img.shields.io/badge/version-2.3.51-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.51)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.51** (2025-09-08): News crawling stability improvements and enhanced error handling
+  - Added early termination functionality to news crawling for improved processing efficiency
+  - Enhanced debug log output content for easier problem identification and resolution
+  - Extended timeout for all-genre candidate re-evaluation function to 10 minutes for large-scale processing
+  - Fixed some error handling issues and strengthened response content logging
+  - Increased memory limit to 512MB and added processing time logging functionality
+  - Significantly improved news crawling processing stability and debugging capabilities
 
 - **v2.3.50** (2025-09-08): Major OpenAI API connection testing and error handling improvements
   - Added OpenAI API connection testing functionality before news crawling and article creation
