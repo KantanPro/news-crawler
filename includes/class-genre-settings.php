@@ -1953,7 +1953,7 @@ $('#cancel-edit').click(function() {
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
-                    timeout: 300000,
+                    timeout: 600000, // 10分に延長
                     data: {
                         action: 'recalculate_all_candidates_now',
                         nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
@@ -1975,9 +1975,22 @@ $('#cancel-edit').click(function() {
                             alert('再評価に失敗しました: ' + (res && res.data ? res.data : '不明なエラー'));
                         }
                     },
-                    error: function(xhr, status) {
+                    error: function(xhr, status, error) {
                         hideProgressPopup();
-                        alert('再評価通信エラー: ' + status);
+                        var errorMessage = '再評価通信エラー: ' + status;
+                        if (status === 'timeout') {
+                            errorMessage = '再評価がタイムアウトしました。時間がかかりすぎている可能性があります。';
+                        } else if (xhr.responseText) {
+                            try {
+                                var response = JSON.parse(xhr.responseText);
+                                if (response.data) {
+                                    errorMessage += '\n詳細: ' + response.data;
+                                }
+                            } catch (e) {
+                                errorMessage += '\nレスポンス: ' + xhr.responseText.substring(0, 200);
+                            }
+                        }
+                        alert(errorMessage);
                     }
                 });
             }
@@ -2868,6 +2881,12 @@ $('#cancel-edit').click(function() {
      * 全ジャンルの候補数を再評価（キャッシュ無視）
      */
     public function recalculate_all_candidates_now() {
+        // 実行時間制限を延長（10分）
+        set_time_limit(600);
+        
+        // メモリ制限を増加（512MB）
+        ini_set('memory_limit', '512M');
+        
         check_ajax_referer('genre_settings_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error('権限がありません');
@@ -2895,10 +2914,19 @@ $('#cancel-edit').click(function() {
         $current_genre_id = $genre_ids[$current_index];
         $setting = $genre_settings[$current_genre_id];
         
+        error_log('NewsCrawler: 候補数再評価開始 - ジャンルID: ' . $current_genre_id . ' (' . ($current_index + 1) . '/' . $total_genres . ')');
+        
         delete_transient('news_crawler_available_count_' . $current_genre_id);
         try {
+            // タイムアウトを防ぐために個別のタイムアウト設定
+            $start_time = time();
             $available = intval($this->test_news_source_availability($setting));
+            $end_time = time();
+            $processing_time = $end_time - $start_time;
+            
+            error_log('NewsCrawler: 候補数再評価完了 - ジャンルID: ' . $current_genre_id . ', 候補数: ' . $available . ', 処理時間: ' . $processing_time . '秒');
         } catch (Exception $e) {
+            error_log('NewsCrawler: 候補数再評価エラー - ジャンルID: ' . $current_genre_id . ', エラー: ' . $e->getMessage());
             $available = 0;
         }
         set_transient('news_crawler_available_count_' . $current_genre_id, $available, 30 * MINUTE_IN_SECONDS);
