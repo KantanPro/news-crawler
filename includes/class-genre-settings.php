@@ -613,7 +613,6 @@ class NewsCrawlerGenreSettings {
         echo '</select>';
         echo '<p class="description">デフォルトのアイキャッチ生成方法を選択してください。</p>';
     }
-    
     public function sanitize_basic_settings($input) {
         $sanitized = array();
         
@@ -1232,7 +1231,6 @@ $('#content-type').change(function() {
         $('#news-settings').show();
     }
 });
-            
             // アイキャッチ自動生成チェックボックス変更時の設定表示切り替え
             $('#auto-featured-image').change(function() {
                 if ($(this).is(':checked')) {
@@ -1883,7 +1881,6 @@ $('#cancel-edit').click(function() {
                 });
             }
         }
-        
         // 投稿作成ボタンクリック（進捗ポップアップ対応）
         function executeGenreSetting(genreId, genreName) {
             if (!confirm('「' + genreName + '」の投稿を作成します。時間がかかる場合があります。続行しますか？')) {
@@ -1918,7 +1915,8 @@ $('#cancel-edit').click(function() {
                         // フロント側ではサーバーキャッシュ削除はできないため、再読込で最新を反映
                     } else if (response && response.data) {
                         hideCreateProgressPopup();
-                        alert('❌ エラー: ' + response.data);
+                        var errorMsg = (typeof response.data === 'object' && response.data.message) ? response.data.message : response.data;
+                        alert('❌ エラー: ' + errorMsg);
                     } else {
                         hideCreateProgressPopup();
                         alert('❌ エラー: 不明な応答形式です');
@@ -2240,13 +2238,41 @@ $('#cancel-edit').click(function() {
             
             // 投稿件数を抽出（レスポンスから数字を抽出）
             var postCount = 0;
-            var match = responseData.match(/(\d+)件の.*投稿を作成/);
-            if (match) {
-                postCount = parseInt(match[1]);
+            var text = '';
+            try {
+                if (typeof responseData === 'object' && responseData !== null) {
+                    if (typeof responseData.posts_created !== 'undefined') {
+                        postCount = parseInt(responseData.posts_created) || 0;
+                    }
+                    if (typeof responseData.message === 'string') {
+                        text = responseData.message;
+                    } else {
+                        text = JSON.stringify(responseData);
+                    }
+                } else if (typeof responseData === 'string') {
+                    text = responseData;
+                }
+            } catch (e) {
+                text = String(responseData || '');
+            }
+            // 文字列からのフォールバック抽出
+            if (!postCount && typeof text === 'string') {
+                var regexes = [
+                    /(\d+)件の[^\n]*?投稿を作成/,
+                    /(\d+)件の[^\n]*?動画投稿を作成/,
+                    /(\d+)件[^\n]*?投稿を作成/
+                ];
+                for (var i = 0; i < regexes.length; i++) {
+                    var m = text.match(regexes[i]);
+                    if (m) { postCount = parseInt(m[1]); break; }
+                }
             }
             
             // OpenAI API エラー: HTTP 401が理由で投稿が0件作成された場合のチェック
-            var isOpenAIError = responseData.includes('OpenAI API エラー: HTTP 401') || responseData.includes('OpenAI API認証エラー');
+            var isOpenAIError = false;
+            if (typeof text === 'string') {
+                isOpenAIError = text.includes('OpenAI API エラー: HTTP 401') || text.includes('OpenAI API認証エラー');
+            }
             var isZeroPosts = postCount === 0;
             
             var popup = jQuery('<div id="create-success-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
@@ -2335,7 +2361,6 @@ $('#cancel-edit').click(function() {
         </style>
         <?php
     }    
-  
   private function render_genre_settings_list($genre_settings) {
         if (empty($genre_settings)) {
             echo '<p>保存されたジャンル設定がありません。</p>';
@@ -2756,6 +2781,14 @@ $('#cancel-edit').click(function() {
             
             // デバッグ情報を結果に追加
             $final_result = implode("\n", $debug_info) . "\n\n" . $result;
+
+            // サーバー側でも作成件数を抽出して返却（UIの誤判定防止）
+            $posts_created = 0;
+            if (preg_match('/(\d+)件の[^\n]*?投稿を作成/u', $result, $m)) {
+                $posts_created = intval($m[1]);
+            } elseif (preg_match('/(\d+)件の[^\n]*?動画投稿を作成/u', $result, $m2)) {
+                $posts_created = intval($m2[1]);
+            }
             
             // 成功時は該当ジャンルの投稿可能数を即時に再計算して保存（UIの乖離防止）
             if (strpos($result, '❌ エラー:') === false) {
@@ -2780,8 +2813,12 @@ $('#cancel-edit').click(function() {
             delete_transient('news_crawler_single_run_guard');
             
             // レスポンス送信前にログ出力
-            error_log('NewsCrawler: wp_send_json_success実行前');
-            wp_send_json_success($final_result);
+            error_log('NewsCrawler: wp_send_json_success実行前 - posts_created: ' . $posts_created);
+            error_log('NewsCrawler: final_result preview: ' . substr($final_result, 0, 200));
+            wp_send_json_success(array(
+                'message' => $final_result,
+                'posts_created' => $posts_created
+            ));
             error_log('NewsCrawler: wp_send_json_success実行後');
             
         } catch (Exception $e) {
@@ -2869,8 +2906,21 @@ $('#cancel-edit').click(function() {
             }
             // 投稿可能数（候補件数）のキャッシュを即時無効化
             delete_transient('news_crawler_available_count_' . $setting['id']);
+            
+            // サーバー側でも作成件数を抽出して返却（UIの誤判定防止）
+            $posts_created = 0;
+            if (preg_match('/(\d+)件の[^\n]*?投稿を作成/u', $result, $m)) {
+                $posts_created = intval($m[1]);
+            } elseif (preg_match('/(\d+)件の[^\n]*?動画投稿を作成/u', $result, $m2)) {
+                $posts_created = intval($m2[1]);
+            }
+            
             $final = implode("\n", $debug_info) . "\n\n" . $result;
-            set_transient('news_crawler_job_status_' . $job_id, array('status' => 'done', 'message' => $final), 300);
+            set_transient('news_crawler_job_status_' . $job_id, array(
+                'status' => 'done', 
+                'message' => $final,
+                'posts_created' => $posts_created
+            ), 300);
         } catch (Exception $e) {
             set_transient('news_crawler_job_status_' . $job_id, array('status' => 'error', 'message' => $e->getMessage()), 300);
         } finally {
@@ -2927,7 +2977,6 @@ $('#cancel-edit').click(function() {
         set_transient('news_crawler_available_count_' . $genre_id, $available, 30 * MINUTE_IN_SECONDS);
         wp_send_json_success(array('available' => $available));
     }
-
     /**
      * 全ジャンルの候補数を再評価（キャッシュ無視）
      */
@@ -3323,7 +3372,7 @@ $('#cancel-edit').click(function() {
         }
     }
     
-    private function get_genre_settings() {
+    public function get_genre_settings() {
         return get_option($this->option_name, array());
     }
     
@@ -3532,7 +3581,6 @@ $('#cancel-edit').click(function() {
             error_log('Genre Auto Posting - Failed to schedule for genre ' . $setting['genre_name']);
         }
     }
-    
     /**
      * 自動投稿の実行処理（全体チェック用）
      */
@@ -4160,7 +4208,6 @@ $('#cancel-edit').click(function() {
         // 次回実行時刻も保存
         update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
     }
-    
     /**
      * 自動投稿の実行ログを記録
      */
@@ -4794,7 +4841,6 @@ $('#cancel-edit').click(function() {
         error_log('News Crawler Debug: Webpage ' . $url . ' with keyword "' . $keyword . '" returned ' . $matching_count . ' matches');
         return $matching_count;
     }
-    
     // debug_cron_schedule メソッドは削除（サーバーcron対応のため）
     
     /**

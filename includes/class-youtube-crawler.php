@@ -661,11 +661,11 @@ class NewsCrawlerYouTubeCrawler {
         $post_content .= '<p class="wp-block-paragraph">本日は' . count($videos) . '本の' . $keyword_text . 'に関する動画をご紹介しました。各動画から最新の情報やトレンドをキャッチアップして、ぜひお気に入りの動画を見つけてください。また、チャンネル登録や高評価もお忘れなく！</p>' . "\n";
         $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
         
-        // News Crawler用の処理のため、最初に下書きとして投稿を作成
+        // 指定されたステータスで直接投稿を作成（公開設定を確実に反映）
         $post_data = array(
             'post_title'    => $post_title,
             'post_content'  => $post_content,
-            'post_status'   => 'draft', // 最初は下書きとして作成
+            'post_status'   => $status, // 指定されたステータスで直接作成
             'post_author'   => get_current_user_id() ?: 1,
             'post_type'     => 'post',
             'post_category' => $cat_ids
@@ -753,27 +753,8 @@ class NewsCrawlerYouTubeCrawler {
         
         // X（Twitter）自動シェア機能は削除済み
         
-        // News Crawler用の処理のため、投稿ステータス変更を即座に実行（cronジョブに依存しない）
-        error_log('YouTubeCrawler: 投稿ステータス変更処理開始 - 現在のステータス: ' . $status . ', 投稿ID: ' . $post_id);
-        if ($status !== 'draft') {
-            // 即座にステータスを変更
-            $update_data = array(
-                'ID' => $post_id,
-                'post_status' => $status
-            );
-            
-            error_log('YouTubeCrawler: 投稿ステータス更新を実行 - データ: ' . print_r($update_data, true));
-            $result = wp_update_post($update_data);
-            if ($result) {
-                error_log('YouTubeCrawler: 投稿ステータスを即座に ' . $status . ' に更新しました (ID: ' . $post_id . ')');
-            } else {
-                error_log('YouTubeCrawler: 投稿ステータスの即座更新に失敗しました (ID: ' . $post_id . ')');
-                // 即座更新に失敗した場合は遅延実行をスケジュール
-                $this->schedule_post_status_update($post_id, $status);
-            }
-        } else {
-            error_log('YouTubeCrawler: ステータスがdraftのため、ステータス変更をスキップしました (ID: ' . $post_id . ')');
-        }
+        // 投稿作成完了をログに記録
+        error_log('YouTubeCrawler: 投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
         
         return $post_id;
     }
@@ -1279,7 +1260,7 @@ class NewsCrawlerYouTubeCrawler {
             try {
                 // GenreSettingsクラスのインスタンスを取得して評価値を再計算
                 if (class_exists('NewsCrawlerGenreSettings')) {
-                    $genre_settings = new NewsCrawlerGenreSettings();
+                    $genre_settings = NewsCrawlerGenreSettings::get_instance();
                     $available = intval($genre_settings->test_news_source_availability($setting));
                     set_transient($cache_key, $available, 30 * MINUTE_IN_SECONDS);
                     error_log('YouTubeCrawler: 投稿作成後の評価値再評価 - ジャンルID: ' . $genre_id . ', 評価値: ' . $available);
@@ -1304,7 +1285,7 @@ class NewsCrawlerYouTubeCrawler {
             return;
         }
         
-        $genre_settings = new NewsCrawlerGenreSettings();
+        $genre_settings = NewsCrawlerGenreSettings::get_instance();
         $all_settings = $genre_settings->get_genre_settings();
         
         $backup_data = array();
