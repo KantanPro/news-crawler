@@ -20,7 +20,20 @@ class NewsCrawlerOpenAISummarizer {
     public function __construct() {
         // 基本設定からOpenAI APIキーを取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
-        $this->api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        $encrypted_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        
+        // セキュリティマネージャーで復号化
+        if (!empty($encrypted_key)) {
+            if (class_exists('NewsCrawlerSecurityManager')) {
+                $security_manager = NewsCrawlerSecurityManager::get_instance();
+                $this->api_key = apply_filters('news_crawler_get_api_key', $encrypted_key);
+            } else {
+                // セキュリティマネージャーが利用できない場合は平文として扱う
+                $this->api_key = $encrypted_key;
+            }
+        } else {
+            $this->api_key = '';
+        }
         
         // 基本設定からモデル設定を取得
         $this->model = isset($basic_settings['summary_generation_model']) ? $basic_settings['summary_generation_model'] : 'gpt-3.5-turbo';
@@ -42,7 +55,8 @@ class NewsCrawlerOpenAISummarizer {
         if (isset($masked_settings['openai_api_key'])) {
             $masked_settings['openai_api_key'] = '***masked***';
         }
-        error_log('NewsCrawlerOpenAISummarizer: 初期設定 - ' . print_r($masked_settings, true));
+        // デバッグ情報は非表示（セキュリティのため）
+        // error_log('NewsCrawlerOpenAISummarizer: 初期設定 - ' . print_r($masked_settings, true));
     }
 
     /**

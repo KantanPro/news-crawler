@@ -391,8 +391,24 @@ class NewsCrawlerGenreSettings {
     public function openai_api_key_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $api_key = isset($options['openai_api_key']) ? $options['openai_api_key'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[openai_api_key]" value="' . esc_attr($api_key) . '" size="50" />';
-        echo '<p class="description">AI画像生成とAI要約生成に使用するOpenAI APIキーを入力してください。</p>';
+        
+        // 既存のAPIキーがある場合はマスク表示
+        if (!empty($api_key)) {
+            if (class_exists('NewsCrawlerSecurityManager')) {
+                $security_manager = NewsCrawlerSecurityManager::get_instance();
+                $masked_value = $security_manager->mask_api_key($api_key);
+            } else {
+                // セキュリティマネージャーが利用できない場合は簡易マスク
+                $masked_value = substr($api_key, 0, 4) . str_repeat('*', strlen($api_key) - 8) . substr($api_key, -4);
+            }
+            echo '<input type="password" name="news_crawler_basic_settings[openai_api_key]" value="' . esc_attr($masked_value) . '" size="50" readonly />';
+            echo '<p class="description">現在のAPIキー: ' . esc_html($masked_value) . '</p>';
+            echo '<p class="description">新しいAPIキーを設定する場合は、下のフィールドに入力してください。</p>';
+            echo '<input type="password" name="news_crawler_basic_settings[new_openai_api_key]" value="" size="50" placeholder="新しいOpenAI APIキー" />';
+        } else {
+            echo '<input type="password" name="news_crawler_basic_settings[openai_api_key]" value="" size="50" placeholder="OpenAI APIキーを入力" />';
+        }
+        echo '<p class="description">AI画像生成とAI要約生成に使用するOpenAI APIキーを入力してください。キーは暗号化して保存されます。</p>';
     }
     
     public function unsplash_access_key_callback() {
@@ -625,7 +641,25 @@ class NewsCrawlerGenreSettings {
         }
         
         if (isset($input['openai_api_key'])) {
-            $sanitized['openai_api_key'] = sanitize_text_field($input['openai_api_key']);
+            $api_key = sanitize_text_field($input['openai_api_key']);
+            
+            // 新しいAPIキーが入力されている場合はそれを使用
+            if (isset($input['new_openai_api_key']) && !empty($input['new_openai_api_key'])) {
+                $api_key = sanitize_text_field($input['new_openai_api_key']);
+            }
+            
+            // セキュリティマネージャーで暗号化
+            if (!empty($api_key)) {
+                if (class_exists('NewsCrawlerSecurityManager')) {
+                    $security_manager = NewsCrawlerSecurityManager::get_instance();
+                    $sanitized['openai_api_key'] = apply_filters('news_crawler_sanitize_api_key', $api_key);
+                } else {
+                    // セキュリティマネージャーが利用できない場合は平文で保存
+                    $sanitized['openai_api_key'] = $api_key;
+                }
+            } else {
+                $sanitized['openai_api_key'] = '';
+            }
         }
         
         if (isset($input['unsplash_access_key'])) {

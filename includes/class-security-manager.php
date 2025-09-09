@@ -31,7 +31,13 @@ class NewsCrawlerSecurityManager {
      * コンストラクタ
      */
     private function __construct() {
-        $this->encryption_key = $this->get_encryption_key();
+        // WordPress関数が利用可能になるまで待機
+        if (function_exists('wp_salt')) {
+            $this->encryption_key = $this->get_encryption_key();
+        } else {
+            // フォールバックキーを設定
+            $this->encryption_key = $this->get_encryption_key();
+        }
         $this->init_hooks();
     }
     
@@ -172,8 +178,17 @@ class NewsCrawlerSecurityManager {
      * 暗号化キーの取得
      */
     private function get_encryption_key() {
-        // WordPress固有のソルトを使用
-        $key = wp_salt('secure_auth') . wp_salt('logged_in');
+        // WordPress関数が利用可能かチェック
+        if (function_exists('wp_salt')) {
+            // WordPress固有のソルトを使用
+            $key = wp_salt('secure_auth') . wp_salt('logged_in');
+        } else {
+            // フォールバック: サイト固有のキーを生成
+            $key = defined('ABSPATH') ? ABSPATH : '';
+            $key .= defined('DB_NAME') ? DB_NAME : '';
+            $key .= defined('DB_USER') ? DB_USER : '';
+            $key .= defined('DB_PASSWORD') ? DB_PASSWORD : '';
+        }
         return hash('sha256', $key);
     }
     
@@ -247,5 +262,36 @@ class NewsCrawlerSecurityManager {
         }
         
         return $wpdb->prepare($query, $args);
+    }
+    
+    /**
+     * 既存のAPIキーを暗号化するマイグレーション
+     */
+    public function migrate_existing_api_keys() {
+        // 基本設定のAPIキーをチェック
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        if (isset($basic_settings['openai_api_key']) && !empty($basic_settings['openai_api_key'])) {
+            $api_key = $basic_settings['openai_api_key'];
+            
+            // 既に暗号化されているかチェック（::が含まれていない場合は平文）
+            if (strpos($api_key, '::') === false && !empty($api_key)) {
+                $encrypted_key = $this->encrypt_api_key($api_key);
+                $basic_settings['openai_api_key'] = $encrypted_key;
+                update_option('news_crawler_basic_settings', $basic_settings);
+            }
+        }
+        
+        // 代替設定のAPIキーをチェック
+        $alt_settings = get_option('news_crawler_settings', array());
+        if (isset($alt_settings['openai_api_key']) && !empty($alt_settings['openai_api_key'])) {
+            $api_key = $alt_settings['openai_api_key'];
+            
+            // 既に暗号化されているかチェック（::が含まれていない場合は平文）
+            if (strpos($api_key, '::') === false && !empty($api_key)) {
+                $encrypted_key = $this->encrypt_api_key($api_key);
+                $alt_settings['openai_api_key'] = $encrypted_key;
+                update_option('news_crawler_settings', $alt_settings);
+            }
+        }
     }
 }

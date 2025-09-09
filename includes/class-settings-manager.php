@@ -785,8 +785,24 @@ class NewsCrawlerSettingsManager {
     public function openai_api_key_callback() {
         $settings = get_option($this->option_name, array());
         $value = isset($settings['openai_api_key']) ? $settings['openai_api_key'] : '';
-        echo '<input type="password" name="' . $this->option_name . '[openai_api_key]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">OpenAI APIキーを入力してください。</p>';
+        
+        // 既存のAPIキーがある場合はマスク表示
+        if (!empty($value)) {
+            if (class_exists('NewsCrawlerSecurityManager')) {
+                $security_manager = NewsCrawlerSecurityManager::get_instance();
+                $masked_value = $security_manager->mask_api_key($value);
+            } else {
+                // セキュリティマネージャーが利用できない場合は簡易マスク
+                $masked_value = substr($value, 0, 4) . str_repeat('*', strlen($value) - 8) . substr($value, -4);
+            }
+            echo '<input type="password" name="' . $this->option_name . '[openai_api_key]" value="' . esc_attr($masked_value) . '" size="50" readonly />';
+            echo '<p class="description">現在のAPIキー: ' . esc_html($masked_value) . '</p>';
+            echo '<p class="description">新しいAPIキーを設定する場合は、下のフィールドに入力してください。</p>';
+            echo '<input type="password" name="' . $this->option_name . '[new_openai_api_key]" value="" size="50" placeholder="新しいOpenAI APIキー" />';
+        } else {
+            echo '<input type="password" name="' . $this->option_name . '[openai_api_key]" value="" size="50" placeholder="OpenAI APIキーを入力" />';
+        }
+        echo '<p class="description">OpenAI APIキーを入力してください。キーは暗号化して保存されます。</p>';
     }
     
     public function auto_featured_image_callback() {
@@ -890,7 +906,25 @@ class NewsCrawlerSettingsManager {
             $sanitized['youtube_api_key'] = sanitize_text_field($input['youtube_api_key']);
         }
         if (array_key_exists('openai_api_key', $input)) {
-            $sanitized['openai_api_key'] = sanitize_text_field($input['openai_api_key']);
+            $api_key = sanitize_text_field($input['openai_api_key']);
+            
+            // 新しいAPIキーが入力されている場合はそれを使用
+            if (array_key_exists('new_openai_api_key', $input) && !empty($input['new_openai_api_key'])) {
+                $api_key = sanitize_text_field($input['new_openai_api_key']);
+            }
+            
+            // セキュリティマネージャーで暗号化
+            if (!empty($api_key)) {
+                if (class_exists('NewsCrawlerSecurityManager')) {
+                    $security_manager = NewsCrawlerSecurityManager::get_instance();
+                    $sanitized['openai_api_key'] = apply_filters('news_crawler_sanitize_api_key', $api_key);
+                } else {
+                    // セキュリティマネージャーが利用できない場合は平文で保存
+                    $sanitized['openai_api_key'] = $api_key;
+                }
+            } else {
+                $sanitized['openai_api_key'] = '';
+            }
         }
 
         // チェックボックス（送信があった項目のみ更新）

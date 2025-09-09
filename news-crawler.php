@@ -285,8 +285,14 @@ function news_crawler_init_components() {
         }
     }
     
-    // セキュリティマネージャーの初期化（軽量）
-    NewsCrawlerSecurityManager::get_instance();
+    // セキュリティマネージャーの初期化（WordPress完全読み込み後）
+    add_action('init', function() {
+        if (class_exists('NewsCrawlerSecurityManager')) {
+            $security_manager = NewsCrawlerSecurityManager::get_instance();
+            // 既存のAPIキーを暗号化するマイグレーションを実行
+            $security_manager->migrate_existing_api_keys();
+        }
+    }, 1);
     // ジャンル設定管理クラス（管理画面/cron のみ初期化）
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerGenreSettings')) {
         NewsCrawlerGenreSettings::get_instance();
@@ -3088,24 +3094,47 @@ class NewsCrawler {
      */
     public function test_openai_api_connection() {
         $basic_settings = get_option('news_crawler_basic_settings', array());
-        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        $encrypted_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        
+        // セキュリティマネージャーで復号化
+        if (!empty($encrypted_key)) {
+            if (class_exists('NewsCrawlerSecurityManager')) {
+                $security_manager = NewsCrawlerSecurityManager::get_instance();
+                $api_key = apply_filters('news_crawler_get_api_key', $encrypted_key);
+            } else {
+                // セキュリティマネージャーが利用できない場合は平文として扱う
+                $api_key = $encrypted_key;
+            }
+        } else {
+            $api_key = '';
+        }
 
-        // デバッグ情報をログに出力
+        // デバッグ情報をログに出力（APIキーはマスク表示）
         error_log('NewsCrawler: API接続テスト開始');
         error_log('NewsCrawler: basic_settings存在: ' . (empty($basic_settings) ? 'false' : 'true'));
         error_log('NewsCrawler: APIキー長: ' . strlen($api_key));
-        error_log('NewsCrawler: APIキー先頭: ' . substr($api_key, 0, 10) . '...');
+        if (!empty($api_key)) {
+            $masked_key = substr($api_key, 0, 4) . str_repeat('*', strlen($api_key) - 8) . substr($api_key, -4);
+            error_log('NewsCrawler: APIキー: ' . $masked_key);
+        }
 
         if (empty($api_key)) {
             // 代替の設定からもAPIキーを取得してみる
             $alt_settings = get_option('news_crawler_settings', array());
-            $alt_api_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
-            error_log('NewsCrawler: 代替設定からAPIキー取得: ' . (empty($alt_api_key) ? '失敗' : '成功'));
+            $alt_encrypted_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
             
-            if (!empty($alt_api_key)) {
-                $api_key = $alt_api_key;
-                error_log('NewsCrawler: 代替APIキーを使用');
-            } else {
+            if (!empty($alt_encrypted_key)) {
+                if (class_exists('NewsCrawlerSecurityManager')) {
+                    $security_manager = NewsCrawlerSecurityManager::get_instance();
+                    $api_key = apply_filters('news_crawler_get_api_key', $alt_encrypted_key);
+                } else {
+                    // セキュリティマネージャーが利用できない場合は平文として扱う
+                    $api_key = $alt_encrypted_key;
+                }
+                error_log('NewsCrawler: 代替設定からAPIキー取得: 成功');
+            }
+            
+            if (empty($api_key)) {
                 return new WP_Error('no_api_key', 'OpenAI APIキーが設定されていません');
             }
         }
@@ -3164,12 +3193,35 @@ class NewsCrawler {
     private function generate_article_summary($article) {
         // OpenAI APIキーを取得（複数の設定から確認）
         $basic_settings = get_option('news_crawler_basic_settings', array());
-        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        $encrypted_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        
+        // セキュリティマネージャーで復号化
+        if (!empty($encrypted_key)) {
+            if (class_exists('NewsCrawlerSecurityManager')) {
+                $security_manager = NewsCrawlerSecurityManager::get_instance();
+                $api_key = apply_filters('news_crawler_get_api_key', $encrypted_key);
+            } else {
+                // セキュリティマネージャーが利用できない場合は平文として扱う
+                $api_key = $encrypted_key;
+            }
+        } else {
+            $api_key = '';
+        }
 
         if (empty($api_key)) {
             // 代替の設定からもAPIキーを取得してみる
             $alt_settings = get_option('news_crawler_settings', array());
-            $api_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
+            $alt_encrypted_key = isset($alt_settings['openai_api_key']) ? $alt_settings['openai_api_key'] : '';
+            
+            if (!empty($alt_encrypted_key)) {
+                if (class_exists('NewsCrawlerSecurityManager')) {
+                    $security_manager = NewsCrawlerSecurityManager::get_instance();
+                    $api_key = apply_filters('news_crawler_get_api_key', $alt_encrypted_key);
+                } else {
+                    // セキュリティマネージャーが利用できない場合は平文として扱う
+                    $api_key = $alt_encrypted_key;
+                }
+            }
         }
 
         if (empty($api_key)) {
