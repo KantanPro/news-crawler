@@ -1106,17 +1106,15 @@ class NewsCrawlerGenreSettings {
                     </form>
                 </div>
                 
-                <!-- 再評価ボタン -->
-                <div style="margin: 15px 0 10px 0; text-align: right;">
-                    <button type="button" class="button button-primary" onclick="recalculateAllCandidates()" style="display: inline-flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 16px;">&#x21BB;</span>
-                        <span>投稿可能数を再評価</span>
-                    </button>
-                </div>
-                
                 <!-- ジャンル設定リスト -->
                 <div class="card" style="max-width: none; margin-top: 10px;">
-                    <h2>保存済み投稿設定</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">保存済み投稿設定</h2>
+                        <button type="button" class="button button-primary" onclick="recalculateAllCandidates()" style="display: inline-flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 16px;">&#x21BB;</span>
+                            <span>投稿可能数を再評価</span>
+                        </button>
+                    </div>
                     <div id="genre-settings-list">
                         <?php $this->render_genre_settings_list($genre_settings); ?>
                     </div>
@@ -2283,7 +2281,6 @@ $('#cancel-edit').click(function() {
         echo '<th>カテゴリー</th>';
         echo '<th>アイキャッチ</th>';
         echo '<th>自動投稿</th>';
-        echo '<th>次回実行予定</th>';
         echo '<th>投稿可能数</th>';
         echo '<th>公開設定</th>';
         echo '<th>操作</th>';
@@ -2342,43 +2339,13 @@ $('#cancel-edit').click(function() {
             // 自動投稿設定の表示（サーバーcron対応）
             $auto_posting_status = '';
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $frequency = isset($setting['posting_frequency']) ? $setting['posting_frequency'] : 'daily';
-                $frequency_labels = array(
-                    'daily' => '毎日',
-                    'weekly' => '1週間',
-                    'monthly' => '毎月',
-                    'custom' => 'カスタム'
-                );
-                $max_posts = isset($setting['max_posts_per_execution']) ? $setting['max_posts_per_execution'] : 3;
-                
-                $auto_posting_status = '<span style="color: #00a32a; font-weight: bold;">✓ 有効</span><br>';
-                $auto_posting_status .= '<small>頻度: ' . $frequency_labels[$frequency] . '</small><br>';
-                $auto_posting_status .= '<small>最大: ' . $max_posts . '件/回</small><br>';
-                $auto_posting_status .= '<small style="color: #0073aa;">サーバーcronで実行</small>';
+                $auto_posting_status = '<span style="color: #00a32a; font-weight: bold;">有効</span>';
             } else {
-                $auto_posting_status = '<span style="color: #d63638;">❌ 無効</span>';
+                $auto_posting_status = '<span style="color: #d63638;">無効</span>';
             }
             
             echo '<td>' . $auto_posting_status . '</td>';
             
-            // 次回実行予定の表示（サーバーcron対応）
-            $next_execution_display = '';
-            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $next_execution_display = '<span style="color: #0073aa; font-weight: bold;">サーバーcronで管理</span><br>';
-                
-                // 開始実行日時がある場合は表示
-                if (!empty($setting['start_execution_time'])) {
-                    $start_time = strtotime($setting['start_execution_time']);
-                    $next_execution_display .= '<small>開始: ' . date('m/d H:i', $start_time) . '</small><br>';
-                }
-                
-                $next_execution_display .= '<small style="color: #666;">Cron設定で確認</small>';
-            } else {
-                $next_execution_display = '<span style="color: #666;">-</span>';
-            }
-            
-            echo '<td>' . $next_execution_display . '</td>';
-
             // 投稿可能数の表示（実際に候補を調査して算出）
             $genre_id_for_count = isset($setting['id']) ? $setting['id'] : $id;
 
@@ -2437,9 +2404,7 @@ $('#cancel-edit').click(function() {
             
             $limit_text = !empty($limit_factors) ? ' (' . implode(', ', $limit_factors) . ')' : '';
             
-            $available_posts_display = '<span style="font-weight: bold;">実際の投稿可能数: ' . esc_html($possible_posts) . ' 件</span>' . $limit_text . '<br>'
-                . '<small>候補: ' . esc_html($available_candidates) . ' / 空き: ' . esc_html($slots) . ' / 上限: ' . esc_html($per_crawl_cap) . '<br>'
-                . 'グローバル空き: ' . esc_html($global_available) . ' / 候補ありジャンル: ' . esc_html($enabled_genres_with_candidates) . ' / グローバル実際可能: ' . esc_html($actual_possible_posts) . '</small>';
+            $available_posts_display = esc_html($possible_posts) . '件';
 
             echo '<td>' . $available_posts_display . '</td>';
             
