@@ -22,6 +22,7 @@ class NewsCrawlerFeaturedImageGenerator {
         // AJAXハンドラーを追加
         add_action('wp_ajax_generate_featured_image', array($this, 'ajax_generate_featured_image'));
         add_action('wp_ajax_regenerate_featured_image', array($this, 'ajax_regenerate_featured_image'));
+        add_action('wp_ajax_check_featured_image_status', array($this, 'ajax_check_featured_image_status'));
     }
     
     public function admin_init() {
@@ -2130,7 +2131,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $('#generate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
-                var method = $('#featured_image_method').val();
+                var method = $('#featured-image-method').val();
                 var keywords = $('#featured-image-keywords').val();
 
                 button.prop('disabled', true).text('生成中...');
@@ -2162,16 +2163,47 @@ class NewsCrawlerFeaturedImageGenerator {
                         }
                     },
                     error: function(xhr, status, error) {
-                        var errorMessage = '通信エラーが発生しました';
-                        if (status === 'timeout') {
-                            errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
-                        } else if (status === 'error') {
-                            errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
-                        } else if (status === 'abort') {
-                            errorMessage = 'リクエストが中断されました。';
-                        }
-
-                        statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                        // エラーが発生した場合でも、実際にアイキャッチ画像が生成されているかチェック
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            dataType: 'json',
+                            data: {
+                                action: 'check_featured_image_status',
+                                post_id: <?php echo $post->ID; ?>,
+                                nonce: '<?php echo wp_create_nonce('check_featured_image_nonce'); ?>'
+                            },
+                            success: function(checkResponse) {
+                                if (checkResponse.success && checkResponse.data.has_thumbnail) {
+                                    statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の生成と設定が完了しました！</div>');
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                } else {
+                                    var errorMessage = '通信エラーが発生しました';
+                                    if (status === 'timeout') {
+                                        errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                                    } else if (status === 'error') {
+                                        errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                                    } else if (status === 'abort') {
+                                        errorMessage = 'リクエストが中断されました。';
+                                    }
+                                    statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                                }
+                            },
+                            error: function() {
+                                var errorMessage = '通信エラーが発生しました';
+                                if (status === 'timeout') {
+                                    errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                                } else if (status === 'error') {
+                                    errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                                } else if (status === 'abort') {
+                                    errorMessage = 'リクエストが中断されました。';
+                                }
+                                statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                            }
+                        });
+                        
                         console.error('AJAX Error:', {
                             status: status,
                             error: error,
@@ -2188,7 +2220,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $('#regenerate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
-                var method = $('#featured_image_method').val();
+                var method = $('#featured-image-method').val();
                 var keywords = $('#featured-image-keywords').val();
 
                 button.prop('disabled', true).text('再生成中...');
@@ -2220,16 +2252,47 @@ class NewsCrawlerFeaturedImageGenerator {
                         }
                     },
                     error: function(xhr, status, error) {
-                        var errorMessage = '通信エラーが発生しました';
-                        if (status === 'timeout') {
-                            errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
-                        } else if (status === 'error') {
-                            errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
-                        } else if (status === 'abort') {
-                            errorMessage = 'リクエストが中断されました。';
-                        }
-
-                        statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                        // エラーが発生した場合でも、実際にアイキャッチ画像が生成されているかチェック
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            dataType: 'json',
+                            data: {
+                                action: 'check_featured_image_status',
+                                post_id: <?php echo $post->ID; ?>,
+                                nonce: '<?php echo wp_create_nonce('check_featured_image_nonce'); ?>'
+                            },
+                            success: function(checkResponse) {
+                                if (checkResponse.success && checkResponse.data.has_thumbnail) {
+                                    statusDiv.html('<div style="color: #46b450;">✅ アイキャッチ画像の再生成と設定が完了しました！</div>');
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                } else {
+                                    var errorMessage = '通信エラーが発生しました';
+                                    if (status === 'timeout') {
+                                        errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                                    } else if (status === 'error') {
+                                        errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                                    } else if (status === 'abort') {
+                                        errorMessage = 'リクエストが中断されました。';
+                                    }
+                                    statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                                }
+                            },
+                            error: function() {
+                                var errorMessage = '通信エラーが発生しました';
+                                if (status === 'timeout') {
+                                    errorMessage = 'リクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。';
+                                } else if (status === 'error') {
+                                    errorMessage = 'サーバーエラーが発生しました。ページをリロードして再度お試しください。';
+                                } else if (status === 'abort') {
+                                    errorMessage = 'リクエストが中断されました。';
+                                }
+                                statusDiv.html('<div style="color: #d63638;">❌ ' + errorMessage + '</div>');
+                            }
+                        });
+                        
                         console.error('AJAX Error:', {
                             status: status,
                             error: error,
@@ -2361,6 +2424,32 @@ class NewsCrawlerFeaturedImageGenerator {
         } else {
             wp_send_json_error('アイキャッチ画像の再生成に失敗しました');
         }
+    }
+    
+    /**
+     * アイキャッチ画像の状態をチェックするAJAXハンドラー
+     */
+    public function ajax_check_featured_image_status() {
+        check_ajax_referer('check_featured_image_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('権限がありません');
+        }
+        
+        $post_id = intval($_POST['post_id']);
+        $post = get_post($post_id);
+        
+        if (!$post || $post->post_type !== 'post') {
+            wp_send_json_error('投稿が見つかりません');
+        }
+        
+        $has_thumbnail = has_post_thumbnail($post_id);
+        $thumbnail_id = $has_thumbnail ? get_post_thumbnail_id($post_id) : null;
+        
+        wp_send_json_success(array(
+            'has_thumbnail' => $has_thumbnail,
+            'thumbnail_id' => $thumbnail_id
+        ));
     }
     
     /**
