@@ -1494,48 +1494,55 @@ $('#cancel-edit').click(function() {
                         nonce: '<?php echo wp_create_nonce('auto_posting_force_nonce'); ?>'
                     },
                     success: function(response) {
-                        hideForceProgressPopup();
-                        if (response && response.success) {
-                            var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
-                            resultContent.html(successMessage);
-                            // 自動リロードを無効化（ユーザーが結果を確認できるように）
-                            // setTimeout(function() {
-                            //     location.reload();
-                            // }, 2000);
-                        } else if (response && response.data) {
-                            resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                        } else {
-                            resultContent.html('❌ 強制実行失敗\n\n不明な応答形式です');
-                        }
+                        // 進捗を100%に更新してからポップアップを閉じる
+                        completeForceProgress();
+                        setTimeout(function() {
+                            if (response && response.success) {
+                                var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                resultContent.html(successMessage);
+                                // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                // setTimeout(function() {
+                                //     location.reload();
+                                // }, 2000);
+                            } else if (response && response.data) {
+                                resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                            } else {
+                                resultContent.html('❌ 強制実行失敗\n\n不明な応答形式です');
+                            }
+                        }, 1200);
                     },
                     error: function(xhr, status, error) {
-                        // JSONパース失敗時でも成功応答を復旧表示するフォールバック
-                        if (status === 'parsererror' && xhr && xhr.responseText) {
-                            try {
-                                var parsed = JSON.parse(xhr.responseText);
-                                if (parsed && parsed.success) {
-                                    resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
-                                    // setTimeout(function() {
-                                    //     location.reload();
-                                    // }, 2000);
-                                    return;
-                                } else if (parsed && parsed.data) {
-                                    resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
-                                    return;
-                                }
-                            } catch (e) {
-                                // 成功テキストがプレーンで返ってきた場合の簡易検出
-                                if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
-                                    resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
-                                    // 自動リロードを無効化（ユーザーが結果を確認できるように）
-                                    // setTimeout(function() {
-                                    //     location.reload();
-                                    // }, 2000);
-                                    return;
+                        // エラー時は進捗を100%に更新してからポップアップを閉じる
+                        completeForceProgress();
+                        setTimeout(function() {
+                            // JSONパース失敗時でも成功応答を復旧表示するフォールバック
+                            if (status === 'parsererror' && xhr && xhr.responseText) {
+                                try {
+                                    var parsed = JSON.parse(xhr.responseText);
+                                    if (parsed && parsed.success) {
+                                        resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                        // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                        // setTimeout(function() {
+                                        //     location.reload();
+                                        // }, 2000);
+                                        return;
+                                    } else if (parsed && parsed.data) {
+                                        resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                        return;
+                                    }
+                                } catch (e) {
+                                    // 成功テキストがプレーンで返ってきた場合の簡易検出
+                                    if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
+                                        resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
+                                        // 自動リロードを無効化（ユーザーが結果を確認できるように）
+                                        // setTimeout(function() {
+                                        //     location.reload();
+                                        // }, 2000);
+                                        return;
+                                    }
                                 }
                             }
-                        }
+                        }, 1000);
                         
                         // HTTPステータスが200の場合は成功として扱う
                         if (xhr.status === 200 && xhr.responseText) {
@@ -1894,7 +1901,7 @@ $('#cancel-edit').click(function() {
                 url: ajaxurl,
                 type: 'POST',
                 dataType: 'json',
-                timeout: 600000, // 10分
+                timeout: 300000, // 5分に短縮
                 data: {
                     action: 'genre_settings_execute',
                     nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
@@ -1902,10 +1909,13 @@ $('#cancel-edit').click(function() {
                 },
                 success: function(response) {
                     if (response && response.success) {
-                        // ポップアップ内に完了メッセージを表示
-                        showCreateSuccessPopup(genreName, response.data);
-                        // 候補数キャッシュをクリア
-                        delete_transient('news_crawler_available_count_' + genreId);
+                        // 進捗を100%に更新してから完了ポップアップを表示
+                        completeCreateProgress();
+                        // 少し待ってから完了ポップアップを表示
+                        setTimeout(function() {
+                            showCreateSuccessPopup(genreName, response.data);
+                        }, 1200);
+                        // フロント側ではサーバーキャッシュ削除はできないため、再読込で最新を反映
                     } else if (response && response.data) {
                         hideCreateProgressPopup();
                         alert('❌ エラー: ' + response.data);
@@ -1915,16 +1925,53 @@ $('#cancel-edit').click(function() {
                     }
                 },
                 error: function(xhr, status, error) {
-                    hideCreateProgressPopup();
-                    var errorMessage = '実行中にエラーが発生しました。';
-                    if (xhr && xhr.statusText && xhr.statusText !== 'OK') {
-                        errorMessage = '通信エラー: ' + xhr.statusText;
-                    } else if (status === 'timeout') {
-                        errorMessage = 'リクエストがタイムアウトしました（10分）。';
-                    } else if (error && error !== 'OK') {
-                        errorMessage = 'エラー: ' + error;
-                    }
-                    alert('❌ エラー: ' + errorMessage);
+                    // エラー時は進捗を100%に更新してからポップアップを閉じる
+                    completeCreateProgress();
+                    setTimeout(function() {
+                        hideCreateProgressPopup();
+                        var errorMessage = '実行中にエラーが発生しました。';
+                        
+                        // 詳細なエラー情報を取得
+                        console.error('AJAX Error Details:', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            responseText: xhr.responseText,
+                            error: error,
+                            readyState: xhr.readyState
+                        });
+                        
+                        if (status === 'timeout') {
+                            errorMessage = 'リクエストがタイムアウトしました（10分）。サーバーの処理が重い可能性があります。';
+                        } else if (status === 'error') {
+                            if (xhr.status === 0) {
+                                errorMessage = 'サーバーとの通信が切断されました。ネットワーク接続を確認してください。';
+                            } else if (xhr.status >= 500) {
+                                errorMessage = 'サーバーエラー（' + xhr.status + '）が発生しました。しばらく時間をおいてから再度お試しください。';
+                            } else if (xhr.status >= 400) {
+                                errorMessage = 'クライアントエラー（' + xhr.status + '）が発生しました。';
+                            } else {
+                                errorMessage = '通信エラー（' + xhr.status + '）: ' + xhr.statusText;
+                            }
+                        } else if (status === 'abort') {
+                            errorMessage = 'リクエストが中断されました。';
+                        } else if (error && error !== 'OK') {
+                            errorMessage = 'エラー: ' + error;
+                        }
+                        
+                        // レスポンステキストがある場合は追加情報を表示
+                        if (xhr.responseText) {
+                            try {
+                                var response = JSON.parse(xhr.responseText);
+                                if (response.data) {
+                                    errorMessage += '\n詳細: ' + response.data;
+                                }
+                            } catch (e) {
+                                errorMessage += '\nレスポンス: ' + xhr.responseText.substring(0, 200);
+                            }
+                        }
+                        
+                        alert('❌ エラー: ' + errorMessage);
+                    }, 1000);
                 },
                 complete: function() {
                     button.prop('disabled', false).text(originalText);
@@ -2080,6 +2127,18 @@ $('#cancel-edit').click(function() {
             window.createProgressInterval = interval;
         }
         
+        function completeCreateProgress() {
+            // 進捗を100%に更新
+            jQuery('#create-progress-fill').css('width', '100%');
+            jQuery('#create-progress-text').text('100%');
+            jQuery('#create-progress-detail').text('投稿作成完了！');
+            
+            // 少し待ってからポップアップを閉じる
+            setTimeout(function() {
+                hideCreateProgressPopup();
+            }, 1000);
+        }
+        
         function hideCreateProgressPopup() {
             if (window.createProgressInterval) {
                 clearInterval(window.createProgressInterval);
@@ -2145,6 +2204,18 @@ $('#cancel-edit').click(function() {
             
             // グローバル変数に保存（キャンセル用）
             window.forceProgressInterval = interval;
+        }
+        
+        function completeForceProgress() {
+            // 進捗を100%に更新
+            jQuery('#force-progress-fill').css('width', '100%');
+            jQuery('#force-progress-text').text('100%');
+            jQuery('#force-progress-detail').text('強制実行完了！');
+            
+            // 少し待ってからポップアップを閉じる
+            setTimeout(function() {
+                hideForceProgressPopup();
+            }, 1000);
         }
         
         function hideForceProgressPopup() {
@@ -2540,8 +2611,18 @@ $('#cancel-edit').click(function() {
         update_option($this->option_name, $genre_settings);
 
         // 候補件数キャッシュをクリアして、次回の表示で再評価
+        // ただし、投稿作成直後の場合はキャッシュを維持する
         if (!empty($genre_id)) {
-            delete_transient('news_crawler_available_count_' . $genre_id);
+            // 投稿作成処理中または投稿作成後の保護期間中でない場合のみキャッシュをクリア
+            $is_creating_post = get_transient('news_crawler_creating_post_' . $genre_id);
+            $is_protected = get_transient('news_crawler_post_creation_protection_' . $genre_id);
+            
+            if (!$is_creating_post && !$is_protected) {
+                delete_transient('news_crawler_available_count_' . $genre_id);
+                error_log('GenreSettings: キャッシュをクリア - ジャンルID: ' . $genre_id);
+            } else {
+                error_log('GenreSettings: キャッシュを保護 - ジャンルID: ' . $genre_id . ' (投稿作成中: ' . ($is_creating_post ? 'Yes' : 'No') . ', 保護中: ' . ($is_protected ? 'Yes' : 'No') . ')');
+            }
         }
         
         // 保存後の確認
@@ -2676,10 +2757,15 @@ $('#cancel-edit').click(function() {
             // デバッグ情報を結果に追加
             $final_result = implode("\n", $debug_info) . "\n\n" . $result;
             
-            // API接続テストでエラーが検出された場合は、候補数の再計算を実行しない
+            // 成功時は該当ジャンルの投稿可能数を即時に再計算して保存（UIの乖離防止）
             if (strpos($result, '❌ エラー:') === false) {
-            // 投稿可能数（候補件数）のキャッシュを即時無効化して次の表示で最新化
-            delete_transient('news_crawler_available_count_' . $setting['id']);
+                delete_transient('news_crawler_available_count_' . $setting['id']);
+                try {
+                    $available = intval($this->test_news_source_availability($setting));
+                } catch (Exception $e) {
+                    $available = 0;
+                }
+                set_transient('news_crawler_available_count_' . $setting['id'], $available, 30 * MINUTE_IN_SECONDS);
             }
             
             // デバッグログにレスポンス内容を記録
@@ -2881,7 +2967,14 @@ $('#cancel-edit').click(function() {
         
         error_log('NewsCrawler: 候補数再評価開始 - ジャンルID: ' . $current_genre_id . ' (' . ($current_index + 1) . '/' . $total_genres . ')');
         
-        delete_transient('news_crawler_available_count_' . $current_genre_id);
+        // 投稿作成後の保護期間中でない場合のみキャッシュを削除
+        $is_protected = get_transient('news_crawler_post_creation_protection_' . $current_genre_id);
+        if (!$is_protected) {
+            delete_transient('news_crawler_available_count_' . $current_genre_id);
+            error_log('NewsCrawler: 全ジャンル再評価でキャッシュをクリア - ジャンルID: ' . $current_genre_id);
+        } else {
+            error_log('NewsCrawler: 全ジャンル再評価でキャッシュを保護 - ジャンルID: ' . $current_genre_id . ' (保護中)');
+        }
         try {
             // タイムアウトを防ぐために個別のタイムアウト設定
             $start_time = time();
@@ -2926,6 +3019,12 @@ $('#cancel-edit').click(function() {
     }
     
     private function execute_news_crawling($setting) {
+        // 実行時間制限を延長（10分）
+        set_time_limit(600);
+        
+        // メモリ制限を増加（512MB）
+        ini_set('memory_limit', '512M');
+        
         // NewsCrawlerクラスのインスタンスを作成して実行
         if (!class_exists('NewsCrawler')) {
             return 'NewsCrawlerクラスが見つかりません。プラグインが正しく読み込まれていない可能性があります。';
@@ -2943,6 +3042,10 @@ $('#cancel-edit').click(function() {
         error_log('NewsCrawler: execute_news_crawling - API接続テスト成功');
         
         try {
+            // メモリ使用量を監視
+            $initial_memory = memory_get_usage(true);
+            error_log('NewsCrawler: execute_news_crawling - 初期メモリ使用量: ' . round($initial_memory / 1024 / 1024, 2) . 'MB');
+            
             // 設定を一時的に適用
             $temp_options = array(
                 'max_articles' => isset($setting['max_articles']) ? intval($setting['max_articles']) : 1,
@@ -3025,11 +3128,39 @@ $('#cancel-edit').click(function() {
                 
                 $debug_info[] = "\nニュースクロール実行開始...";
                 
+                // 実行開始時刻を記録
+                $start_time = time();
+                error_log('NewsCrawler: execute_news_crawling - クロール実行開始時刻: ' . date('Y-m-d H:i:s', $start_time));
+                
                 // 新しいメソッドがあるかチェック
                 if (method_exists($news_crawler, 'crawl_news_with_options')) {
                     $result = $news_crawler->crawl_news_with_options($temp_options);
                 } else {
                     $result = $news_crawler->crawl_news();
+                }
+                
+                // 実行終了時刻を記録
+                $end_time = time();
+                $execution_time = $end_time - $start_time;
+                $final_memory = memory_get_usage(true);
+                $memory_used = $final_memory - $initial_memory;
+                
+                error_log('NewsCrawler: execute_news_crawling - クロール実行終了時刻: ' . date('Y-m-d H:i:s', $end_time) . ', 実行時間: ' . $execution_time . '秒');
+                error_log('NewsCrawler: execute_news_crawling - 最終メモリ使用量: ' . round($final_memory / 1024 / 1024, 2) . 'MB, 使用増分: ' . round($memory_used / 1024 / 1024, 2) . 'MB');
+                
+                // メモリ不足の警告
+                if ($memory_used > 100 * 1024 * 1024) { // 100MB以上使用
+                    error_log('NewsCrawler: execute_news_crawling - 警告: 大量のメモリを使用しました (' . round($memory_used / 1024 / 1024, 2) . 'MB)');
+                }
+                
+                // 結果の検証
+                if (empty($result)) {
+                    error_log('NewsCrawler: execute_news_crawling - 結果が空です');
+                    $result = '❌ エラー: 投稿作成処理が完了しましたが、結果が取得できませんでした。';
+                } elseif (strpos($result, '❌ エラー:') !== false) {
+                    error_log('NewsCrawler: execute_news_crawling - エラーが検出されました: ' . substr($result, 0, 200));
+                } else {
+                    error_log('NewsCrawler: execute_news_crawling - 処理が正常に完了しました');
                 }
                 
                 // 統計情報を更新
@@ -3068,10 +3199,30 @@ $('#cancel-edit').click(function() {
                 $youtube_channels = array_filter(array_map('trim', explode("\n", $setting['youtube_channels'])));
             }
             
+            // キーワードを正規化（配列以外の保存形式にも対応）
+            $keywords_raw = isset($setting['keywords']) ? $setting['keywords'] : array();
+            if (is_string($keywords_raw)) {
+                // 改行またはカンマ区切りを許容
+                $parts = preg_split('/[\n,]+/', $keywords_raw);
+                $keywords_normalized = array();
+                foreach ($parts as $p) {
+                    $t = trim($p);
+                    if ($t !== '') { $keywords_normalized[] = $t; }
+                }
+            } elseif (is_array($keywords_raw)) {
+                $keywords_normalized = array();
+                foreach ($keywords_raw as $p) {
+                    $t = is_string($p) ? trim($p) : '';
+                    if ($t !== '') { $keywords_normalized[] = $t; }
+                }
+            } else {
+                $keywords_normalized = array();
+            }
+
             $temp_options = array(
                 'api_key' => sanitize_text_field($basic_settings['youtube_api_key']),
                 'max_videos' => isset($setting['max_videos']) ? intval($setting['max_videos']) : 5,
-                'keywords' => isset($setting['keywords']) && is_array($setting['keywords']) ? $setting['keywords'] : array(),
+                'keywords' => $keywords_normalized,
                 'channels' => $youtube_channels,
                 'post_categories' => isset($setting['post_categories']) && is_array($setting['post_categories']) ? $setting['post_categories'] : array('blog'),
                 'post_status' => isset($setting['post_status']) ? sanitize_text_field($setting['post_status']) : 'draft',
@@ -4349,7 +4500,7 @@ $('#cancel-edit').click(function() {
     /**
      * ニュースソースの可用性をテストして、実際に取得可能な記事数を返す
      */
-    private function test_news_source_availability($setting) {
+    public function test_news_source_availability($setting) {
         $content_type = $setting['content_type'] ?? 'news';
         $available_articles = 0;
         

@@ -412,11 +412,64 @@ if (function_exists('wp_after_insert_post')) {
 // 未来の投稿が公開される際のフック
 add_action('future_to_publish', 'news_crawler_future_to_publish', 16);
 
+// 投稿削除/ゴミ箱移動/復元/ステータス変更時に評価値キャッシュを無効化
+add_action('before_delete_post', 'news_crawler_invalidate_evaluation_cache_on_change');
+add_action('wp_trash_post', 'news_crawler_invalidate_evaluation_cache_on_change');
+add_action('untrash_post', 'news_crawler_invalidate_evaluation_cache_on_change');
+add_action('transition_post_status', function($new_status, $old_status, $post) {
+    if ($post && $post->post_type === 'post' && $new_status !== $old_status) {
+        news_crawler_invalidate_evaluation_cache_on_change($post->ID);
+    }
+}, 10, 3);
+
+function news_crawler_invalidate_evaluation_cache_on_change($post_or_id) {
+    $post_id = is_object($post_or_id) ? $post_or_id->ID : $post_or_id;
+    if (!$post_id) { return; }
+    // News Crawler管理の投稿のみ対象
+    $genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
+    if (!$genre_id) { return; }
+    delete_transient('news_crawler_available_count_' . $genre_id);
+    error_log('NewsCrawler: 評価値キャッシュを無効化 - ジャンルID: ' . $genre_id . ' (post_id=' . $post_id . ')');
+}
+
 // News Crawler用メタデータを確実に設定するためのフック
 add_action('news_crawler_ensure_meta', 'news_crawler_ensure_meta', 10, 1);
 
 // 投稿作成直後のXPoster用メタデータ設定を強化
 add_action('wp_insert_post', 'news_crawler_enhance_xposter_meta', 10, 3);
+
+/**
+ * 投稿作成後の評価値を復元
+ */
+function news_crawler_restore_evaluation_values() {
+    $backup_data = get_transient('news_crawler_evaluation_backup');
+    
+    if (!$backup_data || !is_array($backup_data)) {
+        error_log('NewsCrawler: 評価値のバックアップデータが見つかりません');
+        return;
+    }
+    
+    $restored_count = 0;
+    foreach ($backup_data as $genre_id => $value) {
+        $cache_key = 'news_crawler_available_count_' . $genre_id;
+        $current_value = get_transient($cache_key);
+        
+        // 現在の値が0または存在しない場合のみ復元
+        if ($current_value === false || $current_value == 0) {
+            set_transient($cache_key, $value, 30 * MINUTE_IN_SECONDS);
+            $restored_count++;
+            error_log('NewsCrawler: 評価値を復元 - ジャンルID: ' . $genre_id . ', 値: ' . $value);
+        }
+    }
+    
+    // バックアップデータを削除
+    delete_transient('news_crawler_evaluation_backup');
+    
+    error_log('NewsCrawler: 評価値復元完了 - ' . $restored_count . '件のジャンルを復元');
+}
+
+// 投稿作成後の評価値復元フック
+add_action('news_crawler_restore_evaluation_values', 'news_crawler_restore_evaluation_values');
 
 function news_crawler_do_update_post_status($post_id, $status) {
     if (!$post_id || !$status) {
@@ -1374,11 +1427,30 @@ class NewsCrawler {
         
         $posts_created = 0;
         $post_id = null;
+        
+        // 投稿作成処理開始のフラグを設定（評価値キャッシュを保護するため）
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            set_transient('news_crawler_creating_post_' . $current_genre_setting['id'], true, 60);
+        }
+        
         if (!empty($valid_articles)) {
             $post_id = $this->create_news_summary_post($valid_articles, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
                 $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+                
+                // 投稿作成成功後、評価値を適切に更新
+                if ($current_genre_setting && isset($current_genre_setting['id'])) {
+                    // 投稿作成前に全ジャンルの評価値をバックアップ
+                    $this->backup_all_evaluation_values();
+                    
+                    // 投稿作成ジャンルの評価値を更新
+                    $this->update_evaluation_after_post_creation($current_genre_setting['id'], $current_genre_setting);
+                    
+                    // 投稿作成後の評価値復元をスケジュール（5秒後）
+                    wp_schedule_single_event(time() + 5, 'news_crawler_restore_evaluation_values');
+                }
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
@@ -1392,6 +1464,11 @@ class NewsCrawler {
             }
         } else {
             $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+        }
+        
+        // 投稿作成処理完了後、フラグを削除
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            delete_transient('news_crawler_creating_post_' . $current_genre_setting['id']);
         }
         
         $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
@@ -3558,6 +3635,67 @@ class NewsCrawler {
             update_option('news_crawler_duplicates_skipped', $current_duplicates + $duplicates_skipped);
         }
         update_option('news_crawler_last_run', current_time('mysql'));
+    }
+    
+    /**
+     * 投稿作成後の評価値を更新
+     */
+    private function update_evaluation_after_post_creation($genre_id, $setting) {
+        // 投稿作成後、評価値を適切に更新
+        // 現在の評価値を取得
+        $cache_key = 'news_crawler_available_count_' . $genre_id;
+        $current_available = get_transient($cache_key);
+        
+        if ($current_available !== false && $current_available > 0) {
+            // 投稿作成により1件減らす
+            $new_available = max(0, $current_available - 1);
+            set_transient($cache_key, $new_available, 30 * MINUTE_IN_SECONDS);
+            error_log('NewsCrawler: 投稿作成後の評価値更新 - ジャンルID: ' . $genre_id . ', 更新前: ' . $current_available . ', 更新後: ' . $new_available);
+        } else {
+            // 評価値が0またはキャッシュがない場合は再評価
+            try {
+                // GenreSettingsクラスのインスタンスを取得して評価値を再計算
+                if (class_exists('NewsCrawlerGenreSettings')) {
+                    $genre_settings = new NewsCrawlerGenreSettings();
+                    $available = intval($genre_settings->test_news_source_availability($setting));
+                    set_transient($cache_key, $available, 30 * MINUTE_IN_SECONDS);
+                    error_log('NewsCrawler: 投稿作成後の評価値再評価 - ジャンルID: ' . $genre_id . ', 評価値: ' . $available);
+                } else {
+                    error_log('NewsCrawler: GenreSettingsクラスが見つかりません');
+                }
+            } catch (Exception $e) {
+                error_log('NewsCrawler: 投稿作成後の評価値再評価エラー - ジャンルID: ' . $genre_id . ', エラー: ' . $e->getMessage());
+            }
+        }
+        
+        // 投稿作成後の評価値保護フラグを設定（他の処理によるリセットを防ぐ）
+        set_transient('news_crawler_post_creation_protection_' . $genre_id, true, 5 * MINUTE_IN_SECONDS);
+        error_log('NewsCrawler: 投稿作成後の評価値保護フラグを設定 - ジャンルID: ' . $genre_id);
+    }
+    
+    /**
+     * 全ジャンルの評価値をバックアップ
+     */
+    private function backup_all_evaluation_values() {
+        if (!class_exists('NewsCrawlerGenreSettings')) {
+            return;
+        }
+        
+        $genre_settings = new NewsCrawlerGenreSettings();
+        $all_settings = $genre_settings->get_genre_settings();
+        
+        $backup_data = array();
+        foreach ($all_settings as $genre_id => $setting) {
+            $cache_key = 'news_crawler_available_count_' . $genre_id;
+            $current_value = get_transient($cache_key);
+            if ($current_value !== false) {
+                $backup_data[$genre_id] = $current_value;
+            }
+        }
+        
+        // バックアップデータを保存（10分間有効）
+        set_transient('news_crawler_evaluation_backup', $backup_data, 10 * MINUTE_IN_SECONDS);
+        error_log('NewsCrawler: 全ジャンルの評価値をバックアップ - ' . count($backup_data) . '件');
     }
     
     /**

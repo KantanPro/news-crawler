@@ -580,6 +580,16 @@ class NewsCrawlerYouTubeCrawler {
         
         $post_content = '';
         
+        // 全体の概要セクションを追加
+        $post_content .= '<!-- wp:paragraph -->' . "\n";
+        $post_content .= '<p class="wp-block-paragraph">本日は' . count($videos) . '本の注目動画をお届けします。最新の' . $keyword_text . 'に関する動画を厳選してまとめました。各動画の詳細とともに、ぜひご覧ください。</p>' . "\n";
+        $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
+        
+        // 今日の動画ニュース（H2）セクション
+        $post_content .= '<!-- wp:heading {"level":2} -->' . "\n";
+        $post_content .= '<h2 class="wp-block-heading">今日の動画ニュース</h2>' . "\n";
+        $post_content .= '<!-- /wp:heading -->' . "\n\n";
+        
         foreach ($videos as $video) {
             // 動画タイトル（ブロックエディタ形式）
             $post_content .= '<!-- wp:heading {"level":3} -->' . "\n";
@@ -642,6 +652,15 @@ class NewsCrawlerYouTubeCrawler {
             }
         }
         
+        // まとめセクションを追加
+        $post_content .= '<!-- wp:heading {"level":2} -->' . "\n";
+        $post_content .= '<h2 class="wp-block-heading">まとめ</h2>' . "\n";
+        $post_content .= '<!-- /wp:heading -->' . "\n\n";
+        
+        $post_content .= '<!-- wp:paragraph -->' . "\n";
+        $post_content .= '<p class="wp-block-paragraph">本日は' . count($videos) . '本の' . $keyword_text . 'に関する動画をご紹介しました。各動画から最新の情報やトレンドをキャッチアップして、ぜひお気に入りの動画を見つけてください。また、チャンネル登録や高評価もお忘れなく！</p>' . "\n";
+        $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
+        
         // News Crawler用の処理のため、最初に下書きとして投稿を作成
         $post_data = array(
             'post_title'    => $post_title,
@@ -702,33 +721,34 @@ class NewsCrawlerYouTubeCrawler {
         // アイキャッチ生成
         $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
         
-        // AI要約生成（メタデータ設定後に呼び出し）
-        error_log('YouTubeCrawler: About to call AI summarizer for YouTube post ' . $post_id);
-        if (class_exists('NewsCrawlerOpenAISummarizer')) {
-            // 基本設定で要約生成が有効かチェック（デフォルトで有効）
-            $basic_settings = get_option('news_crawler_basic_settings', array());
-            $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
+        // 投稿作成成功後、評価値を適切に更新
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        if ($current_genre_setting && isset($current_genre_setting['id'])) {
+            // 投稿作成前に全ジャンルの評価値をバックアップ
+            $this->backup_all_evaluation_values();
             
-            if ($auto_summary_enabled) {
-                error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class found, creating instance');
-                $summarizer = new NewsCrawlerOpenAISummarizer();
-                error_log('YouTubeCrawler: Calling generate_summary for post ' . $post_id);
-                
-                try {
-                    // タイムアウト設定（60秒）
-                    set_time_limit(60);
-                    $summarizer->generate_summary($post_id);
-                    error_log('YouTubeCrawler: generate_summary completed for post ' . $post_id);
-                } catch (Exception $e) {
-                    error_log('YouTubeCrawler: AI summarizer error: ' . $e->getMessage());
-                } catch (Error $e) {
-                    error_log('YouTubeCrawler: AI summarizer fatal error: ' . $e->getMessage());
-                }
+            // 投稿作成ジャンルの評価値を更新
+            $this->update_evaluation_after_post_creation($current_genre_setting['id'], $current_genre_setting);
+            
+            // 投稿作成後の評価値復元をスケジュール（5秒後）
+            wp_schedule_single_event(time() + 5, 'news_crawler_restore_evaluation_values');
+        }
+        
+        // AI要約生成（非同期スケジュール実行に変更）
+        error_log('YouTubeCrawler: About to schedule AI summarizer for YouTube post ' . $post_id);
+        // 基本設定で要約生成が有効かチェック（デフォルトで有効）
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
+
+        if ($auto_summary_enabled) {
+            // 10秒後に非同期実行をスケジュール
+            if (wp_schedule_single_event(time() + 10, 'news_crawler_generate_summary', array($post_id))) {
+                error_log('YouTubeCrawler: Scheduled AI summary generation (post_id=' . $post_id . ')');
             } else {
-                error_log('YouTubeCrawler: AI要約生成が無効のためスキップします (投稿ID: ' . $post_id . ')');
+                error_log('YouTubeCrawler: Failed to schedule AI summary generation (post_id=' . $post_id . ')');
             }
         } else {
-            error_log('YouTubeCrawler: NewsCrawlerOpenAISummarizer class NOT found');
+            error_log('YouTubeCrawler: AI要約生成が無効のためスケジュールをスキップします (投稿ID: ' . $post_id . ')');
         }
         
         // X（Twitter）自動シェア機能は削除済み
@@ -1238,5 +1258,66 @@ class NewsCrawlerYouTubeCrawler {
         wp_schedule_single_event(time() + 2, 'news_crawler_ensure_meta', array($post_id));
         
         error_log('YouTubeCrawler: 投稿ステータス変更を遅延実行でスケジュール (ID: ' . $post_id . ', 対象ステータス: ' . $target_status . ')');
+    }
+    
+    /**
+     * 投稿作成後の評価値を更新
+     */
+    private function update_evaluation_after_post_creation($genre_id, $setting) {
+        // 投稿作成後、評価値を適切に更新
+        // 現在の評価値を取得
+        $cache_key = 'news_crawler_available_count_' . $genre_id;
+        $current_available = get_transient($cache_key);
+        
+        if ($current_available !== false && $current_available > 0) {
+            // 投稿作成により1件減らす
+            $new_available = max(0, $current_available - 1);
+            set_transient($cache_key, $new_available, 30 * MINUTE_IN_SECONDS);
+            error_log('YouTubeCrawler: 投稿作成後の評価値更新 - ジャンルID: ' . $genre_id . ', 更新前: ' . $current_available . ', 更新後: ' . $new_available);
+        } else {
+            // 評価値が0またはキャッシュがない場合は再評価
+            try {
+                // GenreSettingsクラスのインスタンスを取得して評価値を再計算
+                if (class_exists('NewsCrawlerGenreSettings')) {
+                    $genre_settings = new NewsCrawlerGenreSettings();
+                    $available = intval($genre_settings->test_news_source_availability($setting));
+                    set_transient($cache_key, $available, 30 * MINUTE_IN_SECONDS);
+                    error_log('YouTubeCrawler: 投稿作成後の評価値再評価 - ジャンルID: ' . $genre_id . ', 評価値: ' . $available);
+                } else {
+                    error_log('YouTubeCrawler: GenreSettingsクラスが見つかりません');
+                }
+            } catch (Exception $e) {
+                error_log('YouTubeCrawler: 投稿作成後の評価値再評価エラー - ジャンルID: ' . $genre_id . ', エラー: ' . $e->getMessage());
+            }
+        }
+        
+        // 投稿作成後の評価値保護フラグを設定（他の処理によるリセットを防ぐ）
+        set_transient('news_crawler_post_creation_protection_' . $genre_id, true, 5 * MINUTE_IN_SECONDS);
+        error_log('YouTubeCrawler: 投稿作成後の評価値保護フラグを設定 - ジャンルID: ' . $genre_id);
+    }
+    
+    /**
+     * 全ジャンルの評価値をバックアップ
+     */
+    private function backup_all_evaluation_values() {
+        if (!class_exists('NewsCrawlerGenreSettings')) {
+            return;
+        }
+        
+        $genre_settings = new NewsCrawlerGenreSettings();
+        $all_settings = $genre_settings->get_genre_settings();
+        
+        $backup_data = array();
+        foreach ($all_settings as $genre_id => $setting) {
+            $cache_key = 'news_crawler_available_count_' . $genre_id;
+            $current_value = get_transient($cache_key);
+            if ($current_value !== false) {
+                $backup_data[$genre_id] = $current_value;
+            }
+        }
+        
+        // バックアップデータを保存（10分間有効）
+        set_transient('news_crawler_evaluation_backup', $backup_data, 10 * MINUTE_IN_SECONDS);
+        error_log('YouTubeCrawler: 全ジャンルの評価値をバックアップ - ' . count($backup_data) . '件');
     }
 }

@@ -375,8 +375,17 @@ class NewsCrawlerUpdater {
             $this->cleanup_old_files();
             
             // プラグインの一時的な無効化（更新中）
-            if (is_plugin_active($this->plugin_basename)) {
-                deactivate_plugins($this->plugin_basename, true);
+            $was_network_active = is_multisite() && is_plugin_active_for_network($this->plugin_basename);
+            $was_active = is_plugin_active($this->plugin_basename) || $was_network_active;
+
+            // 更新前の有効状態を保存（30分間有効）
+            set_site_transient('news_crawler_pre_update_state', array(
+                'was_active' => $was_active,
+                'network_active' => $was_network_active,
+            ), 30 * MINUTE_IN_SECONDS);
+
+            if ($was_active) {
+                deactivate_plugins($this->plugin_basename, true, $was_network_active);
             }
         }
         
@@ -411,8 +420,21 @@ class NewsCrawlerUpdater {
             // 更新後の整合性チェック
             $this->verify_update_integrity();
             
-            // プラグインの状態をリセット（無効化/有効化は行わない）
-            // WordPressの更新システムが適切に処理するため
+            // 更新前に有効だった場合は自動的に再有効化
+            $pre_state = get_site_transient('news_crawler_pre_update_state');
+            if ($pre_state && !empty($pre_state['was_active'])) {
+                if (!function_exists('activate_plugin')) {
+                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+                }
+                $network_wide = !empty($pre_state['network_active']);
+                $activate_result = activate_plugin($this->plugin_basename, '', $network_wide, true);
+                if (is_wp_error($activate_result)) {
+                    error_log('News Crawler: Reactivation failed - ' . $activate_result->get_error_message());
+                } else {
+                    error_log('News Crawler: Plugin reactivated successfully (network_wide=' . ($network_wide ? 'true' : 'false') . ')');
+                }
+            }
+            delete_site_transient('news_crawler_pre_update_state');
             
         }
         
