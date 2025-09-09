@@ -3656,7 +3656,7 @@ class NewsCrawler {
             try {
                 // GenreSettingsクラスのインスタンスを取得して評価値を再計算
                 if (class_exists('NewsCrawlerGenreSettings')) {
-                    $genre_settings = new NewsCrawlerGenreSettings();
+                    $genre_settings = NewsCrawlerGenreSettings::get_instance();
                     $available = intval($genre_settings->test_news_source_availability($setting));
                     set_transient($cache_key, $available, 30 * MINUTE_IN_SECONDS);
                     error_log('NewsCrawler: 投稿作成後の評価値再評価 - ジャンルID: ' . $genre_id . ', 評価値: ' . $available);
@@ -3681,7 +3681,7 @@ class NewsCrawler {
             return;
         }
         
-        $genre_settings = new NewsCrawlerGenreSettings();
+        $genre_settings = NewsCrawlerGenreSettings::get_instance();
         $all_settings = $genre_settings->get_genre_settings();
         
         $backup_data = array();

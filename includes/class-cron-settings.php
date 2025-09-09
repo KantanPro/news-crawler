@@ -727,7 +727,7 @@ if command -v wp &> /dev/null; then
     # News Crawlerの自動投稿機能を直接実行
     wp eval \"
         if (class_exists('NewsCrawlerGenreSettings')) {
-            \\\$genre_settings = new NewsCrawlerGenreSettings();
+            \\\$genre_settings = NewsCrawlerGenreSettings::get_instance();
             \\\$genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {
@@ -833,7 +833,7 @@ echo \"---\" >> \"\$LOG_FILE\"
         
         // News Crawlerの自動投稿機能を実行
         if (class_exists('NewsCrawlerGenreSettings')) {
-            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings = NewsCrawlerGenreSettings::get_instance();
             $genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {

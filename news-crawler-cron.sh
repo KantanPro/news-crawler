@@ -30,7 +30,7 @@ if command -v wp &> /dev/null; then
     # WordPressのパスを明示的に指定
     wp --path="$WP_PATH" eval "
         if (class_exists('NewsCrawlerGenreSettings')) {
-            $genre_settings = new NewsCrawlerGenreSettings();
+            $genre_settings = NewsCrawlerGenreSettings::get_instance();
             $genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {
@@ -59,7 +59,7 @@ $PHP_CMD -r "
     require_once('wp-config.php');
     require_once('wp-includes/pluggable.php');
     if (class_exists('NewsCrawlerGenreSettings')) {
-        $genre_settings = new NewsCrawlerGenreSettings();
+        $genre_settings = NewsCrawlerGenreSettings::get_instance();
         $genre_settings->execute_auto_posting();
         echo 'News Crawler自動投稿を実行しました';
     } else {
@@ -130,7 +130,7 @@ $PHP_CMD -r "
     # PHPコード内の変数をエスケープ
     wp --path="$WP_PATH" eval "
         if (class_exists('NewsCrawlerGenreSettings')) {
-            \$genre_settings = new NewsCrawlerGenreSettings();
+            \$genre_settings = NewsCrawlerGenreSettings::get_instance();
             \$genre_settings->execute_auto_posting();
             echo 'News Crawler自動投稿を実行しました';
         } else {
