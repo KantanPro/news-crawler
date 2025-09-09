@@ -2635,19 +2635,10 @@ $('#cancel-edit').click(function() {
         
         update_option($this->option_name, $genre_settings);
 
-        // 候補件数キャッシュをクリアして、次回の表示で再評価
-        // ただし、投稿作成直後の場合はキャッシュを維持する
+        // 設定保存時は投稿可能数のキャッシュをクリアしない
+        // 再評価ボタンで明示的に再評価を実行する場合のみキャッシュをクリアする
         if (!empty($genre_id)) {
-            // 投稿作成処理中または投稿作成後の保護期間中でない場合のみキャッシュをクリア
-            $is_creating_post = get_transient('news_crawler_creating_post_' . $genre_id);
-            $is_protected = get_transient('news_crawler_post_creation_protection_' . $genre_id);
-            
-            if (!$is_creating_post && !$is_protected) {
-                delete_transient('news_crawler_available_count_' . $genre_id);
-                error_log('GenreSettings: キャッシュをクリア - ジャンルID: ' . $genre_id);
-            } else {
-                error_log('GenreSettings: キャッシュを保護 - ジャンルID: ' . $genre_id . ' (投稿作成中: ' . ($is_creating_post ? 'Yes' : 'No') . ', 保護中: ' . ($is_protected ? 'Yes' : 'No') . ')');
-            }
+            error_log('GenreSettings: 設定保存時はキャッシュを維持 - ジャンルID: ' . $genre_id);
         }
         
         // 保存後の確認
