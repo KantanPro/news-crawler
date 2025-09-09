@@ -428,6 +428,14 @@ function news_crawler_invalidate_evaluation_cache_on_change($post_or_id) {
     // News Crawler管理の投稿のみ対象
     $genre_id = get_post_meta($post_id, '_news_crawler_genre_id', true);
     if (!$genre_id) { return; }
+    
+    // 投稿作成後の保護期間中はキャッシュを無効化しない
+    $is_protected = get_transient('news_crawler_post_creation_protection_' . $genre_id);
+    if ($is_protected) {
+        error_log('NewsCrawler: 投稿作成後の保護期間中のためキャッシュを保護 - ジャンルID: ' . $genre_id . ' (post_id=' . $post_id . ')');
+        return;
+    }
+    
     delete_transient('news_crawler_available_count_' . $genre_id);
     error_log('NewsCrawler: 評価値キャッシュを無効化 - ジャンルID: ' . $genre_id . ' (post_id=' . $post_id . ')');
 }
