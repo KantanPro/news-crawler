@@ -1894,19 +1894,7 @@ class NewsCrawler {
         // アイキャッチ生成
         $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
 
-        // AI要約生成
-        if (class_exists('NewsCrawlerOpenAISummarizer')) {
-            $basic_settings = get_option('news_crawler_basic_settings', array());
-            $auto_summary_enabled = isset($basic_settings['auto_summary_generation']) ? $basic_settings['auto_summary_generation'] : true;
-
-            if ($auto_summary_enabled) {
-                error_log('NewsCrawler: AI要約生成を実行します (YouTube投稿ID: ' . $post_id . ')');
-                $summarizer = new NewsCrawlerOpenAISummarizer();
-                $summarizer->generate_summary($post_id);
-            } else {
-                error_log('NewsCrawler: AI要約生成が無効のためスキップします (YouTube投稿ID: ' . $post_id . ')');
-            }
-        }
+        // AI要約生成はclass-youtube-crawler.phpで非同期実行されるため、ここではスキップ
 
         error_log('NewsCrawler: YouTube投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
 
