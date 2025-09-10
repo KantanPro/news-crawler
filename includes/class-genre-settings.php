@@ -1496,14 +1496,14 @@ $('#cancel-edit').click(function() {
                         completeForceProgress();
                         setTimeout(function() {
                             if (response && response.success) {
-                                var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                var successMessage = '✅ ' + response.data;
                                 resultContent.html(successMessage);
                                 // 自動リロードを無効化（ユーザーが結果を確認できるように）
                                 // setTimeout(function() {
                                 //     location.reload();
                                 // }, 2000);
                             } else if (response && response.data) {
-                                resultContent.html('❌ 強制実行失敗\n\n' + response.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                resultContent.html('❌ 強制実行失敗\n\n' + response.data);
                             } else {
                                 resultContent.html('❌ 強制実行失敗\n\n不明な応答形式です');
                             }
@@ -1525,13 +1525,13 @@ $('#cancel-edit').click(function() {
                                         // }, 2000);
                                         return;
                                     } else if (parsed && parsed.data) {
-                                        resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                        resultContent.html('❌ 強制実行失敗\n\n' + parsed.data);
                                         return;
                                     }
                                 } catch (e) {
                                     // 成功テキストがプレーンで返ってきた場合の簡易検出
                                     if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
-                                        resultContent.html('✅ 強制実行完了\n\n' + xhr.responseText);
+                                        resultContent.html('✅ ' + xhr.responseText);
                                         // 自動リロードを無効化（ユーザーが結果を確認できるように）
                                         // setTimeout(function() {
                                         //     location.reload();
@@ -1547,14 +1547,14 @@ $('#cancel-edit').click(function() {
                             try {
                                 var parsed = JSON.parse(xhr.responseText);
                                 if (parsed && parsed.success) {
-                                    resultContent.html('✅ 強制実行完了\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                    resultContent.html('✅ ' + parsed.data);
                                     // 自動リロードを無効化（ユーザーが結果を確認できるように）
                                     // setTimeout(function() {
                                     //     location.reload();
                                     // }, 2000);
                                     return;
                                 } else if (parsed && parsed.data) {
-                                    resultContent.html('❌ 強制実行失敗\n\n' + parsed.data + '\n\n詳細なログはWordPressのデバッグログで確認できます。');
+                                    resultContent.html('❌ 強制実行失敗\n\n' + parsed.data);
                                     return;
                                 }
                             } catch (e) {
@@ -1563,7 +1563,7 @@ $('#cancel-edit').click(function() {
                                 
                                 // プレーンテキストで成功メッセージが返ってきた場合
                                 if (/強制実行|完了|ログ|投稿ID|作成しました/.test(cleanResponse)) {
-                                    var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + cleanResponse + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                    var successMessage = '✅ ' + cleanResponse;
                                     resultContent.html(successMessage);
                                     // 自動リロードを無効化（ユーザーが結果を確認できるように）
                                     // setTimeout(function() {
@@ -1574,7 +1574,7 @@ $('#cancel-edit').click(function() {
                                 
                                 // 警告メッセージが含まれていても成功メッセージがある場合
                                 if (/強制実行|完了|ログ|投稿ID|作成しました/.test(xhr.responseText)) {
-                                    var successMessage = '✅ 強制実行が正常に完了しました！\n\n' + xhr.responseText + '\n\n詳細なログはWordPressのデバッグログで確認できます。';
+                                    var successMessage = '✅ ' + xhr.responseText;
                                     resultContent.html(successMessage);
                                     // 自動リロードを無効化（ユーザーが結果を確認できるように）
                                     // setTimeout(function() {
@@ -4428,15 +4428,33 @@ $('#cancel-edit').click(function() {
         ob_start();
         
         try {
+            // 強制実行前のログ数を記録
+            $logs_before = get_option('news_crawler_auto_posting_logs', array());
+            
             // 強制実行用の自動投稿処理を実行
             $this->execute_auto_posting_forced();
             
             // 実行後のログ確認
-            $logs = get_option('news_crawler_auto_posting_logs', array());
+            $logs_after = get_option('news_crawler_auto_posting_logs', array());
             
-            $result = "自動投稿の強制実行が完了しました。\n\n";
-            $result .= "実行結果は自動投稿実行レポートで確認できます。\n";
-            $result .= "記録されたログ数: " . count($logs) . "件";
+            // 今回の実行で新しく追加されたログから成功した投稿数をカウント
+            $new_logs = array_slice($logs_after, count($logs_before));
+            $success_count = 0;
+            
+            foreach ($new_logs as $log) {
+                if (isset($log['status']) && $log['status'] === 'success' && isset($log['post_id'])) {
+                    $success_count++;
+                }
+            }
+            
+            // 分かりやすいレポートを生成
+            if ($success_count > 0) {
+                $result = "自動投稿が完了しました。\n\n";
+                $result .= "{$success_count}件の投稿が成功しましたのでご確認ください。";
+            } else {
+                $result = "自動投稿が完了しました。\n\n";
+                $result .= "今回の実行では新しい投稿は作成されませんでした。";
+            }
             
             // 出力バッファをクリア
             ob_end_clean();
