@@ -46,8 +46,8 @@ class NewsCrawlerSEOTitleGenerator {
             return;
         }
         
-        // 投稿タイプがpostでない場合はスキップ
-        if ($post->post_type !== 'post') {
+        // 投稿タイプがpostまたはpageでない場合はスキップ
+        if (!in_array($post->post_type, array('post', 'page'))) {
             return;
         }
         
@@ -100,13 +100,13 @@ class NewsCrawlerSEOTitleGenerator {
             return array('error' => '本文を入力してから実行してください');
         }
         
-        // 投稿にカテゴリーが設定されているかチェック
+        // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
         $current_categories = wp_get_post_categories($post_id);
-        if (empty($current_categories)) {
+        if (empty($current_categories) && $post->post_type === 'post') {
             return array('error' => 'カテゴリーを設定してください');
         }
         
-        // 現在のカテゴリーを保存
+        // 現在のカテゴリーを保存（固定ページの場合は空配列）
         $saved_categories = $current_categories;
         
         // News Crawlerで設定されているジャンル名を取得
@@ -413,12 +413,12 @@ class NewsCrawlerSEOTitleGenerator {
         // デバッグ情報をログに出力
         error_log('NewsCrawlerSEOTitleGenerator: add_seo_title_meta_box が呼び出されました');
         
-        // 投稿タイプがpostの場合のみ追加
+        // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_seo_title',
             'News Crawler ' . $this->get_plugin_version() . ' - SEOタイトル生成',
             array($this, 'render_seo_title_meta_box'),
-            'post',
+            array('post', 'page'),
             'side',
             'high'
         );

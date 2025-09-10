@@ -39,13 +39,14 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
     public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
-        // 投稿にカテゴリーが設定されているかチェック
+        // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
         $current_categories = wp_get_post_categories($post_id);
-        if (empty($current_categories)) {
+        $post = get_post($post_id);
+        if (empty($current_categories) && $post && $post->post_type === 'post') {
             return array('error' => 'カテゴリーを設定してください');
         }
         
-        // 現在のカテゴリーを保存
+        // 現在のカテゴリーを保存（固定ページの場合は空配列）
         $saved_categories = $current_categories;
         
         // ライセンスチェック - AI画像生成などの高度な機能が有効かどうかを確認
@@ -2038,12 +2039,12 @@ class NewsCrawlerFeaturedImageGenerator {
      * アイキャッチ生成用のメタボックスを追加
      */
     public function add_featured_image_meta_box() {
-        // 投稿タイプがpostの場合のみ追加
+        // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_featured_image',
             'News Crawler ' . $this->get_plugin_version() . ' - アイキャッチ生成',
             array($this, 'render_featured_image_meta_box'),
-            'post',
+            array('post', 'page'),
             'side',
             'high'
         );
@@ -2324,7 +2325,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $keywords = sanitize_text_field($_POST['keywords']);
         
         $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'post') {
+        if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
         
@@ -2381,7 +2382,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $keywords = sanitize_text_field($_POST['keywords']);
         
         $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'post') {
+        if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
         
@@ -2439,7 +2440,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $post_id = intval($_POST['post_id']);
         $post = get_post($post_id);
         
-        if (!$post || $post->post_type !== 'post') {
+        if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
         

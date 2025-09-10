@@ -26,12 +26,12 @@ class NewsCrawlerPostEditorSummary {
      * 要約生成用のメタボックスを追加
      */
     public function add_summary_meta_box() {
-        // 投稿タイプがpostの場合のみ追加
+        // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_summary',
             'News Crawler ' . $this->get_plugin_version() . ' - AI要約生成',
             array($this, 'render_summary_meta_box'),
-            'post',
+            array('post', 'page'),
             'side',
             'high'
         );
@@ -183,7 +183,7 @@ class NewsCrawlerPostEditorSummary {
         $post_id = intval($_POST['post_id']);
         $post = get_post($post_id);
         
-        if (!$post || $post->post_type !== 'post') {
+        if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
         
@@ -222,7 +222,7 @@ class NewsCrawlerPostEditorSummary {
         $post_id = intval($_POST['post_id']);
         $post = get_post($post_id);
         
-        if (!$post || $post->post_type !== 'post') {
+        if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
         

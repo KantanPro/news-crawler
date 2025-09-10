@@ -243,14 +243,14 @@ class NewsCrawlerOpenAISummarizer {
                 return array('error' => '本文を入力してから実行してください');
             }
 
-            // 投稿にカテゴリーが設定されているかチェック
+            // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
             $current_categories = wp_get_post_categories($post_id);
-            if (empty($current_categories)) {
+            if (empty($current_categories) && $post->post_type === 'post') {
                 error_log('NewsCrawlerOpenAISummarizer: 投稿にカテゴリーが設定されていません。');
                 return array('error' => 'カテゴリーを設定してください');
             }
 
-            // カテゴリーを保存
+            // カテゴリーを保存（固定ページの場合は空配列）
             update_post_meta($post_id, '_news_summary_categories', $current_categories);
 
             // 投稿内容から要約とまとめを生成
