@@ -51,8 +51,6 @@ class NewsCrawlerGenreSettings {
         
         // ライセンス認証の処理を追加
         add_action('admin_init', array($this, 'handle_license_activation'));
-        add_action('wp_ajax_get_auto_posting_logs', array($this, 'get_auto_posting_logs'));
-        add_action('wp_ajax_clear_auto_posting_logs', array($this, 'clear_auto_posting_logs'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
         // サーバーcron対応のため、以下のハンドラーは削除
@@ -1143,21 +1141,6 @@ class NewsCrawlerGenreSettings {
                             <div id="test-result-content" style="white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
                         </div>
                         
-                        <!-- エラーログ表示セクション -->
-                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
-                            <h4 style="margin-top: 0; color: #495057;">📋 自動投稿エラーログ</h4>
-                            <p style="margin-bottom: 15px; color: #6c757d;">自動投稿実行時のエラーログとデバッグ情報を表示します。</p>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <button type="button" id="show-error-logs" class="button">エラーログを表示</button>
-                                <button type="button" id="clear-error-logs" class="button" style="margin-left: 10px;">ログをクリア</button>
-                                <button type="button" id="refresh-error-logs" class="button" style="margin-left: 10px;">更新</button>
-                            </div>
-                            
-                            <div id="error-logs-container" style="display: none;">
-                                <div id="error-logs-content" style="white-space: pre-wrap; background: #ffffff; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.4;"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1603,173 +1586,8 @@ $('#cancel-edit').click(function() {
                 });
             });
             
-            // エラーログ表示
-            $('#show-error-logs').click(function() {
-                var container = $('#error-logs-container');
-                var content = $('#error-logs-content');
-                
-                if (container.is(':visible')) {
-                    container.hide();
-                    $(this).text('エラーログを表示');
-                } else {
-                    $(this).text('読み込み中...');
-                    content.html('ログを読み込み中...');
-                    container.show();
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'get_auto_posting_logs',
-                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            console.log('AJAX Success Response:', response);
-                            if (response.success) {
-                                if (response.data && response.data.trim() !== '') {
-                                    content.html(response.data);
-                                } else {
-                                    content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
-                                }
-                            } else {
-                                var errorMsg = response.data || '不明なエラー';
-                                console.log('AJAX Error Response:', response);
-                                content.html('❌ ログの取得に失敗しました: ' + errorMsg);
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            console.log('AJAX Error:', xhr, status, error);
-                            console.log('Response Text:', xhr.responseText);
-                            
-                            // HTTPステータスが200の場合は成功として扱う
-                            if (xhr.status === 200 && xhr.responseText) {
-                                try {
-                                    var responseData = JSON.parse(xhr.responseText);
-                                    if (responseData.success) {
-                                        if (responseData.data && responseData.data.trim() !== '') {
-                                            content.html(responseData.data);
-                                        } else {
-                                            content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
-                                        }
-                                        return;
-                                    } else if (responseData.data) {
-                                        content.html('❌ ログの取得に失敗しました: ' + responseData.data);
-                                        return;
-                                    }
-                                } catch (e) {
-                                    // プレーンテキストで成功メッセージが返ってきた場合
-                                    if (/正常|エラーなし|ログなし/.test(xhr.responseText)) {
-                                        content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
-                                        return;
-                                    }
-                                }
-                            }
-                            
-                            var errorMsg = '通信エラーが発生しました';
-                            if (xhr.responseJSON && xhr.responseJSON.data) {
-                                errorMsg = xhr.responseJSON.data;
-                            } else if (xhr.responseText) {
-                                try {
-                                    var responseData = JSON.parse(xhr.responseText);
-                                    if (responseData.data) {
-                                        errorMsg = responseData.data;
-                                    }
-                                } catch (e) {
-                                    if (xhr.statusText && xhr.statusText !== 'OK') {
-                                        errorMsg = 'サーバーエラー: ' + xhr.status + ' ' + xhr.statusText;
-                                    } else {
-                                        errorMsg = 'サーバーレスポンス: ' + xhr.responseText.substring(0, 200);
-                                    }
-                                }
-                            } else if (error && error !== 'OK') {
-                                errorMsg = error;
-                            }
-                            content.html('❌ ' + errorMsg + '\n\nデバッグ情報:\nStatus: ' + status + '\nError: ' + error + '\nResponse: ' + xhr.responseText);
-                        },
-                        complete: function() {
-                            $('#show-error-logs').text('エラーログを非表示');
-                        }
-                    });
-                }
-            });
             
-            // エラーログクリア
-            $('#clear-error-logs').click(function() {
-                if (confirm('エラーログをクリアしますか？この操作は元に戻せません。')) {
-                    var button = $(this);
-                    button.prop('disabled', true).text('クリア中...');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'clear_auto_posting_logs',
-                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                $('#error-logs-content').html('✅ ログがクリアされました');
-                                alert('エラーログがクリアされました');
-                            } else {
-                                alert('ログのクリアに失敗しました: ' + response.data);
-                            }
-                        },
-                        error: function() {
-                            alert('通信エラーが発生しました');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('ログをクリア');
-                        }
-                    });
-                }
-            });
             
-            // エラーログ更新
-            $('#refresh-error-logs').click(function() {
-                var container = $('#error-logs-container');
-                var content = $('#error-logs-content');
-                
-                if (container.is(':visible')) {
-                    var button = $(this);
-                    button.prop('disabled', true).text('更新中...');
-                    content.html('ログを更新中...');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'get_auto_posting_logs',
-                            nonce: '<?php echo wp_create_nonce('auto_posting_logs_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                if (response.data && response.data.trim() !== '') {
-                                    content.html(response.data);
-                                } else {
-                                    content.html('✅ 正常に機能しています\n\nエラーログはありません。自動投稿機能は正常に動作しています。');
-                                }
-                            } else {
-                                var errorMsg = response.data || '不明なエラー';
-                                content.html('❌ ログの取得に失敗しました: ' + errorMsg);
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            var errorMsg = '通信エラーが発生しました';
-                            if (xhr.responseJSON && xhr.responseJSON.data) {
-                                errorMsg = xhr.responseJSON.data;
-                            } else if (error) {
-                                errorMsg = error;
-                            }
-                            content.html('❌ ' + errorMsg);
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('更新');
-                        }
-                    });
-                } else {
-                    alert('エラーログを表示してから更新してください');
-                }
-            });
         });
         
         // 編集ボタンクリック
@@ -3668,7 +3486,6 @@ $('#cancel-edit').click(function() {
             $check_result = $this->pre_execution_check($setting);
             
             if (!$check_result['can_execute']) {
-                $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
                 return;
             }
             
@@ -3676,7 +3493,6 @@ $('#cancel-edit').click(function() {
             $existing_posts = $this->count_recent_posts_by_genre($genre_id);
             
             if ($existing_posts >= $max_posts) {
-                $this->log_auto_posting_execution($genre_id, 'skipped', "投稿数上限に達しています（既存: {$existing_posts}件、上限: {$max_posts}件）");
                 return;
             }
             
@@ -3685,7 +3501,6 @@ $('#cancel-edit').click(function() {
             
             // 利用可能な投稿数が0以下の場合はスキップ
             if ($available_posts <= 0) {
-                $this->log_auto_posting_execution($genre_id, 'skipped', "実行可能な投稿数がありません（利用可能: {$available_posts}件）");
                 return;
             }
             
@@ -3710,14 +3525,12 @@ $('#cancel-edit').click(function() {
             }
             
             // 実行結果をログに記録（投稿IDを含める）
-            $this->log_auto_posting_execution($genre_id, 'success', "投稿作成完了: {$result}", $post_id);
             
             // 次回実行スケジュールを更新
             $this->reschedule_next_execution($genre_id, $setting);
             
         } catch (Exception $e) {
             // エラーログを記録
-            $this->log_auto_posting_execution($genre_id, 'error', "実行エラー: " . $e->getMessage());
         }
         
         // デバッグログを削除（パフォーマンス向上のため）
@@ -4199,55 +4012,6 @@ $('#cancel-edit').click(function() {
         // 次回実行時刻も保存
         update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
     }
-    /**
-     * 自動投稿の実行ログを記録
-     */
-    private function log_auto_posting_execution($genre_id, $status, $message = '', $post_id = null) {
-        error_log('Log Auto Posting Execution - Starting to log for genre ID: ' . $genre_id . ', status: ' . $status . ', message: ' . $message . ', post_id: ' . ($post_id ?: 'null'));
-        
-        $logs = get_option('news_crawler_auto_posting_logs', array());
-        error_log('Log Auto Posting Execution - Current logs count: ' . count($logs));
-        
-        // ジャンル名を取得
-        $genre_settings = $this->get_genre_settings();
-        $genre_name = 'ジャンル名不明';
-        if (isset($genre_settings[$genre_id]) && isset($genre_settings[$genre_id]['genre_name'])) {
-            $genre_name = $genre_settings[$genre_id]['genre_name'];
-        }
-        
-        $new_log_entry = array(
-            'genre_id' => $genre_id,
-            'genre_name' => $genre_name,
-            'status' => $status,
-            'message' => $message,
-            'timestamp' => current_time('mysql'),
-            'execution_time' => current_time('mysql') // execution_timeフィールドを追加
-        );
-        
-        // 投稿IDが提供されている場合は追加
-        if ($post_id) {
-            $new_log_entry['post_id'] = $post_id;
-            error_log('Log Auto Posting Execution - Added post_id: ' . $post_id);
-        }
-        
-        error_log('Log Auto Posting Execution - New log entry: ' . print_r($new_log_entry, true));
-        
-        $logs[] = $new_log_entry;
-        
-        // ログは最新100件まで保持
-        if (count($logs) > 100) {
-            $logs = array_slice($logs, -100);
-        }
-        
-        error_log('Log Auto Posting Execution - Logs after adding new entry: ' . count($logs));
-        
-        $update_result = update_option('news_crawler_auto_posting_logs', $logs);
-        error_log('Log Auto Posting Execution - Update result: ' . ($update_result ? 'Success' : 'Failed'));
-        
-        // 更新後の確認
-        $updated_logs = get_option('news_crawler_auto_posting_logs', array());
-        error_log('Log Auto Posting Execution - Verification: updated logs count: ' . count($updated_logs));
-    }
     
     /**
      * 指定されたジャンルの自動投稿ログをクリーンアップ
@@ -4488,7 +4252,6 @@ $('#cancel-edit').click(function() {
         $genres_with_candidates = $this->get_genres_with_candidates();
         
         if (empty($genres_with_candidates)) {
-            $this->log_auto_posting_execution('global', 'skipped', "候補があるジャンルがありません");
             return;
         }
         
@@ -4497,7 +4260,6 @@ $('#cancel-edit').click(function() {
         $global_max_posts = count($genres_with_candidates); // 候補があるジャンル数が上限
         
         if ($total_recent_posts >= $global_max_posts) {
-            $this->log_auto_posting_execution('global', 'skipped', "グローバル投稿数上限に達しています（既存: {$total_recent_posts}件、上限: {$global_max_posts}件）");
             return;
         }
         
@@ -4506,7 +4268,6 @@ $('#cancel-edit').click(function() {
             $check_result = $this->pre_execution_check($setting);
             
             if (!$check_result['can_execute']) {
-                $this->log_auto_posting_execution($genre_id, 'skipped', $check_result['reason']);
                 $skipped_count++;
                 continue;
             }
@@ -5188,116 +4949,7 @@ $('#cancel-edit').click(function() {
         }
     }
     
-    /**
-     * 自動投稿ログを取得
-     */
-    public function get_auto_posting_logs() {
-        // 権限チェック
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-            return;
-        }
-        
-        // nonceチェック
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'auto_posting_logs_nonce')) {
-            wp_send_json_error('セキュリティ検証に失敗しました');
-            return;
-        }
-        
-        try {
-            // デバッグ情報を追加
-            error_log('Get Auto Posting Logs - Starting log retrieval...');
-            
-            $logs = get_option('news_crawler_auto_posting_logs', array());
-            error_log('Get Auto Posting Logs - Retrieved logs count: ' . count($logs));
-            
-            $debug_log = $this->get_debug_log_content();
-            error_log('Get Auto Posting Logs - Debug log length: ' . strlen($debug_log));
-            
-            $cron_log = $this->get_cron_log_content();
-            error_log('Get Auto Posting Logs - Cron log length: ' . strlen($cron_log));
-            
-            $output = "=== 自動投稿ログ ===\n\n";
-            
-            if (empty($logs)) {
-                $output .= "自動投稿ログはありません。\n\n";
-            } else {
-                $output .= "記録されたログ数: " . count($logs) . "件\n\n";
-                
-                // 最新の10件のログを表示
-                $recent_logs = array_slice(array_reverse($logs), 0, 10);
-                foreach ($recent_logs as $log) {
-                    $genre_name = isset($log['genre_name']) ? $log['genre_name'] : 'ジャンル名不明';
-                    $timestamp = isset($log['timestamp']) ? $log['timestamp'] : '時刻不明';
-                    $status = isset($log['status']) ? $log['status'] : 'ステータス不明';
-                    $message = isset($log['message']) ? $log['message'] : 'メッセージなし';
-                    
-                    $output .= "[" . $timestamp . "] ";
-                    $output .= "ジャンル: " . $genre_name . " ";
-                    $output .= "ステータス: " . $status . " ";
-                    $output .= "メッセージ: " . $message . "\n";
-                }
-                $output .= "\n";
-            }
-            
-            $output .= "=== WordPressデバッグログ（最新50行） ===\n\n";
-            $output .= $debug_log;
-            
-            $output .= "\n\n=== Cron実行ログ（最新20行） ===\n\n";
-            $output .= $cron_log;
-            
-            error_log('Get Auto Posting Logs - Output length: ' . strlen($output));
-            
-            // ログが空の場合は空文字列を返す（フロントエンドで「正常に機能しています」と表示）
-            if (empty($logs) && 
-                (strpos($debug_log, 'News Crawler関連のデバッグログは見つかりませんでした') !== false || 
-                 strpos($debug_log, 'デバッグログファイルが見つかりません') !== false) &&
-                (strpos($cron_log, 'Cron実行ログファイルが見つかりません') !== false || 
-                 strpos($cron_log, 'Cron実行ログの読み込みに失敗しました') !== false)) {
-                error_log('Get Auto Posting Logs - Returning empty response (no logs found)');
-                wp_send_json_success('');
-            } else {
-                error_log('Get Auto Posting Logs - Returning log data');
-                wp_send_json_success($output);
-            }
-            
-        } catch (Exception $e) {
-            error_log('Get Auto Posting Logs - Exception: ' . $e->getMessage());
-            error_log('Get Auto Posting Logs - Exception trace: ' . $e->getTraceAsString());
-            wp_send_json_error('ログの取得中にエラーが発生しました: ' . $e->getMessage());
-        } catch (Error $e) {
-            error_log('Get Auto Posting Logs - Fatal Error: ' . $e->getMessage());
-            error_log('Get Auto Posting Logs - Error trace: ' . $e->getTraceAsString());
-            wp_send_json_error('致命的なエラーが発生しました: ' . $e->getMessage());
-        } catch (Throwable $e) {
-            error_log('Get Auto Posting Logs - Throwable Error: ' . $e->getMessage());
-            error_log('Get Auto Posting Logs - Throwable trace: ' . $e->getTraceAsString());
-            wp_send_json_error('予期しないエラーが発生しました: ' . $e->getMessage());
-        }
-    }
     
-    /**
-     * 自動投稿ログをクリア
-     */
-    public function clear_auto_posting_logs() {
-        if (!current_user_can('manage_options')) {
-            wp_die('権限がありません');
-        }
-        
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'auto_posting_logs_nonce')) {
-            wp_die('セキュリティ検証に失敗しました');
-        }
-        
-        try {
-            // 自動投稿ログをクリア
-            update_option('news_crawler_auto_posting_logs', array());
-            
-            wp_send_json_success('ログがクリアされました');
-            
-        } catch (Exception $e) {
-            wp_send_json_error('ログのクリア中にエラーが発生しました: ' . $e->getMessage());
-        }
-    }
     
     /**
      * WordPressデバッグログの内容を取得
