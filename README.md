@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.59-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.59)
+[![Version](https://img.shields.io/badge/version-2.3.60-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.60)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,13 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.60** (2025-09-10): Added automatic reactivation after plugin updates
+  - Implemented automatic reactivation functionality after plugin updates
+  - Save and restore pre-update state (active/inactive, network active)
+  - Improved plugin version retrieval methods
+  - Removed unnecessary log output and cache clear functionality
+  - Achieved more stable update process
 
 - **v2.3.59** (2025-09-10): Enhanced support for both posts and pages
   - Fixed category checking and meta box addition processing for both posts and pages
