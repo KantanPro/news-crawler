@@ -57,40 +57,37 @@ add_action('plugins_loaded', function() {
 }, 1);
 
 
-// 標準の更新通知が表示されない場合のフォールバック通知
-add_action('admin_notices', function() {
-    if (!current_user_can('update_plugins')) {
-        return;
+// 更新後の自動有効化処理
+add_action('upgrader_process_complete', function($upgrader_object, $options) {
+    // プラグインの更新が完了した場合のみ処理
+    if ($options['action'] === 'update' && $options['type'] === 'plugin') {
+        $plugin_basename = plugin_basename(__FILE__);
+        
+        // 対象プラグインが更新されたかチェック
+        if (isset($options['plugins']) && in_array($plugin_basename, $options['plugins'])) {
+            // 更新前に有効だったかチェック
+            $pre_state = get_site_transient('news_crawler_pre_update_state');
+            if ($pre_state && !empty($pre_state['was_active'])) {
+                // プラグインを再有効化
+                if (!function_exists('activate_plugin')) {
+                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+                }
+                
+                $network_wide = !empty($pre_state['network_active']);
+                $activate_result = activate_plugin($plugin_basename, '', $network_wide, true);
+                
+                if (is_wp_error($activate_result)) {
+                    error_log('News Crawler: 更新後の自動有効化に失敗しました - ' . $activate_result->get_error_message());
+                } else {
+                    error_log('News Crawler: 更新後の自動有効化が完了しました (network_wide=' . ($network_wide ? 'true' : 'false') . ')');
+                }
+                
+                // 一時データをクリア
+                delete_site_transient('news_crawler_pre_update_state');
+            }
+        }
     }
-
-    // すでに WordPress 標準の更新通知がある場合は何もしない
-    $plugin_basename = plugin_basename(__FILE__);
-    $wp_update_transient = get_site_transient('update_plugins');
-    if (!empty($wp_update_transient) && isset($wp_update_transient->response[$plugin_basename])) {
-        return;
-    }
-
-    // Updater が保存した最新情報のキャッシュを参照（ネットワーク通信は行わない）
-    $latest = get_transient('news_crawler_latest_version');
-    if ($latest === false) {
-        $latest = get_transient('news_crawler_latest_version_backup');
-    }
-
-    if (!is_array($latest) || empty($latest['version'])) {
-        return;
-    }
-
-    // 現在バージョンより新しければフォールバック通知を表示
-    if (version_compare(NEWS_CRAWLER_VERSION, $latest['version'], '<')) {
-        $update_core_url = admin_url('update-core.php');
-        $force_check_url = admin_url('plugins.php?force-check=1');
-        echo '<div class="notice notice-warning is-dismissible">';
-        echo '<p><strong>News Crawler の新しいバージョン ' . esc_html($latest['version']) . ' が利用可能です。</strong></p>';
-        echo '<p><a class="button button-primary" href="' . esc_url($update_core_url) . '">今すぐ更新</a> ';
-        echo '<a class="button" href="' . esc_url($force_check_url) . '">更新情報を再取得</a></p>';
-        echo '</div>';
-    }
-});
+}, 10, 2);
 
 // プラグイン初期化
 function news_crawler_init() {

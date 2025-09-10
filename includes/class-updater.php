@@ -76,17 +76,24 @@ class NewsCrawlerUpdater {
         if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
             return $transient;
         }
+        
         // $transient が null の場合は防御的に初期化
         if ($transient === null) {
             $transient = new stdClass();
         }
+        
         // プラグインの更新チェックが無効化されている場合はスキップ
         if (isset($transient->no_update) && is_array($transient->no_update) && isset($transient->no_update[$this->plugin_basename])) {
             return $transient;
         }
         
-        // 現在のバージョンを取得
-        $current_version = NEWS_CRAWLER_VERSION;
+        // get_plugin_data()を使ってローカルのプラグインバージョンを取得
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        
+        $plugin_data = get_plugin_data($this->plugin_file, false, false);
+        $current_version = isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
         
         // インストール済みバージョンをWP側のcheckedに登録
         if (!isset($transient->checked)) {
@@ -98,8 +105,6 @@ class NewsCrawlerUpdater {
         $latest_version = $this->get_latest_version();
         
         if (!$latest_version || !isset($latest_version['version'])) {
-            // エラー時はログを記録
-            error_log('News Crawler: Failed to get latest version information');
             return $transient;
         }
         
@@ -132,9 +137,6 @@ class NewsCrawlerUpdater {
                     'low' => ''
                 )
             );
-            
-            // 更新通知のログを記録
-            error_log('News Crawler: Update available - Current: ' . $current_version . ', Latest: ' . $latest_version['version']);
         } else {
             // 最新バージョンの場合、no_updateに登録
             if (!isset($transient->no_update)) {
@@ -154,13 +156,6 @@ class NewsCrawlerUpdater {
             if (isset($transient->response[$this->plugin_basename])) {
                 unset($transient->response[$this->plugin_basename]);
             }
-        }
-        
-        // キャッシュクリアを強制実行してバージョン情報を更新
-        if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
-            delete_transient('news_crawler_latest_version');
-            delete_site_transient('update_plugins');
-            wp_clean_plugins_cache();
         }
         
         return $transient;
@@ -185,12 +180,6 @@ class NewsCrawlerUpdater {
         
         // 強制更新チェック
         if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
-            $this->clear_all_caches();
-            wp_update_plugins();
-        }
-        
-        // キャッシュクリア機能
-        if (isset($_GET['clear-cache']) && $_GET['clear-cache'] === '1') {
             $this->clear_all_caches();
             wp_update_plugins();
         }
@@ -371,9 +360,6 @@ class NewsCrawlerUpdater {
      */
     public function before_update($response, $hook_extra, $result = null) {
         if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
-            // 更新前の処理
-            $this->cleanup_old_files();
-            
             // プラグインの一時的な無効化（更新中）
             $was_network_active = is_multisite() && is_plugin_active_for_network($this->plugin_basename);
             $was_active = is_plugin_active($this->plugin_basename) || $was_network_active;
@@ -402,7 +388,6 @@ class NewsCrawlerUpdater {
             delete_transient('news_crawler_latest_version_backup');
             delete_site_transient('update_plugins');
             delete_site_transient('update_plugins_checked');
-            delete_transient('news_crawler_last_check');
             
             // プラグイン情報の再読み込みを強制
             wp_clean_plugins_cache();
@@ -416,26 +401,6 @@ class NewsCrawlerUpdater {
             if (function_exists('wp_cache_flush_group')) {
                 wp_cache_flush_group('plugins');
             }
-            
-            // 更新後の整合性チェック
-            $this->verify_update_integrity();
-            
-            // 更新前に有効だった場合は自動的に再有効化
-            $pre_state = get_site_transient('news_crawler_pre_update_state');
-            if ($pre_state && !empty($pre_state['was_active'])) {
-                if (!function_exists('activate_plugin')) {
-                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
-                }
-                $network_wide = !empty($pre_state['network_active']);
-                $activate_result = activate_plugin($this->plugin_basename, '', $network_wide, true);
-                if (is_wp_error($activate_result)) {
-                    error_log('News Crawler: Reactivation failed - ' . $activate_result->get_error_message());
-                } else {
-                    error_log('News Crawler: Plugin reactivated successfully (network_wide=' . ($network_wide ? 'true' : 'false') . ')');
-                }
-            }
-            delete_site_transient('news_crawler_pre_update_state');
-            
         }
         
         return $response;
@@ -465,7 +430,13 @@ class NewsCrawlerUpdater {
             );
         }
         
-        $current_version = NEWS_CRAWLER_VERSION;
+        // get_plugin_data()を使ってローカルのプラグインバージョンを取得
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        
+        $plugin_data = get_plugin_data($this->plugin_file, false, false);
+        $current_version = isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
         $has_update = version_compare($current_version, $latest_version['version'], '<');
         
         return array(
@@ -483,8 +454,13 @@ class NewsCrawlerUpdater {
     public function debug_update_system() {
         $debug_info = array();
         
-        // 現在のバージョン
-        $debug_info['current_version'] = NEWS_CRAWLER_VERSION;
+        // get_plugin_data()を使ってローカルのプラグインバージョンを取得
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        
+        $plugin_data = get_plugin_data($this->plugin_file, false, false);
+        $debug_info['current_version'] = isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
         
         // プラグインベース名
         $debug_info['plugin_basename'] = $this->plugin_basename;
@@ -548,8 +524,13 @@ class NewsCrawlerUpdater {
         }
         
         // プラグインのバージョン情報をチェック
-        if (!defined('NEWS_CRAWLER_VERSION')) {
-            error_log('News Crawler: Update integrity check failed. Version constant not defined.');
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        
+        $plugin_data = get_plugin_data($this->plugin_file, false, false);
+        if (!isset($plugin_data['Version']) || empty($plugin_data['Version'])) {
+            error_log('News Crawler: Update integrity check failed. Version not found in plugin data.');
             return false;
         }
         
@@ -562,58 +543,6 @@ class NewsCrawlerUpdater {
         return true;
     }
     
-    /**
-     * Cleanup old files before update
-     */
-    private function cleanup_old_files() {
-        $plugin_dir = NEWS_CRAWLER_PLUGIN_DIR;
-        
-        // 古いファイルやディレクトリをクリーンアップ
-        $old_files = array(
-            'news-crawler-cron.log',
-            'news-crawler-cron.sh',
-            'CHANGELOG.md',
-            'README.md'
-        );
-        
-        foreach ($old_files as $file) {
-            $file_path = $plugin_dir . $file;
-            if (file_exists($file_path)) {
-                if (is_file($file_path)) {
-                    unlink($file_path);
-                } elseif (is_dir($file_path)) {
-                    $this->recursive_rmdir($file_path);
-                }
-            }
-        }
-        
-        // 一時ファイルのクリーンアップ
-        $temp_files = glob($plugin_dir . '*.tmp');
-        foreach ($temp_files as $temp_file) {
-            if (file_exists($temp_file)) {
-                unlink($temp_file);
-            }
-        }
-    }
-    
-    /**
-     * Recursively remove directory
-     */
-    private function recursive_rmdir($dir) {
-        if (is_dir($dir)) {
-            $objects = scandir($dir);
-            foreach ($objects as $object) {
-                if ($object != "." && $object != "..") {
-                    if (is_dir($dir . "/" . $object)) {
-                        $this->recursive_rmdir($dir . "/" . $object);
-                    } else {
-                        unlink($dir . "/" . $object);
-                    }
-                }
-            }
-            rmdir($dir);
-        }
-    }
     
     /**
      * Cleanup on deactivation
