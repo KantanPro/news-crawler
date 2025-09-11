@@ -162,9 +162,17 @@ class NewsCrawlerOpenAISummarizer {
 
         error_log('NewsCrawlerOpenAISummarizer: すべてのチェックが完了いたしました。投稿ID ' . $post_id . ' の要約生成を非同期で実行いたします');
 
-        // 非同期処理のみ実行（レート制限回避のため同期処理を削除）
+        // WP-Cron が無効な環境では即時同期実行にフォールバック
+        if (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON) {
+            error_log('NewsCrawlerOpenAISummarizer: WP-Cronが無効のため同期実行にフォールバックします（post_id=' . $post_id . '）');
+            $this->generate_summary($post_id);
+            return;
+        }
+
+        // 非同期スケジュール。失敗時は同期実行にフォールバック
         if (!$this->schedule_event_with_retry($post_id)) {
-            error_log('NewsCrawlerOpenAISummarizer: 非同期処理のスケジュールに失敗しました。投稿ID: ' . $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 非同期スケジュールに失敗。同期実行にフォールバックします（post_id=' . $post_id . '）');
+            $this->generate_summary($post_id);
         }
     }
     
