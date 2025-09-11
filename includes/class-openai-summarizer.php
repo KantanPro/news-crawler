@@ -355,9 +355,17 @@ class NewsCrawlerOpenAISummarizer {
             return array('error' => '記事の内容が短すぎるため、要約を生成できません。記事本文を充実させてください。');
         }
 
+        // YouTube投稿かどうかを判定
+        $is_youtube_post = get_post_meta($post_id, '_youtube_summary', true);
+        
         // プロンプトを作成（キーワード最適化対応）
-        $prompt = $this->create_summary_prompt($text_content, $title, $post_id);
-        error_log('NewsCrawlerOpenAISummarizer: プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
+        if ($is_youtube_post) {
+            $prompt = $this->create_youtube_summary_prompt($text_content, $title, $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: YouTube投稿用プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
+        } else {
+            $prompt = $this->create_summary_prompt($text_content, $title, $post_id);
+            error_log('NewsCrawlerOpenAISummarizer: 通常投稿用プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
+        }
 
         // OpenAI APIを呼び出し（強化版指数バックオフ付き）
         $max_retries = 5; // 再試行回数を増やす
@@ -606,6 +614,81 @@ class NewsCrawlerOpenAISummarizer {
 注意：
 - 要約は事実に基づいて客観的に作成いたします
 - まとめは読者の理解を深め、実際に活用できるような内容にしてください
+- 日本語で自然で親しみやすい文章にしてください
+- 必ず「〜です」「〜ます」の丁寧語を使い、読みやすい文体にしてください
+- 難しい概念は身近な例えを使って説明いたします
+- 文末は必ず「です」「ます」「ございます」で終わるようにしてください";
+    }
+    
+    /**
+     * YouTube投稿用の要約プロンプトを作成
+     */
+    private function create_youtube_summary_prompt($content, $title, $post_id = null) {
+        // キーワード最適化のためのキーワード取得
+        $keyword_instructions = '';
+        if ($post_id) {
+            $seo_settings = get_option('news_crawler_seo_settings', array());
+            if (isset($seo_settings['keywords']) && !empty($seo_settings['keywords'])) {
+                $keywords = $seo_settings['keywords'];
+                if (!empty($keywords)) {
+                    $keyword_list = implode('、', $keywords);
+                    $keyword_instructions = "
+
+【SEO最適化指示】
+以下のキーワードを自然に含めて要約とまとめを作成してください：
+ターゲットキーワード：{$keyword_list}
+
+注意事項：
+- キーワードは自然な文章の流れの中で使用してください
+- 無理にキーワードを詰め込まず、読みやすさを優先してください
+- キーワードの密度は適切に保ち、過度な繰り返しは避けてください
+- 要約とまとめの両方で、関連するキーワードを効果的に使用してください";
+                }
+            }
+        }
+        
+        return "【最重要】必ず「ですます調」で書いてください！文末は「です」「ます」「ございます」で終わらせてください！{$keyword_instructions}
+
+以下のYouTube動画まとめ記事の内容を分析して、以下の形式で回答いたします：
+
+記事タイトル：{$title}
+
+記事内容：
+{$content}
+
+回答形式：
+## この記事の要約
+（動画の内容を3-4行で、誰でも理解できるように分かりやすくまとめてください。各動画の要点を簡潔に説明いたします）
+
+## まとめ
+（紹介された動画の内容を踏まえて、読者が実際に活用できるような洞察や今後の展望を2-3行で述べてください。動画視聴のメリットや関連情報の探し方など、具体的で実用的なアドバイスを含めてください）
+
+【重要】文体のルール（絶対に守ってください）：
+- 必ず「ですます調」で書いてください
+- 文末は必ず「です」「ます」「ございます」で終わってください
+- 「〜している」→「〜しております」
+- 「〜している」→「〜しております」
+- 「〜となる」→「〜となります」
+- 「〜になる」→「〜になります」
+- 「〜がある」→「〜がございます」
+- 「〜が必要」→「〜が必要です」
+- 「〜である」→「〜でございます」
+- 「〜だろう」→「〜になります」
+- 「〜される」→「〜されます」
+- 「〜される」→「〜されます」
+
+【絶対禁止事項】：
+- 「〜している」で終わる文章は絶対に書かないでください
+- 「〜である」で終わる文章は絶対に書かないでください
+- 「〜だろう」で終わる文章は絶対に書かないでください
+- 「〜れる」で終わる文章は絶対に書かないでください
+
+【最終確認】：
+回答を書く前に、すべての文末が「です」「ます」「ございます」で終わっているか必ず確認してください。
+
+注意：
+- 要約は動画の内容に基づいて客観的に作成いたします
+- まとめは読者の理解を深め、実際に動画を活用できるような内容にしてください
 - 日本語で自然で親しみやすい文章にしてください
 - 必ず「〜です」「〜ます」の丁寧語を使い、読みやすい文体にしてください
 - 難しい概念は身近な例えを使って説明いたします

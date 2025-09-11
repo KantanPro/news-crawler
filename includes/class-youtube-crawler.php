@@ -703,15 +703,6 @@ class NewsCrawlerYouTubeCrawler {
             }
         }
         
-        // まとめセクションを追加
-        $post_content .= '<!-- wp:heading {"level":2} -->' . "\n";
-        $post_content .= '<h2 class="wp-block-heading">まとめ</h2>' . "\n";
-        $post_content .= '<!-- /wp:heading -->' . "\n\n";
-        
-        $post_content .= '<!-- wp:paragraph -->' . "\n";
-        $post_content .= '<p class="wp-block-paragraph">本日は' . count($videos) . '本の' . $keyword_text . 'に関する動画をご紹介しました。各動画から最新の情報やトレンドをキャッチアップして、ぜひお気に入りの動画を見つけてください。また、チャンネル登録や高評価もお忘れなく！</p>' . "\n";
-        $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
-        
         // 指定されたステータスで直接投稿を作成（公開設定を確実に反映）
         $post_data = array(
             'post_title'    => $post_title,
