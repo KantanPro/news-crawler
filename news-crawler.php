@@ -61,7 +61,7 @@ add_action('plugins_loaded', function() {
 */
 
 
-// 更新後の自動有効化処理（WordPress標準更新システム用に簡素化）
+// 更新後の自動有効化処理（WordPress標準更新システム用）
 add_action('upgrader_process_complete', function($upgrader_object, $options) {
     // プラグインの更新が完了した場合のみ処理
     if ($options['action'] === 'update' && $options['type'] === 'plugin') {
@@ -69,8 +69,29 @@ add_action('upgrader_process_complete', function($upgrader_object, $options) {
         
         // 対象プラグインが更新されたかチェック
         if (isset($options['plugins']) && in_array($plugin_basename, $options['plugins'])) {
-            // WordPress標準更新システムでは自動的に有効化されるため、特別な処理は不要
-            error_log('News Crawler: プラグインの更新が完了しました');
+            // 更新前の有効状態を取得
+            $was_active = get_site_transient('news_crawler_pre_update_state');
+            
+            // キャッシュクリア
+            delete_transient('news_crawler_latest_version');
+            delete_transient('news_crawler_latest_version_backup');
+            delete_site_transient('update_plugins');
+            delete_site_transient('update_plugins_checked');
+            wp_clean_plugins_cache();
+            
+            // 更新前の状態に応じてプラグインを再有効化
+            if ($was_active && isset($was_active['was_active']) && $was_active['was_active']) {
+                if (isset($was_active['network_active']) && $was_active['network_active']) {
+                    // ネットワーク有効化
+                    activate_plugin($plugin_basename, '', true);
+                } else {
+                    // 通常の有効化
+                    activate_plugin($plugin_basename);
+                }
+            }
+            
+            // 一時的な状態を削除
+            delete_site_transient('news_crawler_pre_update_state');
         }
     }
 }, 10, 2);
@@ -336,8 +357,8 @@ function news_crawler_init_components() {
         new NewsCrawlerOGPSettings();
     }
     
-    // 更新チェッククラスを初期化（管理画面/cron のみ）
-    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
+    // 更新チェッククラスを初期化（WordPress標準更新システム用）
+    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         new NewsCrawlerUpdater();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }

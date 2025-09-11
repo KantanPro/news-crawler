@@ -84,7 +84,10 @@ class NewsCrawlerUpdater {
         
         // プラグインの更新チェックが無効化されている場合はスキップ
         if (isset($transient->no_update) && is_array($transient->no_update) && isset($transient->no_update[$this->plugin_basename])) {
-            return $transient;
+            // ただし、強制更新チェックの場合はスキップしない
+            if (!isset($_GET['force-check']) || $_GET['force-check'] != '1') {
+                return $transient;
+            }
         }
         
         // get_plugin_data()を使ってローカルのプラグインバージョンを取得
@@ -137,6 +140,11 @@ class NewsCrawlerUpdater {
                     'low' => ''
                 )
             );
+            
+            // 古いno_updateエントリをクリア
+            if (isset($transient->no_update[$this->plugin_basename])) {
+                unset($transient->no_update[$this->plugin_basename]);
+            }
         } else {
             // 最新バージョンの場合、no_updateに登録
             if (!isset($transient->no_update)) {
