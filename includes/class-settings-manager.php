@@ -337,6 +337,16 @@ class NewsCrawlerSettingsManager {
                     </p>
                 </div>
 
+                <?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
+                <!-- 開発環境モードの説明（開発環境でのみ表示） -->
+                <div class="ktp-dev-mode-info" style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px;">
+                    <p style="margin: 0; font-size: 14px; color: #0066cc;">
+                        <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
+                        開発者モードで認証されています
+                    </p>
+                </div>
+                <?php endif; ?>
+
                 <!-- ライセンス認証フォーム -->
                 <div class="ktp-license-form-container" style="padding: 20px; background: #f9f9f9; border-radius: 5px;">
                     <h3><?php echo esc_html__( 'ライセンスキーを入力してください', 'news-crawler' ); ?></h3>

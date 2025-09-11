@@ -1,13 +1,23 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 自動生成されたシェルスクリプトです
-# 生成日時: 2025-09-02 06:31:43
+# 修正版 - 2025-09-11
 
 # スクリプトのディレクトリを取得
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # WordPressのパスを動的に取得（プラグインディレクトリから逆算）
 WP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")/"
+
+# WordPressのパスが正しいかチェック（wp-config.phpの存在確認）
+if [ ! -f "$WP_PATH/wp-config.php" ]; then
+    # 代替パスを試行
+    for alt_path in "/var/www/html/" "/Users/kantanpro/Desktop/KantanPro/wordpress/" "$(dirname "$SCRIPT_DIR")/../../"; do
+        if [ -f "$alt_path/wp-config.php" ]; then
+            WP_PATH="$alt_path"
+            break
+        fi
+    done
+fi
 
 # プラグインパスを設定
 PLUGIN_PATH="$SCRIPT_DIR/"
@@ -21,122 +31,87 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: $SCRIPT_
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: $WP_PATH" >> "$LOG_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$LOG_FILE"
 
-# WordPressのwp-cliが利用可能かチェック
-if command -v wp &> /dev/null; then
-    # wp-cliを使用してNews Crawlerを実行
-    cd "$WP_PATH"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
+# Docker環境かどうかを判定
+if [ -f "/.dockerenv" ] || [ -n "$DOCKER_CONTAINER" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境で実行中..." >> "$LOG_FILE"
     
-    # WordPressのパスを明示的に指定
-    wp --path="$WP_PATH" eval "
-        if (class_exists('NewsCrawlerGenreSettings')) {
-            $genre_settings = NewsCrawlerGenreSettings::get_instance();
-            $genre_settings->execute_auto_posting();
-            echo 'News Crawler自動投稿を実行しました';
-        } else {
-            echo 'News CrawlerGenreSettingsクラスが見つかりません';
-        }
-    " >> "$LOG_FILE" 2>&1
-    
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました" >> "$LOG_FILE"
-else
-    # wp-cliが利用できない場合は、PHPを直接実行
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
-    
-    cd "$WP_PATH"
-    
-    # PHPのフルパスを指定
-PHP_CMD="$(which php)"
-
-# PHPコマンドが見つからない場合のエラーハンドリング
-if [ -z "$PHP_CMD" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンドが見つかりません。スクリプトを終了します。" >> "$LOG_FILE"
-    exit 1
-fi
-
-# PHPコマンドを使用して実行
-$PHP_CMD -r "
-    require_once('wp-config.php');
-    require_once('wp-includes/pluggable.php');
-    if (class_exists('NewsCrawlerGenreSettings')) {
-        $genre_settings = NewsCrawlerGenreSettings::get_instance();
-        $genre_settings->execute_auto_posting();
-        echo 'News Crawler自動投稿を実行しました';
-    } else {
-        echo 'News CrawlerGenreSettingsクラスが見つかりません';
-    }
-" >> "$LOG_FILE" 2>&1
-    
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
-    
-    # HTTPリクエストは使用しない（セキュリティチェックの問題のため）
-    # else
-    # wp-cliが利用できない場合は、HTTPリクエストでNews Crawlerを実行
-    # WordPressの設定からサイトURLを動的に取得
-    SITE_URL=$(cd "$WP_PATH" && php -r "
-        if (file_exists('wp-config.php')) {
-            require_once('wp-config.php');
-            echo get_option('home', 'http://localhost');
-        } else {
-            echo 'http://localhost';
-        }
-    " 2>/dev/null)
-    
-        # サイトURLが取得できない場合は、wp-config.phpから直接取得を試行
-    if [ -z "$SITE_URL" ] || [ "$SITE_URL" = "http://localhost" ]; then
-        SITE_URL=$(cd "$WP_PATH" && php -r "
-        if (file_exists('wp-config.php')) {
-            \$config = file_get_contents('wp-config.php');
-            if (preg_match('/define\s*\(\s*[\'\"\"]WP_HOME[\'\"\"]\s*,\s*[\'\"\"]([^\'\"\"]+)[\'\"\"]/', \$config, \$matches)) {
-                echo \$matches[1];
-            } elseif (preg_match('/define\s*\(\s*[\'\"\"]WP_SITEURL[\'\"\"]\s*,\s*[\'\"\"]([^\'\"\"]+)[\'\"\"]/', \$config, \$matches)) {
-                echo \$matches[1];
+    # Docker環境ではwp-cliを使用
+    if command -v wp &> /dev/null; then
+        cd "$WP_PATH"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
+        
+        # WordPressのパスを明示的に指定して実行
+        wp --path="$WP_PATH" eval "
+            if (class_exists('NewsCrawlerGenreSettings')) {
+                \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+                \$genre_settings->execute_auto_posting();
+                echo 'News Crawler自動投稿を実行しました';
             } else {
-                echo 'http://localhost:8081';
+                echo 'News CrawlerGenreSettingsクラスが見つかりません';
             }
-        } else {
-            echo 'http://localhost:8081';
-        }
-    " 2>/dev/null)
+        " >> "$LOG_FILE" 2>&1
+        
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました" >> "$LOG_FILE"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でwp-cliが見つかりません" >> "$LOG_FILE"
     fi
-    
-    # Dockerコンテナ内からアクセスする場合は、ホストのIPアドレスを使用
-    if [ "$SITE_URL" = "http://localhost:8081" ]; then
-        SITE_URL="http://host.docker.internal:8081"
+else
+    # ローカル環境ではwp-cliまたはPHP直接実行
+    if command -v wp &> /dev/null; then
+        # wp-cliを使用してNews Crawlerを実行
+        cd "$WP_PATH"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
+        
+        # WordPressのパスを明示的に指定して実行
+        wp --path="$WP_PATH" eval "
+            if (class_exists('NewsCrawlerGenreSettings')) {
+                \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+                \$genre_settings->execute_auto_posting();
+                echo 'News Crawler自動投稿を実行しました';
+            } else {
+                echo 'News CrawlerGenreSettingsクラスが見つかりません';
+            }
+        " >> "$LOG_FILE" 2>&1
+        
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました" >> "$LOG_FILE"
+    else
+        # wp-cliが利用できない場合は、PHPを直接実行
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
+        
+        cd "$WP_PATH"
+        
+        # PHPのフルパスを複数の候補から検索
+        PHP_CMD=""
+        for php_path in "/usr/bin/php" "/usr/local/bin/php" "/opt/homebrew/bin/php" "$(which php)"; do
+            if [ -x "$php_path" ]; then
+                PHP_CMD="$php_path"
+                break
+            fi
+        done
+        
+        # PHPコマンドが見つからない場合のエラーハンドリング
+        if [ -z "$PHP_CMD" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンドが見つかりません。スクリプトを終了します。" >> "$LOG_FILE"
+            exit 1
+        fi
+        
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD" >> "$LOG_FILE"
+        
+        # PHPコマンドを使用して実行
+        $PHP_CMD -r "
+            require_once('wp-config.php');
+            require_once('wp-includes/pluggable.php');
+            if (class_exists('NewsCrawlerGenreSettings')) {
+                \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+                \$genre_settings->execute_auto_posting();
+                echo 'News Crawler自動投稿を実行しました';
+            } else {
+                echo 'News CrawlerGenreSettingsクラスが見つかりません';
+            }
+        " >> "$LOG_FILE" 2>&1
+        
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
     fi
-    
-    CRON_URL="$SITE_URL/wp-admin/admin-ajax.php"
-    
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 取得したサイトURL: $SITE_URL" >> "$LOG_FILE"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S")] HTTPリクエスト経由でNews Crawlerを実行中..." >> "$LOG_FILE"
-    
-    # News Crawlerの自動投稿機能をHTTPリクエストで実行
-    # 正しいnonceを動的に生成
-    CRON_NONCE=$(cd "$WP_PATH" && php -r "
-        require_once('wp-config.php');
-        require_once('wp-includes/pluggable.php');
-        echo wp_create_nonce('news_crawler_cron_nonce');
-    " 2>/dev/null)
-    
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 生成されたnonce: $CRON_NONCE" >> "$LOG_FILE"
-    
-    curl -s -X POST "$CRON_URL" \
-        -d "action=news_crawler_cron_execute" \
-        -d "nonce=$CRON_NONCE" \
-        >> "$LOG_FILE" 2>&1
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S")] HTTPリクエスト経由でNews Crawlerを実行しました" >> "$LOG_FILE"
-
-    # PHPコード内の変数をエスケープ
-    wp --path="$WP_PATH" eval "
-        if (class_exists('NewsCrawlerGenreSettings')) {
-            \$genre_settings = NewsCrawlerGenreSettings::get_instance();
-            \$genre_settings->execute_auto_posting();
-            echo 'News Crawler自動投稿を実行しました';
-        } else {
-            echo 'News CrawlerGenreSettingsクラスが見つかりません';
-        }
-    " >> "$LOG_FILE" 2>&1
 fi
 
 # ログに実行終了を記録

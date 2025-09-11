@@ -979,32 +979,16 @@ class NewsCrawler_License_Manager {
      * @return bool True if development environment
      */
     public function is_development_environment() {
-        // 開発環境の判定ロジック
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        $is_localhost = in_array( $host, array( 'localhost', '127.0.0.1', '::1' ) );
-        $is_dev_domain = strpos( $host, '.local' ) !== false || strpos( $host, '.test' ) !== false || strpos( $host, '.dev' ) !== false;
+        // WP_DEBUGが有効で、かつ明示的に開発環境フラグが設定されている場合のみ開発環境と判定
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG && 
+             defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true ) {
+            error_log('NewsCrawler License: Development environment detected via WP_DEBUG + NEWS_CRAWLER_DEVELOPMENT_MODE flags');
+            return true;
+        }
         
-        // Docker環境も開発環境として認識（より具体的な判定）
-        $is_docker = (strpos( $host, 'docker' ) !== false || strpos( $host, 'container' ) !== false) && $is_localhost;
-        
-        // 本番環境のドメインパターンを除外
-        $is_production_domain = strpos( $host, '.com' ) !== false || 
-                               strpos( $host, '.net' ) !== false || 
-                               strpos( $host, '.org' ) !== false || 
-                               strpos( $host, '.jp' ) !== false ||
-                               strpos( $host, '.co.jp' ) !== false;
-        
-        // 開発環境の明示的な定数チェック（より厳密）
-        $is_dev_constant = defined( 'WP_DEBUG' ) && WP_DEBUG && 
-                          (defined( 'WP_ENV' ) && WP_ENV === 'development') || 
-                          (defined( 'WP_ENVIRONMENT_TYPE' ) && WP_ENVIRONMENT_TYPE === 'development');
-        
-        // 開発環境判定（本番ドメインの場合は除外）
-        $is_dev = ($is_localhost || $is_dev_domain || $is_docker || $is_dev_constant) && !$is_production_domain;
-        
-        error_log('NewsCrawler License: Environment check - Host: ' . $host . ', Localhost: ' . ($is_localhost ? 'true' : 'false') . ', Dev domain: ' . ($is_dev_domain ? 'true' : 'false') . ', WP_DEBUG: ' . (defined( 'WP_DEBUG' ) && WP_DEBUG ? 'true' : 'false') . ', Docker: ' . ($is_docker ? 'true' : 'false') . ', Production domain: ' . ($is_production_domain ? 'true' : 'false') . ', Is Dev: ' . ($is_dev ? 'true' : 'false'));
-        
-        return $is_dev;
+        // フラグが設定されていない場合は本番環境として扱う
+        error_log('NewsCrawler License: Production environment - Development flags not set');
+        return false;
     }
 
     /**

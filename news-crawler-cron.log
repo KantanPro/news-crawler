@@ -329,3 +329,311 @@ Pass --path=`path/to/wordpress` or run `wp core download`.
 [2025-09-10 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
 [2025-09-10 19:00:01] WordPressパス: /var/www/html/
 [2025-09-10 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-11 19:00:01] News Crawler Cron 実行開始
+[2025-09-11 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
+[2025-09-11 19:00:01] WordPressパス: /var/www/html/
+[2025-09-11 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-12 07:35:16] News Crawler Cron 実行開始
+[2025-09-12 07:35:16] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-12 07:35:16] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-12 07:35:16] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-12 07:35:16] wp-cli経由でNews Crawlerを実行中...
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DeclareAbstractBaseCommand (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFrameworkAutoloader (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\ConfigureRunner (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeRequestsAutoloader (0.029s)
+Debug (bootstrap): Setting RequestsLibrary::$version to v2 (0.029s)
+Debug (bootstrap): Setting RequestsLibrary::$source to wp-core (0.029s)
+Debug (bootstrap): Setting RequestsLibrary::$class_name to \WpOrg\Requests\Requests (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeColorization (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeLogger (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DefineProtectedCommands (0.029s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadExecCommand (0.032s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadRequiredCommand (0.033s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludePackageAutoloader (0.034s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFallbackAutoloader (0.035s)
+Debug (bootstrap): Fallback autoloader paths: phar://wp-cli.phar/vendor/autoload.php (0.036s)
+Debug (bootstrap): Loading detected autoloader: phar://wp-cli.phar/vendor/autoload.php (0.036s)
+Debug (commands): Adding command: config (0.042s)
+Debug (commands): Adding command: core (0.043s)
+Debug (commands): Adding command: eval (0.043s)
+Debug (commands): Adding command: eval-file (0.044s)
+Debug (commands): Adding command: cache (0.044s)
+Debug (commands): Adding command: transient (0.045s)
+Debug (commands): Adding command: verify-checksums in core Namespace (0.045s)
+Debug (commands): Adding command: plugin (0.045s)
+Debug (commands): Adding command: verify-checksums in plugin Namespace (0.045s)
+Debug (commands): Adding command: cron (0.046s)
+Debug (commands): Adding command: event in cron Namespace (0.046s)
+Debug (commands): Adding command: schedule in cron Namespace (0.047s)
+Debug (commands): Adding command: db (0.05s)
+Debug (commands): Adding command: embed (0.052s)
+Debug (commands): Adding command: fetch in embed Namespace (0.052s)
+Debug (commands): Adding command: provider in embed Namespace (0.053s)
+Debug (commands): Adding command: handler in embed Namespace (0.053s)
+Debug (commands): Adding command: cache in embed Namespace (0.053s)
+Debug (commands): Adding command: comment (0.054s)
+Debug (commands): Adding command: meta in comment Namespace (0.055s)
+Debug (commands): Adding command: menu (0.055s)
+Debug (commands): Adding command: item in menu Namespace (0.055s)
+Debug (commands): Adding command: location in menu Namespace (0.056s)
+Debug (commands): Deferring command: network meta (0.056s)
+Debug (commands): Adding command: option (0.056s)
+Debug (commands): Adding command: post (0.057s)
+Debug (commands): Adding command: meta in post Namespace (0.058s)
+Debug (commands): Adding command: term in post Namespace (0.058s)
+Debug (commands): Adding command: post-type (0.058s)
+Debug (commands): Adding command: site (0.059s)
+Debug (commands): Adding command: meta in site Namespace (0.059s)
+Debug (commands): Adding command: option in site Namespace (0.06s)
+Debug (commands): Adding command: taxonomy (0.06s)
+Debug (commands): Adding command: term (0.061s)
+Debug (commands): Adding command: meta in term Namespace (0.061s)
+Debug (commands): Adding command: user (0.062s)
+Debug (commands): Adding command: application-password in user Namespace (0.062s)
+Debug (commands): Adding command: meta in user Namespace (0.063s)
+Debug (commands): Adding command: session in user Namespace (0.063s)
+Debug (commands): Adding command: term in user Namespace (0.064s)
+Debug (commands): Adding command: network (0.064s)
+Debug (hooks): Processing hook "after_add_command:network" with 1 callbacks (0.065s)
+Debug (hooks): On hook "after_add_command:network": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.065s)
+Debug (commands): Adding command: meta in network Namespace (0.065s)
+Debug (commands): Adding command: export (0.065s)
+Debug (commands): Adding command: plugin (0.068s)
+Debug (commands): Adding command: auto-updates in plugin Namespace (0.068s)
+Debug (commands): Adding command: theme (0.069s)
+Debug (commands): Adding command: auto-updates in theme Namespace (0.069s)
+Debug (commands): Adding command: mod in theme Namespace (0.07s)
+Debug (commands): Adding command: i18n (0.07s)
+Debug (commands): Adding command: make-pot in i18n Namespace (0.071s)
+Debug (commands): Adding command: make-json in i18n Namespace (0.072s)
+Debug (commands): Adding command: make-mo in i18n Namespace (0.072s)
+Debug (commands): Adding command: update-po in i18n Namespace (0.072s)
+Debug (commands): Adding command: import (0.073s)
+Debug (commands): Deferring command: language core (0.073s)
+Debug (commands): Deferring command: language plugin (0.074s)
+Debug (commands): Deferring command: language theme (0.074s)
+Debug (hooks): Immediately invoking on passed hook "after_add_command:site": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/language-command/language-command.php at line 39 (0.074s)
+Debug (commands): Adding command: switch-language in site Namespace (0.074s)
+Debug (commands): Adding command: language (0.074s)
+Debug (hooks): Processing hook "after_add_command:language" with 3 callbacks (0.074s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.074s)
+Debug (commands): Adding command: core in language Namespace (0.074s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.074s)
+Debug (commands): Adding command: plugin in language Namespace (0.075s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.075s)
+Debug (commands): Adding command: theme in language Namespace (0.075s)
+Debug (commands): Adding command: maintenance-mode (0.075s)
+Debug (commands): Adding command: media (0.076s)
+Debug (commands): Adding command: package (0.077s)
+Debug (commands): Adding command: rewrite (0.078s)
+Debug (commands): Adding command: rewrite (0.078s)
+Debug (commands): Adding command: cap (0.078s)
+Debug (commands): Adding command: role (0.079s)
+Debug (commands): Adding command: scaffold (0.08s)
+Debug (commands): Adding command: search-replace (0.082s)
+Debug (commands): Adding command: server (0.082s)
+Debug (commands): Adding command: shell (0.082s)
+Debug (commands): Adding command: super-admin (0.083s)
+Debug (commands): Adding command: widget (0.084s)
+Debug (commands): Adding command: sidebar (0.084s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterFrameworkCommands (0.084s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/cli.php (0.084s)
+Debug (commands): Adding command: cli (0.086s)
+Debug (commands): Adding command: cache in cli Namespace (0.086s)
+Debug (commands): Adding command: alias in cli Namespace (0.087s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/help.php (0.087s)
+Debug (commands): Adding command: help (0.088s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterDeferredCommands (0.088s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeContexts (0.088s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LaunchRunner (0.089s)
+Debug (bootstrap): No readable global config found (0.089s)
+Debug (bootstrap): Using project config: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-cli.yml (0.089s)
+Debug (bootstrap): argv: /usr/local/bin/wp --path=/Users/kantanpro/Desktop/KantanPro/wordpress/ eval 
+        if (class_exists('NewsCrawlerGenreSettings')) {
+            $genre_settings = NewsCrawlerGenreSettings::get_instance();
+            $genre_settings->execute_auto_posting();
+            echo 'News Crawler自動投稿を実行しました';
+        } else {
+            echo 'News CrawlerGenreSettingsクラスが見つかりません';
+        }
+     (0.089s)
+Debug (bootstrap): ABSPATH defined: /Users/kantanpro/Desktop/KantanPro/wordpress/ (0.089s)
+Debug (bootstrap): Set URL: http://localhost:8080 (0.089s)
+Debug (hooks): Processing hook "before_run_command" with 1 callbacks (0.089s)
+Debug (hooks): On hook "before_run_command": WP_CLI\Bootstrap\RegisterDeferredCommands->add_deferred_commands() (0.089s)
+Debug (bootstrap): Running command: eval (0.089s)
+Debug (context): Using context 'cli' (0.095s)
+Debug (bootstrap): Begin WordPress load (0.095s)
+Debug (bootstrap): wp-config.php path: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-config.php (0.095s)
+Debug (bootstrap): Looking for UTF-8 BOM (0.095s)
+Debug (bootstrap): Looking for UTF-16 (BE) BOM (0.095s)
+Debug (bootstrap): Looking for UTF-16 (LE) BOM (0.095s)
+PHP Warning:  mysqli_real_connect(): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Warning: mysqli_real_connect(): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+PHP Warning:  mysqli_real_connect(): (HY000/2002): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Warning: mysqli_real_connect(): (HY000/2002): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known`
+データベース接続確立エラー
+これは、`wp-config.php` ファイルのユーザー名とパスワードが正しくないか、あるいは `db:3306` のデータベースサーバーに接続できないかのどちらかを意味します。ホスティングサービスのデータベースサーバーがダウンしているかもしれません。
+
+ユーザー名とパスワードに間違いはありませんか ?
+正しいホスト名を入力しましたか ?
+データベースサーバーは動作中ですか ?
+
+こうした用語が何を意味しているのか分からない場合は、ホスティングサービスに連絡するべきでしょう。助けが必要であればいつでも WordPress サポートフォーラムを訪れることができます。 `php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known`
+[2025-09-12 07:35:16] wp-cli経由でNews Crawlerを実行しました
+[2025-09-12 07:35:16] News Crawler Cron 実行終了
+---
+[2025-09-12 07:35:50] News Crawler Cron 実行開始
+[2025-09-12 07:35:50] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-12 07:35:50] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-12 07:35:50] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-12 07:35:50] wp-cli経由でNews Crawlerを実行中...
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DeclareAbstractBaseCommand (0.013s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFrameworkAutoloader (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\ConfigureRunner (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeRequestsAutoloader (0.014s)
+Debug (bootstrap): Setting RequestsLibrary::$version to v2 (0.014s)
+Debug (bootstrap): Setting RequestsLibrary::$source to wp-core (0.014s)
+Debug (bootstrap): Setting RequestsLibrary::$class_name to \WpOrg\Requests\Requests (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeColorization (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeLogger (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\DefineProtectedCommands (0.014s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadExecCommand (0.015s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LoadRequiredCommand (0.015s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludePackageAutoloader (0.015s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\IncludeFallbackAutoloader (0.016s)
+Debug (bootstrap): Fallback autoloader paths: phar://wp-cli.phar/vendor/autoload.php (0.017s)
+Debug (bootstrap): Loading detected autoloader: phar://wp-cli.phar/vendor/autoload.php (0.017s)
+Debug (commands): Adding command: config (0.021s)
+Debug (commands): Adding command: core (0.023s)
+Debug (commands): Adding command: eval (0.024s)
+Debug (commands): Adding command: eval-file (0.024s)
+Debug (commands): Adding command: cache (0.024s)
+Debug (commands): Adding command: transient (0.025s)
+Debug (commands): Adding command: verify-checksums in core Namespace (0.025s)
+Debug (commands): Adding command: plugin (0.025s)
+Debug (commands): Adding command: verify-checksums in plugin Namespace (0.026s)
+Debug (commands): Adding command: cron (0.026s)
+Debug (commands): Adding command: event in cron Namespace (0.027s)
+Debug (commands): Adding command: schedule in cron Namespace (0.027s)
+Debug (commands): Adding command: db (0.028s)
+Debug (commands): Adding command: embed (0.029s)
+Debug (commands): Adding command: fetch in embed Namespace (0.029s)
+Debug (commands): Adding command: provider in embed Namespace (0.029s)
+Debug (commands): Adding command: handler in embed Namespace (0.029s)
+Debug (commands): Adding command: cache in embed Namespace (0.029s)
+Debug (commands): Adding command: comment (0.03s)
+Debug (commands): Adding command: meta in comment Namespace (0.031s)
+Debug (commands): Adding command: menu (0.031s)
+Debug (commands): Adding command: item in menu Namespace (0.032s)
+Debug (commands): Adding command: location in menu Namespace (0.032s)
+Debug (commands): Deferring command: network meta (0.032s)
+Debug (commands): Adding command: option (0.032s)
+Debug (commands): Adding command: post (0.033s)
+Debug (commands): Adding command: meta in post Namespace (0.033s)
+Debug (commands): Adding command: term in post Namespace (0.034s)
+Debug (commands): Adding command: post-type (0.034s)
+Debug (commands): Adding command: site (0.035s)
+Debug (commands): Adding command: meta in site Namespace (0.035s)
+Debug (commands): Adding command: option in site Namespace (0.036s)
+Debug (commands): Adding command: taxonomy (0.036s)
+Debug (commands): Adding command: term (0.037s)
+Debug (commands): Adding command: meta in term Namespace (0.037s)
+Debug (commands): Adding command: user (0.042s)
+Debug (commands): Adding command: application-password in user Namespace (0.043s)
+Debug (commands): Adding command: meta in user Namespace (0.044s)
+Debug (commands): Adding command: session in user Namespace (0.044s)
+Debug (commands): Adding command: term in user Namespace (0.044s)
+Debug (commands): Adding command: network (0.044s)
+Debug (hooks): Processing hook "after_add_command:network" with 1 callbacks (0.044s)
+Debug (hooks): On hook "after_add_command:network": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.044s)
+Debug (commands): Adding command: meta in network Namespace (0.044s)
+Debug (commands): Adding command: export (0.045s)
+Debug (commands): Adding command: plugin (0.047s)
+Debug (commands): Adding command: auto-updates in plugin Namespace (0.048s)
+Debug (commands): Adding command: theme (0.049s)
+Debug (commands): Adding command: auto-updates in theme Namespace (0.049s)
+Debug (commands): Adding command: mod in theme Namespace (0.049s)
+Debug (commands): Adding command: i18n (0.05s)
+Debug (commands): Adding command: make-pot in i18n Namespace (0.05s)
+Debug (commands): Adding command: make-json in i18n Namespace (0.051s)
+Debug (commands): Adding command: make-mo in i18n Namespace (0.051s)
+Debug (commands): Adding command: update-po in i18n Namespace (0.051s)
+Debug (commands): Adding command: import (0.052s)
+Debug (commands): Deferring command: language core (0.053s)
+Debug (commands): Deferring command: language plugin (0.053s)
+Debug (commands): Deferring command: language theme (0.053s)
+Debug (hooks): Immediately invoking on passed hook "after_add_command:site": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/language-command/language-command.php at line 39 (0.053s)
+Debug (commands): Adding command: switch-language in site Namespace (0.053s)
+Debug (commands): Adding command: language (0.054s)
+Debug (hooks): Processing hook "after_add_command:language" with 3 callbacks (0.054s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.054s)
+Debug (commands): Adding command: core in language Namespace (0.054s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.054s)
+Debug (commands): Adding command: plugin in language Namespace (0.054s)
+Debug (hooks): On hook "after_add_command:language": Closure in file phar:///usr/local/bin/wp/vendor/wp-cli/wp-cli/php/class-wp-cli.php at line 695 (0.054s)
+Debug (commands): Adding command: theme in language Namespace (0.054s)
+Debug (commands): Adding command: maintenance-mode (0.054s)
+Debug (commands): Adding command: media (0.056s)
+Debug (commands): Adding command: package (0.057s)
+Debug (commands): Adding command: rewrite (0.058s)
+Debug (commands): Adding command: rewrite (0.058s)
+Debug (commands): Adding command: cap (0.058s)
+Debug (commands): Adding command: role (0.059s)
+Debug (commands): Adding command: scaffold (0.06s)
+Debug (commands): Adding command: search-replace (0.061s)
+Debug (commands): Adding command: server (0.061s)
+Debug (commands): Adding command: shell (0.062s)
+Debug (commands): Adding command: super-admin (0.062s)
+Debug (commands): Adding command: widget (0.062s)
+Debug (commands): Adding command: sidebar (0.063s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterFrameworkCommands (0.063s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/cli.php (0.063s)
+Debug (commands): Adding command: cli (0.064s)
+Debug (commands): Adding command: cache in cli Namespace (0.065s)
+Debug (commands): Adding command: alias in cli Namespace (0.065s)
+Debug (bootstrap): Adding framework command: phar://wp-cli.phar/vendor/wp-cli/wp-cli/php/commands/help.php (0.065s)
+Debug (commands): Adding command: help (0.066s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\RegisterDeferredCommands (0.066s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\InitializeContexts (0.066s)
+Debug (bootstrap): Processing bootstrap step: WP_CLI\Bootstrap\LaunchRunner (0.067s)
+Debug (bootstrap): No readable global config found (0.067s)
+Debug (bootstrap): Using project config: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-cli.yml (0.067s)
+Debug (bootstrap): argv: /usr/local/bin/wp --path=/Users/kantanpro/Desktop/KantanPro/wordpress/ eval 
+            if (class_exists('NewsCrawlerGenreSettings')) {
+                $genre_settings = NewsCrawlerGenreSettings::get_instance();
+                $genre_settings->execute_auto_posting();
+                echo 'News Crawler自動投稿を実行しました';
+            } else {
+                echo 'News CrawlerGenreSettingsクラスが見つかりません';
+            }
+         (0.067s)
+Debug (bootstrap): ABSPATH defined: /Users/kantanpro/Desktop/KantanPro/wordpress/ (0.067s)
+Debug (bootstrap): Set URL: http://localhost:8080 (0.067s)
+Debug (hooks): Processing hook "before_run_command" with 1 callbacks (0.067s)
+Debug (hooks): On hook "before_run_command": WP_CLI\Bootstrap\RegisterDeferredCommands->add_deferred_commands() (0.067s)
+Debug (bootstrap): Running command: eval (0.067s)
+Debug (context): Using context 'cli' (0.07s)
+Debug (bootstrap): Begin WordPress load (0.07s)
+Debug (bootstrap): wp-config.php path: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-config.php (0.07s)
+Debug (bootstrap): Looking for UTF-8 BOM (0.07s)
+Debug (bootstrap): Looking for UTF-16 (BE) BOM (0.07s)
+Debug (bootstrap): Looking for UTF-16 (LE) BOM (0.07s)
+PHP Warning:  mysqli_real_connect(): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Warning: mysqli_real_connect(): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+PHP Warning:  mysqli_real_connect(): (HY000/2002): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Warning: mysqli_real_connect(): (HY000/2002): php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known in /Users/kantanpro/Desktop/KantanPro/wordpress/wp-includes/class-wpdb.php on line 1988
+Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known`
+データベース接続確立エラー
+これは、`wp-config.php` ファイルのユーザー名とパスワードが正しくないか、あるいは `db:3306` のデータベースサーバーに接続できないかのどちらかを意味します。ホスティングサービスのデータベースサーバーがダウンしているかもしれません。
+
+ユーザー名とパスワードに間違いはありませんか ?
+正しいホスト名を入力しましたか ?
+データベースサーバーは動作中ですか ?
+
+こうした用語が何を意味しているのか分からない場合は、ホスティングサービスに連絡するべきでしょう。助けが必要であればいつでも WordPress サポートフォーラムを訪れることができます。 `php_network_getaddresses: getaddrinfo for db failed: nodename nor servname provided, or not known`
+[2025-09-12 07:35:51] wp-cli経由でNews Crawlerを実行しました
+[2025-09-12 07:35:51] News Crawler Cron 実行終了
+---

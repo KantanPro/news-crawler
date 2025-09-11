@@ -123,10 +123,21 @@ class NewsCrawler_License_Settings {
                             <span class="dashicons <?php echo esc_attr( $license_status['icon'] ); ?>" style="color: <?php echo esc_attr( $license_status['color'] ); ?>;"></span>
                             <?php echo esc_html__( 'ライセンスステータス', 'news-crawler' ); ?>
                         </h3>
-                        <p style="font-size: 16px; margin: 10px 0;">
-                            <strong><?php echo esc_html( $license_status['message'] ); ?></strong>
+                    <p style="font-size: 16px; margin: 10px 0;">
+                        <strong><?php echo esc_html( $license_status['message'] ); ?></strong>
+                    </p>
+                    
+                    <?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
+                    <!-- 開発環境モードの説明（開発環境でのみ表示） -->
+                    <div class="ktp-dev-mode-info" style="margin: 15px 0; padding: 15px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px;">
+                        <p style="margin: 0; font-size: 14px; color: #0066cc;">
+                            <span class="dashicons dashicons-info" style="margin-right: 5px;"></span>
+                            開発者モードで認証されています
                         </p>
-                        <?php if ( ! empty( $license_status['is_dev_mode'] ) ) : ?>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ( ! empty( $license_status['is_dev_mode'] ) ) : ?>
                             <div class="ktp-dev-mode-toggle" style="margin-top: 15px; padding: 10px; background-color: #fff8e1; border: 1px solid #ffecb3; border-radius: 4px;">
                                 <p style="margin: 0; display: flex; align-items: center; justify-content: space-between;">
                                     <span><span class="dashicons dashicons-info-outline"></span> 開発環境モードで動作中です。</span>

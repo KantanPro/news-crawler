@@ -50,6 +50,26 @@ cd news-crawler
 # Upload to your WordPress plugins directory
 ```
 
+## 🛠️ Development Environment Setup
+
+For development purposes, you can enable development mode to skip license verification:
+
+1. Open your `wp-config.php` file
+2. Ensure `WP_DEBUG` is set to `true` (for development environments)
+3. Add the following line before `/* That's all, stop editing! Happy publishing. */`:
+
+```php
+// News Crawler Development Mode (ONLY for development)
+define('NEWS_CRAWLER_DEVELOPMENT_MODE', true);
+```
+
+**⚠️ Important Security Note:**
+- **NEVER** set this flag in production environments
+- This flag requires both `WP_DEBUG` and `NEWS_CRAWLER_DEVELOPMENT_MODE` to be true
+- This flag bypasses license verification and should only be used for development
+- Without this flag, the plugin will treat the environment as production and require valid licensing
+```
+
 ## ⚙️ Configuration
 
 ### Required API Keys
