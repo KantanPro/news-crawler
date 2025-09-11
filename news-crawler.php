@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 2.3.61
+ * Version: 2.3.62
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '2.3.61');
+define('NEWS_CRAWLER_VERSION', '2.3.62');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -41,7 +41,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-cron-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
+// require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php'; // WordPress標準更新システムを使用するため無効化
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
@@ -49,6 +49,8 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 
 
 // アップデータを早期初期化（plugins_loaded の最初期）
+// WordPress標準更新システムを使用するため無効化
+/*
 add_action('plugins_loaded', function() {
     // 管理画面またはWP-Cronのみで初期化し、フロント側の負荷を回避
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
@@ -56,9 +58,10 @@ add_action('plugins_loaded', function() {
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
 }, 1);
+*/
 
 
-// 更新後の自動有効化処理
+// 更新後の自動有効化処理（WordPress標準更新システム用に簡素化）
 add_action('upgrader_process_complete', function($upgrader_object, $options) {
     // プラグインの更新が完了した場合のみ処理
     if ($options['action'] === 'update' && $options['type'] === 'plugin') {
@@ -66,26 +69,8 @@ add_action('upgrader_process_complete', function($upgrader_object, $options) {
         
         // 対象プラグインが更新されたかチェック
         if (isset($options['plugins']) && in_array($plugin_basename, $options['plugins'])) {
-            // 更新前に有効だったかチェック
-            $pre_state = get_site_transient('news_crawler_pre_update_state');
-            if ($pre_state && !empty($pre_state['was_active'])) {
-                // プラグインを再有効化
-                if (!function_exists('activate_plugin')) {
-                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
-                }
-                
-                $network_wide = !empty($pre_state['network_active']);
-                $activate_result = activate_plugin($plugin_basename, '', $network_wide, true);
-                
-                if (is_wp_error($activate_result)) {
-                    error_log('News Crawler: 更新後の自動有効化に失敗しました - ' . $activate_result->get_error_message());
-                } else {
-                    error_log('News Crawler: 更新後の自動有効化が完了しました (network_wide=' . ($network_wide ? 'true' : 'false') . ')');
-                }
-                
-                // 一時データをクリア
-                delete_site_transient('news_crawler_pre_update_state');
-            }
+            // WordPress標準更新システムでは自動的に有効化されるため、特別な処理は不要
+            error_log('News Crawler: プラグインの更新が完了しました');
         }
     }
 }, 10, 2);
@@ -4147,11 +4132,6 @@ function news_crawler_activation() {
 }
 
 function news_crawler_deactivation() {
-    // 更新チェックのクリーンアップ
-    if (class_exists('NewsCrawlerUpdater')) {
-        NewsCrawlerUpdater::cleanup();
-    }
-    
     // メニュー登録フラグをリセット
     delete_option('news_crawler_menu_registered');
     
