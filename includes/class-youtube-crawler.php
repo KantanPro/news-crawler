@@ -630,6 +630,7 @@ class NewsCrawlerYouTubeCrawler {
         }
         
         $post_content = '';
+        $summary_source_parts = array();
         
         // 全体の概要セクションを追加
         $post_content .= '<!-- wp:paragraph -->' . "\n";
@@ -667,11 +668,28 @@ class NewsCrawlerYouTubeCrawler {
             
             // 動画の説明
             if (!empty($video['description'])) {
-                $description = wp_trim_words($video['description'], 100, '...');
+                // 日本語テキストも考慮して文字数でトリム（最大800文字）
+                $raw_desc = $video['description'];
+                if (function_exists('mb_substr')) {
+                    $description = mb_substr($raw_desc, 0, 800);
+                } else {
+                    $description = substr($raw_desc, 0, 800);
+                }
                 $post_content .= '<!-- wp:paragraph -->' . "\n";
                 $post_content .= '<p class="wp-block-paragraph">' . esc_html($description) . '</p>' . "\n";
                 $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
             }
+
+            // 要約用ソーステキストを蓄積（AI要約入力に活用）
+            $title_for_source = isset($video['title']) ? $video['title'] : '';
+            $desc_for_source = isset($video['description']) ? $video['description'] : '';
+            // 1動画あたりの説明は最大2000文字に制限
+            if (function_exists('mb_substr')) {
+                $desc_for_source = mb_substr($desc_for_source, 0, 2000);
+            } else {
+                $desc_for_source = substr($desc_for_source, 0, 2000);
+            }
+            $summary_source_parts[] = "タイトル: " . $title_for_source . "\n" . (empty($desc_for_source) ? '' : ("説明: " . $desc_for_source));
             
             // メタ情報
             $meta_info = [];
@@ -724,6 +742,12 @@ class NewsCrawlerYouTubeCrawler {
         }
         
         error_log('YouTubeCrawler: Post created with ID: ' . $post_id);
+
+        // 要約用の結合テキストをメタに保存
+        if (!empty($summary_source_parts)) {
+            $summary_source = implode("\n\n---\n\n", $summary_source_parts);
+            update_post_meta($post_id, '_youtube_summary_source', $summary_source);
+        }
         
         // メタデータの保存（即座に実行）
         update_post_meta($post_id, '_youtube_summary', true);

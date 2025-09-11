@@ -264,11 +264,12 @@ class NewsCrawlerOpenAISummarizer {
                 return false;
             }
 
-            if ($summary_result && isset($summary_result['summary']) && isset($summary_result['conclusion'])) {
+            // 要約またはまとめのどちらか一方でも取得できていれば更新を実施
+            if ($summary_result && ( !empty($summary_result['summary']) || !empty($summary_result['conclusion']) )) {
                 error_log('NewsCrawlerOpenAISummarizer: 要約生成が成功いたしました。投稿内容を更新いたします');
 
                 // 投稿内容に要約とまとめを追加
-                $updated_content = $this->append_summary_to_post($post->post_content, $summary_result['summary'], $summary_result['conclusion']);
+                $updated_content = $this->append_summary_to_post($post->post_content, $summary_result['summary'] ?? '', $summary_result['conclusion'] ?? '');
 
                 // 基本設定で要約をexcerptに設定するかどうかを確認
                 $basic_settings = get_option('news_crawler_basic_settings', array());
@@ -302,8 +303,12 @@ class NewsCrawlerOpenAISummarizer {
                     // 要約生成完了のメタデータを保存
                     update_post_meta($post_id, '_openai_summary_generated', true);
                     update_post_meta($post_id, '_openai_summary_date', current_time('mysql'));
-                    update_post_meta($post_id, '_openai_summary_text', $summary_result['summary']);
-                    update_post_meta($post_id, '_openai_conclusion_text', $summary_result['conclusion']);
+                    if (!empty($summary_result['summary'])) {
+                        update_post_meta($post_id, '_openai_summary_text', $summary_result['summary']);
+                    }
+                    if (!empty($summary_result['conclusion'])) {
+                        update_post_meta($post_id, '_openai_conclusion_text', $summary_result['conclusion']);
+                    }
 
                     // 処理中フラグをクリア
                     delete_transient('news_crawler_ai_processing_' . $post_id);
@@ -347,6 +352,16 @@ class NewsCrawlerOpenAISummarizer {
 
         // 投稿内容をテキストとして抽出（HTMLタグを除去）
         $text_content = wp_strip_all_tags($content);
+
+        // YouTubeまとめ投稿の場合は、メタに保存した説明テキストを要約ソースに追加
+        $is_youtube_post = $post_id ? get_post_meta($post_id, '_youtube_summary', true) : false;
+        if ($is_youtube_post) {
+            $youtube_source = $post_id ? get_post_meta($post_id, '_youtube_summary_source', true) : '';
+            if (!empty($youtube_source)) {
+                // 本文テキストと結合してプロンプトの材料を充実させる
+                $text_content = trim($text_content . "\n\n" . $youtube_source);
+            }
+        }
         error_log('NewsCrawlerOpenAISummarizer: テキスト内容の長さ: ' . mb_strlen($text_content) . '文字');
 
         // 内容が短すぎる場合はスキップ
@@ -355,8 +370,8 @@ class NewsCrawlerOpenAISummarizer {
             return array('error' => '記事の内容が短すぎるため、要約を生成できません。記事本文を充実させてください。');
         }
 
-        // YouTube投稿かどうかを判定
-        $is_youtube_post = get_post_meta($post_id, '_youtube_summary', true);
+        // YouTube投稿かどうかを再判定（上で取得済みだが安全のため）
+        $is_youtube_post = $post_id ? get_post_meta($post_id, '_youtube_summary', true) : false;
         
         // プロンプトを作成（キーワード最適化対応）
         if ($is_youtube_post) {
@@ -704,23 +719,36 @@ class NewsCrawlerOpenAISummarizer {
         $summary = '';
         $conclusion = '';
         
+        // 正規表現を寛容化：見出しの全角/半角スペース、バリエーション、「まとめです」などにも対応
         // 要約部分を抽出
-        if (preg_match('/## この記事の要約\s*(.+?)(?=\s*##|\s*$)/s', $response, $matches)) {
+        if (preg_match('/##\s*この記事の要約\s*(.+?)(?=\s*##|\s*$)/su', $response, $matches)) {
             $summary = trim($matches[1]);
             error_log('NewsCrawlerOpenAISummarizer: 要約が抽出されました: ' . $summary);
         } else {
             error_log('NewsCrawlerOpenAISummarizer: 要約の抽出に失敗いたしました');
         }
         
-        // まとめ部分を抽出
-        if (preg_match('/## まとめ\s*(.+?)(?=\s*##|\s*$)/s', $response, $matches)) {
-            $conclusion = trim($matches[1]);
+        // まとめ部分を抽出（「結論」「まとめです」「総括」等も許容）
+        if (preg_match('/##\s*(まとめ|結論|総括)\s*(.+?)(?=\s*##|\s*$)/su', $response, $matches)) {
+            // グループ2が本文
+            $conclusion = trim(isset($matches[2]) ? $matches[2] : $matches[1]);
             error_log('NewsCrawlerOpenAISummarizer: まとめが抽出されました: ' . $conclusion);
         } else {
             error_log('NewsCrawlerOpenAISummarizer: まとめの抽出に失敗いたしました');
         }
         
-        // 抽出に失敗した場合は、エラーメッセージを返す
+        // フォールバック：本文の最後の見出し以降を「まとめ」とみなす（何も取れなかった場合）
+        if (empty($conclusion)) {
+            if (preg_match('/##\s*[^#\n]+\n+(.+)$/su', $response, $m)) {
+                $fallback = trim($m[1]);
+                if (mb_strlen($fallback) >= 20) {
+                    $conclusion = $fallback;
+                    error_log('NewsCrawlerOpenAISummarizer: まとめ抽出フォールバックを適用しました');
+                }
+            }
+        }
+
+        // どちらも空ならエラー
         if (empty($summary) && empty($conclusion)) {
             error_log('NewsCrawlerOpenAISummarizer: 要約とまとめの両方の抽出に失敗いたしました');
             return array('error' => 'AIからの応答形式が正しくありません。要約の生成に失敗しました。しばらく時間をおいてから再試行してください。');
