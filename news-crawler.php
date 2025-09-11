@@ -45,6 +45,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 
 
 // アップデータを早期初期化（plugins_loaded の最初期）
@@ -318,6 +319,11 @@ function news_crawler_init_components() {
     // アイキャッチ画像管理画面クラス（管理画面のみ）
     if (is_admin() && class_exists('News_Crawler_Eyecatch_Admin')) {
         new News_Crawler_Eyecatch_Admin();
+    }
+    
+    // SEO設定クラス（管理画面のみ）
+    if (is_admin() && class_exists('NewsCrawlerSeoSettings')) {
+        new NewsCrawlerSeoSettings();
     }
     
     // AI要約生成クラス（管理画面のみ）

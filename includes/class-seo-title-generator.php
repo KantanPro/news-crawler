@@ -112,8 +112,8 @@ class NewsCrawlerSEOTitleGenerator {
         // News Crawlerで設定されているジャンル名を取得
         $genre_name = $this->get_news_crawler_genre_name($post_id);
         
-        // 投稿内容からSEOタイトルを生成
-        $seo_title = $this->generate_seo_title_with_ai($post, $genre_name);
+        // 投稿内容からSEOタイトルを生成（キーワード最適化対応）
+        $seo_title = $this->generate_seo_title_with_ai($post, $genre_name, $post_id);
         
         if ($seo_title) {
             // 投稿タイトルを更新
@@ -229,9 +229,9 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
-     * AIを使用してSEO最適化されたタイトルを生成
+     * AIを使用してSEO最適化されたタイトルを生成（キーワード最適化対応）
      */
-    private function generate_seo_title_with_ai($post, $genre_name) {
+    private function generate_seo_title_with_ai($post, $genre_name, $post_id = null) {
         if (empty($this->api_key)) {
             return false;
         }
@@ -240,8 +240,8 @@ class NewsCrawlerSEOTitleGenerator {
         $content = $post->post_content;
         $excerpt = $post->post_excerpt;
         
-        // プロンプトを作成
-        $prompt = $this->create_seo_title_prompt($content, $excerpt, $genre_name);
+        // プロンプトを作成（キーワード最適化対応）
+        $prompt = $this->create_seo_title_prompt($content, $excerpt, $genre_name, $post_id);
         
         // OpenAI APIを呼び出し
         $response = $this->call_openai_api($prompt);
@@ -255,10 +255,37 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
-     * SEOタイトル生成用のプロンプトを作成
+     * SEOタイトル生成用のプロンプトを作成（キーワード最適化対応）
      */
-    private function create_seo_title_prompt($content, $excerpt, $genre_name) {
-        return "以下の記事内容を基に、SEOに最適化された魅力的なタイトルを生成してください。
+    private function create_seo_title_prompt($content, $excerpt, $genre_name, $post_id = null) {
+        // キーワード最適化の設定を取得
+        $keyword_instructions = '';
+        if ($post_id && class_exists('NewsCrawlerSeoSettings')) {
+            $seo_settings = get_option('news_crawler_seo_settings', array());
+            $keyword_optimization_enabled = isset($seo_settings['keyword_optimization_enabled']) ? $seo_settings['keyword_optimization_enabled'] : false;
+            $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
+            
+            if ($keyword_optimization_enabled && !empty($target_keywords)) {
+                // キーワードを配列に変換
+                $keywords = array_map('trim', preg_split('/[,\n\r]+/', $target_keywords));
+                $keywords = array_filter($keywords); // 空の要素を除去
+                
+                if (!empty($keywords)) {
+                    $keyword_list = implode('、', $keywords);
+                    $keyword_instructions = "
+
+【重要】以下のキーワードを必ずタイトルに含めてください：
+ターゲットキーワード：{$keyword_list}
+
+注意事項：
+- 指定されたキーワードを自然にタイトルに組み込んでください
+- キーワードは記事の内容と関連性がある場合のみ使用してください
+- タイトルの読みやすさと魅力的さを保ってください";
+                }
+            }
+        }
+        
+        return "以下の記事内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
 
 記事のジャンル: {$genre_name}
 

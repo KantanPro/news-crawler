@@ -146,25 +146,141 @@ class NewsCrawlerOGPManager {
     }
     
     /**
-     * 投稿の説明文を取得
+     * 投稿の説明文を取得（キーワード最適化対応）
      */
     private function get_post_description($post) {
         // 抜粋がある場合は使用
         if (!empty($post->post_excerpt)) {
-            return wp_strip_all_tags($post->post_excerpt);
+            $description = wp_strip_all_tags($post->post_excerpt);
+        } else {
+            // 抜粋がない場合は本文から生成
+            $content = wp_strip_all_tags($post->post_content);
+            $content = str_replace(array("\n", "\r", "\t"), ' ', $content);
+            $content = preg_replace('/\s+/', ' ', $content);
+            
+            // 160文字程度で切り詰め
+            if (mb_strlen($content) > 160) {
+                $content = mb_substr($content, 0, 157) . '...';
+            }
+            
+            $description = $content;
         }
         
-        // 抜粋がない場合は本文から生成
-        $content = wp_strip_all_tags($post->post_content);
-        $content = str_replace(array("\n", "\r", "\t"), ' ', $content);
-        $content = preg_replace('/\s+/', ' ', $content);
-        
-        // 160文字程度で切り詰め
-        if (mb_strlen($content) > 160) {
-            $content = mb_substr($content, 0, 157) . '...';
+        // キーワード最適化が有効な場合は、AIでメタディスクリプションを生成
+        if (class_exists('NewsCrawlerSeoSettings')) {
+            $seo_settings = get_option('news_crawler_seo_settings', array());
+            $auto_meta_description = isset($seo_settings['auto_meta_description']) ? $seo_settings['auto_meta_description'] : false;
+            $keyword_optimization_enabled = isset($seo_settings['keyword_optimization_enabled']) ? $seo_settings['keyword_optimization_enabled'] : false;
+            $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
+            
+            if ($auto_meta_description && $keyword_optimization_enabled && !empty($target_keywords)) {
+                $optimized_description = $this->generate_keyword_optimized_description($post, $description);
+                if ($optimized_description) {
+                    return $optimized_description;
+                }
+            }
         }
         
-        return $content;
+        return $description;
+    }
+    
+    /**
+     * キーワード最適化されたメタディスクリプションを生成
+     */
+    private function generate_keyword_optimized_description($post, $original_description) {
+        // OpenAI APIキーを取得
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
+        
+        if (empty($api_key)) {
+            return $original_description;
+        }
+        
+        // SEO設定を取得
+        $seo_settings = get_option('news_crawler_seo_settings', array());
+        $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
+        $meta_description_length = isset($seo_settings['meta_description_length']) ? intval($seo_settings['meta_description_length']) : 160;
+        
+        if (empty($target_keywords)) {
+            return $original_description;
+        }
+        
+        // キーワードを配列に変換
+        $keywords = array_map('trim', preg_split('/[,\n\r]+/', $target_keywords));
+        $keywords = array_filter($keywords);
+        
+        if (empty($keywords)) {
+            return $original_description;
+        }
+        
+        $keyword_list = implode('、', $keywords);
+        
+        // プロンプトを作成
+        $prompt = "以下の記事内容を基に、SEOに最適化されたメタディスクリプションを生成してください。
+
+記事タイトル：{$post->post_title}
+
+記事内容：
+" . wp_strip_all_tags($post->post_content) . "
+
+元の説明文：
+{$original_description}
+
+【重要】以下のキーワードを必ず含めてください：
+ターゲットキーワード：{$keyword_list}
+
+要求事項：
+1. {$meta_description_length}文字以内の簡潔な説明文
+2. 指定されたキーワードを自然に含める
+3. 記事の内容を正確に表現
+4. 読者の興味を引く魅力的な表現
+5. 日本語で自然な文章
+
+メタディスクリプションのみを返してください。説明や装飾は不要です。";
+        
+        // OpenAI APIを呼び出し
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array(
+                'model' => 'gpt-3.5-turbo',
+                'messages' => array(
+                    array(
+                        'role' => 'system',
+                        'content' => 'あなたはSEOに精通したWebライターです。記事の内容を基に、検索エンジン最適化された魅力的なメタディスクリプションを生成してください。'
+                    ),
+                    array(
+                        'role' => 'user',
+                        'content' => $prompt
+                    )
+                ),
+                'max_tokens' => 200,
+                'temperature' => 0.3
+            )),
+            'timeout' => 30
+        ));
+        
+        if (is_wp_error($response)) {
+            return $original_description;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            return $original_description;
+        }
+        
+        $generated_description = trim($data['choices'][0]['message']['content']);
+        
+        // 生成された説明文が適切な長さかチェック
+        if (mb_strlen($generated_description) > $meta_description_length) {
+            $generated_description = mb_substr($generated_description, 0, $meta_description_length - 3) . '...';
+        }
+        
+        return $generated_description;
     }
     
     /**

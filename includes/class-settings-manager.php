@@ -213,6 +213,14 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings-quality'
         );
         
+        // SEO設定セクション（SEOタブ用スラッグ）
+        add_settings_section(
+            'seo_settings',
+            'SEO設定',
+            array($this, 'seo_section_callback'),
+            'news-crawler-settings-seo'
+        );
+        
         add_settings_field(
             'duplicate_check_strictness',
             '重複チェック厳密度',
@@ -387,7 +395,7 @@ class NewsCrawlerSettingsManager {
      */
     public function display_post_settings_page($page_title_suffix = '投稿設定') {
         // アクティブタブを決定（保存後も同じタブを維持）
-        $valid_tabs = array('api-settings', 'feature-settings', 'quality-settings');
+        $valid_tabs = array('api-settings', 'feature-settings', 'quality-settings', 'seo-settings');
         $requested_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : '';
         $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
@@ -404,6 +412,7 @@ class NewsCrawlerSettingsManager {
                 <a href="#api-settings" class="nav-tab<?php echo ($active_tab === 'api-settings' ? ' nav-tab-active' : ''); ?>" data-tab="api-settings">API設定</a>
                 <a href="#feature-settings" class="nav-tab<?php echo ($active_tab === 'feature-settings' ? ' nav-tab-active' : ''); ?>" data-tab="feature-settings">機能設定</a>
                 <a href="#quality-settings" class="nav-tab<?php echo ($active_tab === 'quality-settings' ? ' nav-tab-active' : ''); ?>" data-tab="quality-settings">品質管理</a>
+                <a href="#seo-settings" class="nav-tab<?php echo ($active_tab === 'seo-settings' ? ' nav-tab-active' : ''); ?>" data-tab="seo-settings">SEO設定</a>
                 
             </div>
             
@@ -443,6 +452,17 @@ class NewsCrawlerSettingsManager {
                 </form>
             </div>
             
+            <div id="seo-settings" class="tab-content<?php echo ($active_tab === 'seo-settings' ? ' active' : ''); ?>">
+                <form method="post" action="options.php">
+                    <?php 
+                    // SEO設定のフィールドを表示
+                    settings_fields('news_crawler_seo_settings');
+                    do_settings_sections('news-crawler-settings-seo');
+                    ?>
+                    <input type="hidden" name="current_tab" value="seo-settings" />
+                    <?php submit_button(); ?>
+                </form>
+            </div>
             
             
             
@@ -772,6 +792,10 @@ class NewsCrawlerSettingsManager {
     
     public function quality_section_callback() {
         echo '<p>コンテンツの品質管理に関する設定を行います。</p>';
+    }
+    
+    public function seo_section_callback() {
+        echo '<p>投稿のSEO最適化に関する設定を行います。</p>';
     }
     
     // フィールドコールバック関数

@@ -253,8 +253,8 @@ class NewsCrawlerOpenAISummarizer {
             // カテゴリーを保存（固定ページの場合は空配列）
             update_post_meta($post_id, '_news_summary_categories', $current_categories);
 
-            // 投稿内容から要約とまとめを生成
-            $summary_result = $this->generate_summary_with_openai($post->post_content, $post->post_title);
+            // 投稿内容から要約とまとめを生成（キーワード最適化対応）
+            $summary_result = $this->generate_summary_with_openai($post->post_content, $post->post_title, $post_id);
 
             error_log('NewsCrawlerOpenAISummarizer: OpenAI結果: ' . print_r($summary_result, true));
 
@@ -332,7 +332,7 @@ class NewsCrawlerOpenAISummarizer {
     /**
      * OpenAI APIを使用して要約とまとめを生成（強化版通信エラーハンドリング）
      */
-    private function generate_summary_with_openai($content, $title) {
+    private function generate_summary_with_openai($content, $title, $post_id = null) {
         error_log('NewsCrawlerOpenAISummarizer: タイトル「' . $title . '」でOpenAI要約生成が呼び出されました');
 
         if (empty($this->api_key)) {
@@ -355,8 +355,8 @@ class NewsCrawlerOpenAISummarizer {
             return array('error' => '記事の内容が短すぎるため、要約を生成できません。記事本文を充実させてください。');
         }
 
-        // プロンプトを作成
-        $prompt = $this->create_summary_prompt($text_content, $title);
+        // プロンプトを作成（キーワード最適化対応）
+        $prompt = $this->create_summary_prompt($text_content, $title, $post_id);
         error_log('NewsCrawlerOpenAISummarizer: プロンプトが作成されました。長さ: ' . mb_strlen($prompt) . '文字');
 
         // OpenAI APIを呼び出し（強化版指数バックオフ付き）
@@ -532,10 +532,39 @@ class NewsCrawlerOpenAISummarizer {
     }
     
     /**
-     * OpenAI API用のプロンプトを作成
+     * OpenAI API用のプロンプトを作成（キーワード最適化対応）
      */
-    private function create_summary_prompt($content, $title) {
-        return "【最重要】必ず「ですます調」で書いてください！文末は「です」「ます」「ございます」で終わらせてください！
+    private function create_summary_prompt($content, $title, $post_id = null) {
+        // キーワード最適化の設定を取得
+        $keyword_instructions = '';
+        if ($post_id && class_exists('NewsCrawlerSeoSettings')) {
+            $seo_settings = get_option('news_crawler_seo_settings', array());
+            $keyword_optimization_enabled = isset($seo_settings['keyword_optimization_enabled']) ? $seo_settings['keyword_optimization_enabled'] : false;
+            $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
+            
+            if ($keyword_optimization_enabled && !empty($target_keywords)) {
+                // キーワードを配列に変換
+                $keywords = array_map('trim', preg_split('/[,\n\r]+/', $target_keywords));
+                $keywords = array_filter($keywords); // 空の要素を除去
+                
+                if (!empty($keywords)) {
+                    $keyword_list = implode('、', $keywords);
+                    $keyword_instructions = "
+
+【SEO最適化指示】
+以下のキーワードを自然に含めて要約とまとめを作成してください：
+ターゲットキーワード：{$keyword_list}
+
+注意事項：
+- キーワードは自然な文章の流れの中で使用してください
+- 無理にキーワードを詰め込まず、読みやすさを優先してください
+- キーワードの密度は適切に保ち、過度な繰り返しは避けてください
+- 要約とまとめの両方で、関連するキーワードを効果的に使用してください";
+                }
+            }
+        }
+        
+        return "【最重要】必ず「ですます調」で書いてください！文末は「です」「ます」「ございます」で終わらせてください！{$keyword_instructions}
 
 以下の記事の内容を分析して、以下の形式で回答いたします：
 
