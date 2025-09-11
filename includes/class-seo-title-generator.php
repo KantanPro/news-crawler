@@ -236,8 +236,8 @@ class NewsCrawlerSEOTitleGenerator {
             return false;
         }
         
-        // 投稿内容を取得
-        $content = $post->post_content;
+        // 投稿内容を取得（改善版）
+        $content = $this->extract_clean_content($post, $post_id);
         $excerpt = $post->post_excerpt;
         
         // プロンプトを作成（キーワード最適化対応）
@@ -252,6 +252,64 @@ class NewsCrawlerSEOTitleGenerator {
         }
         
         return false;
+    }
+    
+    /**
+     * 投稿内容からクリーンなテキストを抽出
+     */
+    private function extract_clean_content($post, $post_id = null) {
+        $content = $post->post_content;
+        
+        // ニュース投稿かYouTube投稿かを確認
+        $is_news_summary = $post_id ? get_post_meta($post_id, '_news_summary', true) : false;
+        $is_youtube_summary = $post_id ? get_post_meta($post_id, '_youtube_summary', true) : false;
+        
+        // ニュース投稿の場合、要約メタデータを優先的に使用
+        if ($is_news_summary && $post_id) {
+            $news_summary_source = get_post_meta($post_id, '_news_summary_source', true);
+            if (!empty($news_summary_source)) {
+                $content = $news_summary_source;
+            }
+        }
+        
+        // YouTube投稿の場合、要約メタデータを優先的に使用
+        if ($is_youtube_summary && $post_id) {
+            $youtube_summary_source = get_post_meta($post_id, '_youtube_summary_source', true);
+            if (!empty($youtube_summary_source)) {
+                $content = $youtube_summary_source;
+            }
+        }
+        
+        // HTMLタグとブロックコメントを除去
+        $content = $this->clean_html_content($content);
+        
+        // 内容が短い場合は元の本文からも抽出を試行
+        if (mb_strlen($content) < 100) {
+            $original_content = $this->clean_html_content($post->post_content);
+            if (mb_strlen($original_content) > mb_strlen($content)) {
+                $content = $original_content;
+            }
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * HTMLコンテンツをクリーンアップ
+     */
+    private function clean_html_content($content) {
+        // WordPressブロックコメントを除去
+        $content = preg_replace('/<!-- wp:[^>]*-->/', '', $content);
+        $content = preg_replace('/<!-- \/wp:[^>]*-->/', '', $content);
+        
+        // HTMLタグを除去
+        $content = wp_strip_all_tags($content);
+        
+        // 余分な空白と改行を整理
+        $content = preg_replace('/\s+/', ' ', $content);
+        $content = trim($content);
+        
+        return $content;
     }
     
     /**
@@ -285,6 +343,20 @@ class NewsCrawlerSEOTitleGenerator {
             }
         }
         
+        // 投稿タイプに応じた追加情報を取得
+        $additional_context = '';
+        if ($post_id) {
+            $is_news_summary = get_post_meta($post_id, '_news_summary', true);
+            $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
+            
+            if ($is_news_summary) {
+                $additional_context = "\n\n【記事の特徴】\n- ニュース記事の要約記事です\n- 複数のニュースソースから厳選された情報をまとめています\n- 最新の情報を分かりやすく整理しています";
+            } elseif ($is_youtube_summary) {
+                $video_count = get_post_meta($post_id, '_youtube_videos_count', true);
+                $additional_context = "\n\n【記事の特徴】\n- YouTube動画のまとめ記事です\n- " . ($video_count ? $video_count . "本" : "複数本") . "の動画を厳選して紹介しています\n- 動画の要点を分かりやすくまとめています";
+            }
+        }
+
         return "以下の記事内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
 
 記事のジャンル: {$genre_name}
@@ -293,7 +365,7 @@ class NewsCrawlerSEOTitleGenerator {
 {$content}
 
 記事の要約:
-{$excerpt}
+{$excerpt}{$additional_context}
 
 要求事項:
 1. 30文字以内の簡潔で分かりやすいタイトル
@@ -301,6 +373,7 @@ class NewsCrawlerSEOTitleGenerator {
 3. 読者の興味を引く魅力的な表現
 4. 記事の内容を正確に表現
 5. 日本語で自然な表現
+6. 記事の特徴（ニュースまとめ/動画まとめなど）を適切に反映
 
 タイトルのみを返してください。説明や装飾は不要です。";
     }
