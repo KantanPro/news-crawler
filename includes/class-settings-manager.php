@@ -894,6 +894,7 @@ class NewsCrawlerSettingsManager {
     
     public function age_limit_days_callback() {
         $settings = get_option($this->option_name, array());
+        // 設定値がある場合はその値を使用、ない場合はデフォルト値（7日）を使用
         $value = isset($settings['age_limit_days']) ? $settings['age_limit_days'] : 7;
         echo '<input type="number" name="' . $this->option_name . '[age_limit_days]" value="' . esc_attr($value) . '" min="1" max="365" />';
         echo '<span class="description">日</span>';
