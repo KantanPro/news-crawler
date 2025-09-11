@@ -14,6 +14,297 @@ class NewsCrawlerYouTubeCrawler {
     private $api_key;
     private $option_name = 'youtube_crawler_settings';
     
+    /**
+     * OpenAI APIキー取得（News Crawler 基本設定から）
+     */
+    private function get_openai_api_key() {
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        return isset($basic_settings['openai_api_key']) ? trim($basic_settings['openai_api_key']) : '';
+    }
+    
+    /**
+     * OpenAI モデル取得（News Crawler 基本設定から）
+     */
+    private function get_openai_model() {
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        return isset($basic_settings['summary_generation_model']) && !empty($basic_settings['summary_generation_model'])
+            ? $basic_settings['summary_generation_model']
+            : 'gpt-3.5-turbo';
+    }
+    
+    /**
+     * OpenAIで各動画の長文要約を生成（600-1600文字、ですます調、見出しなし）
+     * 失敗時は空文字を返す（呼び出し側でフォールバック）
+     */
+    private function generate_ai_inline_video_summary($title, $description) {
+        $api_key = $this->get_openai_api_key();
+        if (empty($api_key)) {
+            return '';
+        }
+        $content_text = trim((string)$description);
+        if ($content_text === '') {
+            return '';
+        }
+        // プロンプト構築
+        $system = 'あなたは親しみやすく、分かりやすい文章を書く日本語の編集者です。必ず丁寧語（です・ます調）で書き、見出しや箇条書きやURLは使わず、段落のみで出力してください。';
+        $user = "以下のYouTube動画の内容（説明テキスト）を要約してください。日本語で、丁寧語（です・ます調）で、600〜1600文字、4〜10文程度にまとめてください。\n"
+              . "- 見出しや箇条書き、記号による区切りは使わないでください\n"
+              . "- タイムスタンプやURLは要約に含めないでください\n"
+              . "- 説明テキストに含まれる列挙やノイズは自然に統合してください\n\n"
+              . '動画タイトル：' . $title . "\n"
+              . '説明テキスト：' . $content_text;
+
+        $model = $this->get_openai_model();
+        $endpoint = 'https://api.openai.com/v1/chat/completions';
+        $headers = array(
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer ' . $api_key,
+        );
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array('role' => 'system', 'content' => $system),
+                array('role' => 'user', 'content' => $user),
+            ),
+            'temperature' => 0.7,
+        );
+
+        $max_retries = 3;
+        $delay = 1;
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            $response = wp_remote_post($endpoint, array(
+                'headers' => $headers,
+                'body' => wp_json_encode($body),
+                'timeout' => 60,
+                'sslverify' => false,
+            ));
+            if (is_wp_error($response)) {
+                if ($attempt < $max_retries) {
+                    sleep($delay);
+                    $delay *= 2;
+                    continue;
+                }
+                return '';
+            }
+            $code = wp_remote_retrieve_response_code($response);
+            if ($code !== 200) {
+                if ($attempt < $max_retries) {
+                    sleep($delay);
+                    $delay *= 2;
+                    continue;
+                }
+                return '';
+            }
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+            if (!$data || !isset($data['choices'][0]['message']['content'])) {
+                if ($attempt < $max_retries) {
+                    sleep($delay);
+                    $delay *= 2;
+                    continue;
+                }
+                return '';
+            }
+            $text = trim($data['choices'][0]['message']['content']);
+            // 最終クレンジング：見出し・記号・URLを除去
+            $text = preg_replace('/https?:\/\/[\S]+/u', '', $text);
+            $text = preg_replace('/\s+/u', ' ', $text);
+            return $text;
+        }
+        return '';
+    }
+    
+    /**
+     * YouTube 説明文から短い要約文を生成
+     * - 先頭400文字をベースに文末で丸める簡易ロジック（外部API不使用）
+     */
+    private function generate_inline_video_summary($title, $description) {
+        $text = trim((string)$description);
+        if ($text === '') {
+            return '';
+        }
+        // 正規化テキストとオリジナル双方を利用
+        $normalized = preg_replace('/\s+/u', ' ', $text);
+        $accumulated = '';
+        $maxChars = 1600;  // 上限（長め）
+        $minChars = 600;   // 最低文字数
+        $maxSentences = 10; // 最大文数
+
+        // 文区切りで分割（日本語句点・一般的終端記号）
+        $sentences = preg_split('/(?<=。|！|!|？|\?)/u', $normalized, -1, PREG_SPLIT_NO_EMPTY);
+        if (is_array($sentences) && count($sentences) > 0) {
+            $count = 0;
+            foreach ($sentences as $s) {
+                $candidate = trim($s);
+                if ($candidate === '') { continue; }
+                $new = $accumulated . ($accumulated === '' ? '' : ' ') . $candidate;
+                $newLen = function_exists('mb_strlen') ? mb_strlen($new) : strlen($new);
+                if ($newLen <= $maxChars) {
+                    $accumulated = $new;
+                    $count++;
+                } else {
+                    break;
+                }
+                if ($count >= $maxSentences) {
+                    break;
+                }
+            }
+        }
+
+        // もし十分でなければ、フォールバックで先頭から長めに切り出し
+        $len = function_exists('mb_strlen') ? mb_strlen($accumulated) : strlen($accumulated);
+        if ($len < $minChars) {
+            // オリジナルテキストを優先使用（タイムスタンプやURLを保持）
+            $orig = preg_replace("/\r\n|\r|\n/u", ' / ', $text);
+            $snippet = function_exists('mb_substr') ? mb_substr($orig, 0, $maxChars) : substr($orig, 0, $maxChars);
+            // 末尾を文末で揃えられるなら整える
+            $pos = function_exists('mb_strrpos') ? mb_strrpos($snippet, '。') : strrpos($snippet, '。');
+            if ($pos !== false && $pos > 50) {
+                $snippet = function_exists('mb_substr') ? mb_substr($snippet, 0, $pos + 1) : substr($snippet, 0, $pos + 1);
+            }
+            $accumulated = trim($snippet);
+        }
+
+        // 最終整形：余分な空白の正規化
+        $accumulated = preg_replace('/\s+/u', ' ', $accumulated);
+        return $accumulated;
+    }
+    
+    /**
+     * 既存のYouTubeまとめ投稿に、各動画直下の要約を後付け挿入
+     * - `_youtube_summary_source` を動画順に分割して用いる
+     * - 既に `youtube-inline-summary` が存在する場合はスキップ
+     */
+    public function insert_inline_summaries_for_post($post_id, $force = false) {
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'post') {
+            return array('error' => '対象投稿が見つかりません');
+        }
+        $content = $post->post_content;
+        if (empty($content)) {
+            return array('error' => '本文が空のため処理できません');
+        }
+
+        // 全体のソーステキスト（タイトル/説明）を動画順に分割
+        $summary_source = get_post_meta($post_id, '_youtube_summary_source', true);
+        $segments = array();
+        if (!empty($summary_source)) {
+            $segments = explode("\n\n---\n\n", $summary_source);
+        }
+
+        // YouTube埋め込みブロックを検出
+        $pattern = '/<!--\s*wp:embed\s*\{[^}]*"providerNameSlug"\s*:\s*"youtube"[^}]*}\s*-->[\s\S]*?<!--\s*\/wp:embed\s*-->/u';
+        if (!preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+            return array('error' => 'YouTube埋め込みブロックが見つかりません');
+        }
+
+        $offsetDelta = 0;
+        $collected_inlines = array();
+        foreach ($matches[0] as $i => $match) {
+            $embedBlock = $match[0];
+            $embedPos = $match[1] + $offsetDelta;
+            // すでに直後に要約があるかチェック（必要に応じて更新）
+            $sliceLen = 2000;
+            if (function_exists('mb_substr')) {
+                $afterSlice = mb_substr($content, $embedPos, $sliceLen);
+            } else {
+                $afterSlice = substr($content, $embedPos, $sliceLen);
+            }
+
+            // 対応するセグメントから説明を抽出
+            $desc = '';
+            if (isset($segments[$i])) {
+                $seg = trim($segments[$i]);
+                if (preg_match('/説明\s*:\s*(.+)\z/us', $seg, $m)) {
+                    $desc = trim($m[1]);
+                } else {
+                    $lines = preg_split('/\r?\n/', $seg);
+                    if (!empty($lines)) {
+                        if (mb_strpos($lines[0], 'タイトル:') === 0) {
+                            array_shift($lines);
+                        }
+                        $desc = trim(implode("\n", $lines));
+                    }
+                }
+            }
+
+            // 生成（OpenAI優先、失敗時はローカル整形）
+            $inline = $this->generate_ai_inline_video_summary('', $desc);
+            if (empty($inline)) {
+                $inline = $this->generate_inline_video_summary('', $desc);
+            }
+            if (empty($inline)) {
+                continue;
+            }
+            $collected_inlines[$i] = $inline;
+
+            // 既存の要約が近傍にある場合は置換、なければ挿入
+            if (mb_strpos($afterSlice, 'youtube-inline-summary') !== false) {
+                if (!$force) {
+                    continue;
+                }
+                // 置換処理
+                $patternSummary = '/(<!--\s*wp:paragraph\s*\{\s*"className"\s*:\s*"youtube-inline-summary"\s*}\s*-->\s*<p[^>]*class="[^"]*youtube-inline-summary[^"]*"[^>]*>)([\s\S]*?)(<\/p>\s*<!--\s*\/wp:paragraph\s*-->)/u';
+                $replacement = '$1' . '<strong>この動画の要約：</strong>' . esc_html($inline) . '$3';
+                $updatedSlice = preg_replace($patternSummary, $replacement, $afterSlice, 1);
+                if ($updatedSlice !== null && $updatedSlice !== $afterSlice) {
+                    $content = mb_substr($content, 0, $embedPos) . $updatedSlice . mb_substr($content, $embedPos + mb_strlen($afterSlice));
+                    $offsetDelta += mb_strlen($updatedSlice) - mb_strlen($afterSlice);
+                }
+            } else {
+                $insertHtml = "<!-- wp:paragraph {\"className\":\"youtube-inline-summary\"} -->\n"
+                            . '<p class="wp-block-paragraph youtube-inline-summary"><strong>この動画の要約：</strong>' . esc_html($inline) . "</p>\n"
+                            . "<!-- /wp:paragraph -->\n\n";
+
+                // 埋め込みブロックの直後に挿入
+                if (function_exists('mb_strlen')) {
+                    $insertPos = $embedPos + mb_strlen($embedBlock);
+                } else {
+                    $insertPos = $embedPos + strlen($embedBlock);
+                }
+                $content = mb_substr($content, 0, $insertPos) . $insertHtml . mb_substr($content, $insertPos);
+                $offsetDelta += mb_strlen($insertHtml);
+            }
+        }
+
+        // _youtube_summary_source を長文要約込みで更新
+        if (!empty($segments)) {
+            $new_segments = $segments;
+            $changed = false;
+            foreach ($new_segments as $idx => $seg_text) {
+                if (isset($collected_inlines[$idx]) && !empty($collected_inlines[$idx])) {
+                    $inline_text = $collected_inlines[$idx];
+                    // 既に要約: が含まれていれば置換し、なければ追記
+                    if (preg_match('/^(.|\n)*?要約\s*:\s*.+$/us', $seg_text)) {
+                        $seg_text = preg_replace('/要約\s*:\s*.+$/us', '要約: ' . $inline_text, $seg_text);
+                    } else {
+                        $seg_text = rtrim($seg_text) . "\n要約: " . $inline_text;
+                    }
+                    $new_segments[$idx] = $seg_text;
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                $rebuilt = implode("\n\n---\n\n", $new_segments);
+                update_post_meta($post_id, '_youtube_summary_source', $rebuilt);
+            }
+        }
+
+        // 変更があれば保存
+        if ($content !== $post->post_content) {
+            $update = array(
+                'ID' => $post_id,
+                'post_content' => $content
+            );
+            $r = wp_update_post($update, true);
+            if (is_wp_error($r)) {
+                return array('error' => $r->get_error_message());
+            }
+            return true;
+        }
+
+        return array('message' => '変更はありませんでした');
+    }
+    
     public function __construct() {
         // APIキーは基本設定から取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
@@ -631,6 +922,7 @@ class NewsCrawlerYouTubeCrawler {
         
         $post_content = '';
         $summary_source_parts = array();
+        $per_video_summaries = array();
         
         // 全体の概要セクションを追加
         $post_content .= '<!-- wp:paragraph -->' . "\n";
@@ -642,7 +934,7 @@ class NewsCrawlerYouTubeCrawler {
         $post_content .= '<h2 class="wp-block-heading">今日の動画ニュース</h2>' . "\n";
         $post_content .= '<!-- /wp:heading -->' . "\n\n";
         
-        foreach ($videos as $video) {
+        foreach ($videos as $index => $video) {
             // 動画タイトル（ブロックエディタ形式）
             $post_content .= '<!-- wp:heading {"level":3} -->' . "\n";
             $post_content .= '<h3 class="wp-block-heading">' . esc_html($video['title']) . '</h3>' . "\n";
@@ -664,6 +956,19 @@ class NewsCrawlerYouTubeCrawler {
                 $post_content .= '<!-- wp:paragraph -->' . "\n";
                 $post_content .= '<p class="wp-block-paragraph"><a href="' . esc_url($youtube_url) . '" target="_blank" rel="noopener noreferrer">📺 YouTubeで視聴する</a></p>' . "\n";
                 $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
+            }
+
+            // 動画直下に要約を挿入（OpenAI優先、失敗時はローカル整形）
+            $inline_summary = '';
+            $inline_summary = $this->generate_ai_inline_video_summary(isset($video['title']) ? $video['title'] : '', isset($video['description']) ? $video['description'] : '');
+            if (empty($inline_summary)) {
+                $inline_summary = $this->generate_inline_video_summary(isset($video['title']) ? $video['title'] : '', isset($video['description']) ? $video['description'] : '');
+            }
+            if (!empty($inline_summary)) {
+                $post_content .= '<!-- wp:paragraph {"className":"youtube-inline-summary"} -->' . "\n";
+                $post_content .= '<p class="wp-block-paragraph youtube-inline-summary"><strong>この動画の要約：</strong>' . esc_html($inline_summary) . '</p>' . "\n";
+                $post_content .= '<!-- /wp:paragraph -->' . "\n\n";
+                $per_video_summaries[$index] = $inline_summary;
             }
             
             // 動画の説明
@@ -690,6 +995,15 @@ class NewsCrawlerYouTubeCrawler {
                 $desc_for_source = substr($desc_for_source, 0, 2000);
             }
             $summary_source_parts[] = "タイトル: " . $title_for_source . "\n" . (empty($desc_for_source) ? '' : ("説明: " . $desc_for_source));
+            
+            // 併せてインライン要約もメタ入力に寄与（存在する場合）
+            $inline_for_source = $this->generate_ai_inline_video_summary($title_for_source, $desc_for_source);
+            if (empty($inline_for_source)) {
+                $inline_for_source = $this->generate_inline_video_summary($title_for_source, $desc_for_source);
+            }
+            if (!empty($inline_for_source)) {
+                $summary_source_parts[] = "要約: " . $inline_for_source;
+            }
             
             // メタ情報
             $meta_info = [];
@@ -775,6 +1089,9 @@ class NewsCrawlerYouTubeCrawler {
             update_post_meta($post_id, '_youtube_video_' . $index . '_title', $video['title']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_id', $video['video_id']);
             update_post_meta($post_id, '_youtube_video_' . $index . '_channel', $video['channel_title']);
+            if (isset($per_video_summaries[$index]) && !empty($per_video_summaries[$index])) {
+                update_post_meta($post_id, '_youtube_video_' . $index . '_summary', $per_video_summaries[$index]);
+            }
         }
         
         // メタデータ設定完了をログに記録
