@@ -49,8 +49,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 
 
 // アップデータを早期初期化（plugins_loaded の最初期）
-// WordPress標準更新システムを使用するため無効化
-/*
+// WordPress標準更新システムを使用
 add_action('plugins_loaded', function() {
     // 管理画面またはWP-Cronのみで初期化し、フロント側の負荷を回避
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
@@ -58,7 +57,6 @@ add_action('plugins_loaded', function() {
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
 }, 1);
-*/
 
 
 // 更新後の自動有効化処理（WordPress標準更新システム用）
@@ -81,12 +79,15 @@ add_action('upgrader_process_complete', function($upgrader_object, $options) {
             
             // 更新前の状態に応じてプラグインを再有効化
             if ($was_active && isset($was_active['was_active']) && $was_active['was_active']) {
-                if (isset($was_active['network_active']) && $was_active['network_active']) {
-                    // ネットワーク有効化
-                    activate_plugin($plugin_basename, '', true);
-                } else {
-                    // 通常の有効化
-                    activate_plugin($plugin_basename);
+                // プラグインが無効化されている場合のみ再有効化
+                if (!is_plugin_active($plugin_basename)) {
+                    if (isset($was_active['network_active']) && $was_active['network_active']) {
+                        // ネットワーク有効化
+                        activate_plugin($plugin_basename, '', true);
+                    } else {
+                        // 通常の有効化
+                        activate_plugin($plugin_basename);
+                    }
                 }
             }
             
@@ -357,11 +358,7 @@ function news_crawler_init_components() {
         new NewsCrawlerOGPSettings();
     }
     
-    // 更新チェッククラスを初期化（WordPress標準更新システム用）
-    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
-        new NewsCrawlerUpdater();
-        define('NEWS_CRAWLER_UPDATER_INIT', true);
-    }
+    // 更新チェッククラスは早期初期化で処理済み
     
     // ライセンス管理クラスを初期化
     if (class_exists('NewsCrawler_License_Manager')) {
