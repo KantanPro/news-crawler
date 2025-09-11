@@ -2583,7 +2583,9 @@ $('#cancel-edit').click(function() {
                 $result = $this->execute_news_crawling($setting);
             } elseif ($setting['content_type'] === 'youtube') {
                 $debug_info[] = 'YouTubeチャンネル数: ' . count($setting['youtube_channels'] ?? array());
+                error_log('GenreSettings: YouTubeクロール実行開始 - ジャンルID: ' . $genre_id);
                 $result = $this->execute_youtube_crawling($setting);
+                error_log('GenreSettings: YouTubeクロール実行完了 - 結果: ' . substr($result, 0, 200) . '...');
             } else {
                 wp_send_json_error('不正なコンテンツタイプです: ' . $setting['content_type']);
             }
@@ -2709,7 +2711,9 @@ $('#cancel-edit').click(function() {
                 $result = $this->execute_news_crawling($setting);
             } elseif ($setting['content_type'] === 'youtube') {
                 $debug_info[] = 'YouTubeチャンネル数: ' . count($setting['youtube_channels'] ?? array());
+                error_log('GenreSettings: YouTubeクロール実行開始（ジョブ） - ジャンルID: ' . $genre_id);
                 $result = $this->execute_youtube_crawling($setting);
+                error_log('GenreSettings: YouTubeクロール実行完了（ジョブ） - 結果: ' . substr($result, 0, 200) . '...');
             } else {
                 throw new Exception('不正なコンテンツタイプ: ' . $setting['content_type']);
             }
@@ -3160,9 +3164,12 @@ $('#cancel-edit').click(function() {
                         return 'NewsCrawlerYouTubeCrawlerクラスにcrawl_youtubeメソッドが見つかりません。';
                     }
                     
+                    error_log('GenreSettings: crawl_youtubeメソッドを使用してクロール実行');
                     $result = $youtube_crawler->crawl_youtube();
                 } else {
                     // 新しいメソッドを使用してオプションを直接渡す
+                    error_log('GenreSettings: crawl_youtube_with_optionsメソッドを使用してクロール実行');
+                    error_log('GenreSettings: マージされたオプション: ' . json_encode($merged_options, JSON_UNESCAPED_UNICODE));
                     $result = $youtube_crawler->crawl_youtube_with_options($merged_options);
                 }
                 

@@ -398,48 +398,74 @@ class NewsCrawlerYouTubeCrawler {
         $errors = array();
         $duplicates_skipped = 0;
         
+        error_log('YouTubeCrawler: クロール開始 - チャンネル数: ' . count($channels) . ', キーワード数: ' . count($keywords) . ', 最大動画数: ' . $max_videos);
+        
         foreach ($channels as $channel) {
             try {
                 // 各チャンネルから最新の動画を複数件取得（ヒット率向上）
                 $per_channel_fetch = max(1, min(5, $max_videos));
+                error_log('YouTubeCrawler: チャンネル ' . $channel . ' から動画を取得開始（取得予定数: ' . $per_channel_fetch . '）');
+                
                 $videos = $this->fetch_channel_videos($channel, $per_channel_fetch);
+                error_log('YouTubeCrawler: チャンネル ' . $channel . ' から取得した動画数: ' . (is_array($videos) ? count($videos) : '0'));
+                
                 if ($videos && is_array($videos)) {
                     foreach ($videos as $video) {
+                        error_log('YouTubeCrawler: 動画をチェック中: ' . $video['title']);
                         if ($this->is_keyword_match($video, $keywords)) {
                             $matched_videos[] = $video;
+                            error_log('YouTubeCrawler: マッチした動画を追加: ' . $video['title']);
                             if (count($matched_videos) >= $max_videos) {
+                                error_log('YouTubeCrawler: 目標数に達したため早期終了');
                                 break 2; // 目標数に達したら全体ループを早期終了
                             }
+                        } else {
+                            error_log('YouTubeCrawler: キーワードにマッチしなかった動画: ' . $video['title']);
                         }
                     }
+                } else {
+                    error_log('YouTubeCrawler: チャンネル ' . $channel . ' から動画を取得できませんでした');
                 }
             } catch (Exception $e) {
+                error_log('YouTubeCrawler: チャンネル ' . $channel . ' でエラー: ' . $e->getMessage());
                 $errors[] = $channel . ': ' . $e->getMessage();
             }
         }
         
         $valid_videos = array();
+        error_log('YouTubeCrawler: 重複チェック開始 - マッチした動画数: ' . count($matched_videos));
+        
         foreach ($matched_videos as $video) {
-            if ($skip_duplicates === 'enabled') {
+            // 重複チェックを一時的に完全無効化（デバッグ用）
+            if (false && $skip_duplicates === 'enabled') {
                 $duplicate_info = $this->is_duplicate_video($video);
                 if ($duplicate_info) {
                     $duplicates_skipped++;
+                    error_log('YouTubeCrawler: 重複動画をスキップ: ' . $video['title']);
                     continue;
                 }
             }
             
             $valid_videos[] = $video;
+            error_log('YouTubeCrawler: 有効な動画として追加: ' . $video['title']);
         }
         
         $valid_videos = array_slice($valid_videos, 0, $max_videos);
+        error_log('YouTubeCrawler: 最終的な有効動画数: ' . count($valid_videos));
         
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_videos)) {
+            error_log('YouTubeCrawler: 投稿作成開始 - 動画数: ' . count($valid_videos));
             $post_id = $this->create_video_summary_post($valid_videos, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
+                error_log('YouTubeCrawler: 投稿作成成功 - ID: ' . $post_id);
+            } else {
+                error_log('YouTubeCrawler: 投稿作成失敗 - エラー: ' . (is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー'));
             }
+        } else {
+            error_log('YouTubeCrawler: 有効な動画がないため投稿を作成しません');
         }
         
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
@@ -504,27 +530,39 @@ class NewsCrawlerYouTubeCrawler {
         }
         
         $valid_videos = array();
+        error_log('YouTubeCrawler: 重複チェック開始 - マッチした動画数: ' . count($matched_videos));
+        
         foreach ($matched_videos as $video) {
-            if ($skip_duplicates === 'enabled') {
+            // 重複チェックを一時的に完全無効化（デバッグ用）
+            if (false && $skip_duplicates === 'enabled') {
                 $duplicate_info = $this->is_duplicate_video($video);
                 if ($duplicate_info) {
                     $duplicates_skipped++;
+                    error_log('YouTubeCrawler: 重複動画をスキップ: ' . $video['title']);
                     continue;
                 }
             }
             
             $valid_videos[] = $video;
+            error_log('YouTubeCrawler: 有効な動画として追加: ' . $video['title']);
         }
         
         $valid_videos = array_slice($valid_videos, 0, $max_videos);
+        error_log('YouTubeCrawler: 最終的な有効動画数: ' . count($valid_videos));
         
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_videos)) {
+            error_log('YouTubeCrawler: 投稿作成開始 - 動画数: ' . count($valid_videos));
             $post_id = $this->create_video_summary_post($valid_videos, $categories, $status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
+                error_log('YouTubeCrawler: 投稿作成成功 - ID: ' . $post_id);
+            } else {
+                error_log('YouTubeCrawler: 投稿作成失敗 - エラー: ' . (is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー'));
             }
+        } else {
+            error_log('YouTubeCrawler: 有効な動画がないため投稿を作成しません');
         }
         
         $result = $posts_created . '件の動画投稿を作成しました（' . count($valid_videos) . '件の動画を含む）。';
@@ -540,11 +578,24 @@ class NewsCrawlerYouTubeCrawler {
     private function is_keyword_match($video, $keywords) {
         $text_to_search = strtolower($video['title'] . ' ' . ($video['description'] ?? ''));
         
+        // デバッグ情報を追加
+        error_log('YouTubeCrawler: キーワードマッチング開始');
+        error_log('YouTubeCrawler: 動画タイトル: ' . $video['title']);
+        error_log('YouTubeCrawler: 検索対象テキスト: ' . $text_to_search);
+        error_log('YouTubeCrawler: キーワード一覧: ' . implode(', ', $keywords));
+        
         foreach ($keywords as $keyword) {
-            if (stripos($text_to_search, strtolower($keyword)) !== false) {
+            $keyword_lower = strtolower($keyword);
+            $match_result = stripos($text_to_search, $keyword_lower);
+            error_log('YouTubeCrawler: キーワード "' . $keyword . '" のマッチ結果: ' . ($match_result !== false ? 'マッチ' : 'マッチしない'));
+            
+            if ($match_result !== false) {
+                error_log('YouTubeCrawler: キーワードマッチ成功: ' . $keyword);
                 return true;
             }
         }
+        
+        error_log('YouTubeCrawler: キーワードマッチ失敗');
         return false;
     }
     
@@ -843,8 +894,8 @@ class NewsCrawlerYouTubeCrawler {
         global $wpdb;
         $video_id = $video['video_id'];
         
-        // 過去30日以内の投稿のみをチェック（重複チェックを緩和）
-        $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+        // 過去1時間以内の投稿のみをチェック（重複を防ぎつつ新しい動画は許可）
+        $one_hour_ago = date('Y-m-d H:i:s', strtotime('-1 hour'));
         
         $existing_video = $wpdb->get_var($wpdb->prepare(
             "SELECT pm.post_id FROM {$wpdb->postmeta} pm 
@@ -854,7 +905,7 @@ class NewsCrawlerYouTubeCrawler {
              AND p.post_status IN ('publish', 'draft', 'pending', 'private')",
             '_youtube_video_%_id',
             $video_id,
-            $thirty_days_ago
+            $one_hour_ago
         ));
         
         return $existing_video ? $existing_video : false;
