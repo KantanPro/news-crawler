@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.63-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.63)
+[![Version](https://img.shields.io/badge/version-2.3.64-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.64)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -167,6 +167,11 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.64** (2025-09-11): Fixed zero article issue
+  - Improved handling when no articles are found
+  - Achieved more stable news crawling functionality
+  - Enhanced error handling
 
 - **v2.3.63** (2025-09-11): Fixed duplicate summary generation issue
   - Resolved issue where summaries were being generated twice
