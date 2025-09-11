@@ -724,9 +724,13 @@ class NewsCrawlerOpenAISummarizer {
             // 最初のH2タグ以降の内容を取得
             $after_h2 = substr($content, $first_h2_pos);
             
-            // まとめセクションを削除
-            $conclusion_pattern = '/<!-- wp:group.*?まとめ.*?<!-- \/wp:group -->/s';
-            $after_h2 = preg_replace($conclusion_pattern, '', $after_h2);
+            // まとめセクションを削除（複数回実行してすべて削除）
+            $conclusion_pattern = '/<!-- wp:group[^>]*>.*?<h2>まとめ<\/h2>.*?<!-- \/wp:group -->/s';
+            $previous_content = '';
+            while ($previous_content !== $after_h2) {
+                $previous_content = $after_h2;
+                $after_h2 = preg_replace($conclusion_pattern, '', $after_h2);
+            }
             
             // 結合して返す
             $content = $before_h2 . $after_h2;
