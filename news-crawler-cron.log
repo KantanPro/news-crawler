@@ -325,3 +325,7 @@ Pass --path=`path/to/wordpress` or run `wp core download`.
 [2025-09-09 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
 [2025-09-09 19:00:01] WordPressパス: /var/www/html/
 [2025-09-09 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-10 19:00:01] News Crawler Cron 実行開始
+[2025-09-10 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
+[2025-09-10 19:00:01] WordPressパス: /var/www/html/
+[2025-09-10 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
