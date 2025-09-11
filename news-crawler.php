@@ -1772,8 +1772,16 @@ class NewsCrawler {
         $post_title = '【' . $genre_name_for_title . '】以降はＡＩで生成';
 
         $post_content = '';
+        $summary_source_parts = array(); // SEOタイトル用に動画のタイトル/説明を蓄積
 
         foreach ($videos as $video) {
+            // SEOタイトル生成の素材を蓄積（タイトル + 説明）
+            $video_title_for_source = isset($video['title']) ? $video['title'] : '';
+            $video_desc_for_source = isset($video['description']) ? wp_trim_words($video['description'], 120, '...') : '';
+            $source_line = trim($video_title_for_source . "\n" . $video_desc_for_source);
+            if (!empty($source_line)) {
+                $summary_source_parts[] = $source_line;
+            }
             // 動画区切り
             $post_content .= '<!-- wp:separator -->';
             $post_content .= '<hr class="wp-block-separator has-alpha-channel-opacity"/>';
@@ -1887,6 +1895,22 @@ class NewsCrawler {
         update_post_meta($post_id, '_news_crawler_intended_status', $status);
         update_post_meta($post_id, '_news_crawler_creation_timestamp', current_time('timestamp'));
         update_post_meta($post_id, '_news_crawler_ready', true); // ステータス変更不要のためtrueに設定
+
+        // 要約用の結合テキストをメタに保存（SEOタイトル用）
+        if (!empty($summary_source_parts)) {
+            $summary_source = implode("\n\n---\n\n", $summary_source_parts);
+            update_post_meta($post_id, '_youtube_summary_source', $summary_source);
+        }
+
+        // 直後にSEOタイトルを本文ベースで再生成
+        if (class_exists('NewsCrawlerSEOTitleGenerator')) {
+            try {
+                $seo_generator = new NewsCrawlerSEOTitleGenerator();
+                $seo_generator->generate_seo_title($post_id);
+            } catch (Exception $e) {
+                error_log('NewsCrawler: SEOタイトル再生成中にエラー: ' . $e->getMessage());
+            }
+        }
 
         // ジャンルIDを保存（自動投稿用）
         $current_genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -3449,6 +3473,7 @@ class NewsCrawler {
 
         $post_content = '';
         $valid_articles = array(); // 要約が生成できた記事のみを格納
+        $summary_source_parts = array(); // SEOタイトル用に本文由来テキストを蓄積
 
         try {
             foreach ($articles as $article) {
@@ -3463,6 +3488,13 @@ class NewsCrawler {
 
             // 要約が生成できた記事を有効記事として追加
             $valid_articles[] = $article;
+
+            // SEOタイトル生成の素材としてまとめソースを蓄積
+            $part_title = is_array($article) && !empty($article['title']) ? $article['title'] : '';
+            $summary_line = trim($part_title . "\n" . $article_summary);
+            if (!empty($summary_line)) {
+                $summary_source_parts[] = $summary_line;
+            }
 
             // 記事区切り
             $post_content .= '<!-- wp:separator -->';
@@ -3606,6 +3638,22 @@ class NewsCrawler {
         }
         if (!empty($first_article_url)) {
             update_post_meta($post_id, '_news_crawler_source_url', $first_article_url);
+        }
+
+        // まとめソースを保存（SEOタイトル生成が本文と乖離しないように）
+        if (!empty($summary_source_parts)) {
+            $summary_source = implode("\n\n---\n\n", $summary_source_parts);
+            update_post_meta($post_id, '_news_summary_source', $summary_source);
+        }
+
+        // 直後にSEOタイトルを本文ベースで再生成
+        if (class_exists('NewsCrawlerSEOTitleGenerator')) {
+            try {
+                $seo_generator = new NewsCrawlerSEOTitleGenerator();
+                $seo_generator->generate_seo_title($post_id);
+            } catch (Exception $e) {
+                error_log('NewsCrawler: SEOタイトル再生成中にエラー: ' . $e->getMessage());
+            }
         }
 
         // アイキャッチ生成
