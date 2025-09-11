@@ -436,8 +436,8 @@ class NewsCrawlerYouTubeCrawler {
         error_log('YouTubeCrawler: 重複チェック開始 - マッチした動画数: ' . count($matched_videos));
         
         foreach ($matched_videos as $video) {
-            // 重複チェックを一時的に完全無効化（デバッグ用）
-            if (false && $skip_duplicates === 'enabled') {
+            // 重複チェックを実行
+            if ($skip_duplicates === 'enabled') {
                 $duplicate_info = $this->is_duplicate_video($video);
                 if ($duplicate_info) {
                     $duplicates_skipped++;
@@ -533,8 +533,8 @@ class NewsCrawlerYouTubeCrawler {
         error_log('YouTubeCrawler: 重複チェック開始 - マッチした動画数: ' . count($matched_videos));
         
         foreach ($matched_videos as $video) {
-            // 重複チェックを一時的に完全無効化（デバッグ用）
-            if (false && $skip_duplicates === 'enabled') {
+            // 重複チェックを実行
+            if ($skip_duplicates === 'enabled') {
                 $duplicate_info = $this->is_duplicate_video($video);
                 if ($duplicate_info) {
                     $duplicates_skipped++;
