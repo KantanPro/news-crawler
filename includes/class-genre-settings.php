@@ -1045,7 +1045,7 @@ class NewsCrawlerGenreSettings {
                                             1. <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブを設定<br>
                                             2. サーバーのcrontabに設定を追加<br>
                                             3. この設定で自動投稿を有効化<br>
-                                            <strong>※ 実行時刻はサーバーのcronジョブ設定に従います</strong>
+                                            <strong>※ 実行頻度と時刻はサーバーのcronジョブ設定に完全に依存します</strong>
                                         </p>
                                     </div>
                                     
@@ -1056,32 +1056,10 @@ class NewsCrawlerGenreSettings {
                                     <div id="auto-posting-settings" style="margin-top: 10px; display: none;">
                                         <table class="form-table" style="margin: 0;">
                                             <tr>
-                                                <th scope="row" style="padding: 5px 0;">投稿頻度</th>
-                                                <td style="padding: 5px 0;">
-                                                    <select id="posting-frequency" name="posting_frequency">
-                                                        <option value="daily">毎日</option>
-                                                        <option value="weekly">1週間</option>
-                                                        <option value="monthly">毎月</option>
-                                                        <option value="custom">カスタム</option>
-                                                    </select>
-                                                    <div id="custom-frequency-settings" style="margin-top: 5px; display: none;">
-                                                        <input type="number" id="custom-frequency-days" name="custom_frequency_days" value="7" min="1" max="365" style="width: 80px;" /> 日ごと
-                                                    </div>
-                                                    <p class="description" style="margin: 5px 0 0 0; color: #d63638;">※ 実際の実行頻度と時刻はサーバーのcronジョブ設定に依存します</p>
-                                                </td>
-                                            </tr>
-                                            <tr>
                                                 <th scope="row" style="padding: 5px 0;">投稿記事数上限</th>
                                                 <td style="padding: 5px 0;">
                                                     <input type="number" id="max-posts-per-execution" name="max_posts_per_execution" value="3" min="1" max="20" style="width: 80px;" /> 件
                                                     <p class="description" style="margin: 5px 0 0 0;">1回の実行で作成する投稿の最大数</p>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <th scope="row" style="padding: 5px 0;">次回実行予定</th>
-                                                <td style="padding: 5px 0;">
-                                                    <span id="next-execution-time" style="color: #0073aa; font-weight: bold;">サーバーcronジョブで管理</span>
-                                                    <p class="description" style="margin: 5px 0 0 0;">実際の実行スケジュールはサーバーのcronジョブ設定で管理されます</p>
                                                 </td>
                                             </tr>
                                         </table>
@@ -1226,32 +1204,10 @@ $('#content-type').change(function() {
                 }
             });
             
-            // 投稿頻度変更時のカスタム設定表示切り替え
-            $('#posting-frequency').change(function() {
-                var frequency = $(this).val();
-                if (frequency === 'custom') {
-                    $('#custom-frequency-settings').show();
-                } else {
-                    $('#custom-frequency-settings').hide();
-                }
-                updateNextExecutionTime();
-            });
-            
-            // カスタム頻度日数変更時
-            $('#custom-frequency-days').change(function() {
-                updateNextExecutionTime();
-            });
             
             
-            // 次回実行予定時刻を更新（cronジョブ設定に基づく）
-            function updateNextExecutionTime() {
-                // cronジョブ設定に基づいて表示を更新
-                $('#next-execution-time').text('サーバーcronジョブで管理');
-            }
             
             
-            // 初期表示時に次回実行予定時刻を更新
-            updateNextExecutionTime();
             
             // 初期表示時にアイキャッチ設定を表示
             $('#featured-image-settings').show();
@@ -1292,10 +1248,7 @@ $('#content-type').trigger('change');
                     auto_featured_image: autoFeaturedImage,
                     featured_image_method: $('#featured-image-method').val(),
                     auto_posting: autoPosting,
-                    posting_frequency: $('#posting-frequency').val(),
-                    custom_frequency_days: $('#custom-frequency-days').val(),
-                    max_posts_per_execution: $('#max-posts-per-execution').val(),
-                    next_execution_display: $('#next-execution-time').text().trim().replace(/\n/g, ' ')
+                    max_posts_per_execution: $('#max-posts-per-execution').val()
                 };
                 
                 // デバッグ情報をコンソールに出力
@@ -2315,12 +2268,6 @@ $('#cancel-edit').click(function() {
         error_log('Genre Settings Save - Processed auto_posting value: ' . $auto_posting);
         
         // next_execution_displayの値をクリーンアップ
-        $raw_next_execution = $_POST['next_execution_display'] ?? '';
-        $cleaned_next_execution = sanitize_text_field(trim(str_replace(["\n", "\r"], ' ', $raw_next_execution)));
-        
-        // デバッグ情報を記録
-        error_log('Genre Settings Save - Raw next_execution_display: "' . $raw_next_execution . '"');
-        error_log('Genre Settings Save - Cleaned next_execution_display: "' . $cleaned_next_execution . '"');
         
         $setting = array(
             'genre_name' => $genre_name,
@@ -2331,10 +2278,7 @@ $('#cancel-edit').click(function() {
             'auto_featured_image' => isset($_POST['auto_featured_image']) ? 1 : 0,
             'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'template'),
             'auto_posting' => $auto_posting,
-            'posting_frequency' => sanitize_text_field($_POST['posting_frequency'] ?? 'daily'),
-            'custom_frequency_days' => intval($_POST['custom_frequency_days'] ?? 7),
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
-            'next_execution_display' => $cleaned_next_execution,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
         );
@@ -3743,10 +3687,8 @@ $('#cancel-edit').click(function() {
      */
     private function calculate_next_execution_from_start_time($setting, $start_time) {
         $current_time = current_time('timestamp');
-        $frequency = $setting['posting_frequency'] ?? 'daily';
-        
-        // 頻度に応じた間隔を取得
-        $interval = $this->get_frequency_interval($frequency, $setting);
+        // cronジョブ設定に基づいて実行間隔を決定
+        $interval = $this->get_frequency_interval('', $setting);
         
         // 開始時刻から現在時刻までの経過時間を計算
         $elapsed = $current_time - $start_time;
@@ -3768,35 +3710,22 @@ $('#cancel-edit').click(function() {
     }
     
     /**
-     * 現在時刻から次回実行時刻を計算
+     * 現在時刻から次回実行時刻を計算（cronジョブ設定に基づく）
      */
     private function calculate_next_execution_from_now($setting, $now) {
-        $frequency = $setting['posting_frequency'] ?? 'daily';
-        $interval = $this->get_frequency_interval($frequency, $setting);
+        // cronジョブ設定に基づいて実行間隔を決定
+        $interval = $this->get_frequency_interval('', $setting);
         
         return $now + $interval;
     }
     
     /**
-     * 頻度に応じた間隔（秒）を取得
+     * 頻度に応じた間隔（秒）を取得（cronジョブ設定に基づく）
      */
     private function get_frequency_interval($frequency, $setting) {
-        switch ($frequency) {
-            case 'daily':
-            case '毎日':
-                return 24 * 60 * 60; // 24時間
-            case 'weekly':
-            case '1週間ごと':
-                return 7 * 24 * 60 * 60; // 7日
-            case 'monthly':
-            case '1ヶ月ごと':
-                return 30 * 24 * 60 * 60; // 30日
-            case 'custom':
-                $days = $setting['custom_frequency_days'] ?? 7;
-                return $days * 24 * 60 * 60;
-            default:
-                return 24 * 60 * 60; // デフォルトは24時間
-        }
+        // cronジョブ設定に基づいて実行間隔を決定
+        // デフォルトは1時間間隔（cronジョブの実行頻度に依存）
+        return 60 * 60; // 1時間
     }
     
     /**
