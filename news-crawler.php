@@ -41,15 +41,14 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-cron-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
-// require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php'; // WordPress標準更新システムを使用するため無効化
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 
 
-// アップデータを早期初期化（plugins_loaded の最初期）
-// WordPress標準更新システムを使用
+// アップデータクラスを初期化（WordPress標準更新システム）
 add_action('plugins_loaded', function() {
     // 管理画面またはWP-Cronのみで初期化し、フロント側の負荷を回避
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
@@ -59,43 +58,7 @@ add_action('plugins_loaded', function() {
 }, 1);
 
 
-// 更新後の自動有効化処理（WordPress標準更新システム用）
-add_action('upgrader_process_complete', function($upgrader_object, $options) {
-    // プラグインの更新が完了した場合のみ処理
-    if ($options['action'] === 'update' && $options['type'] === 'plugin') {
-        $plugin_basename = plugin_basename(__FILE__);
-        
-        // 対象プラグインが更新されたかチェック
-        if (isset($options['plugins']) && in_array($plugin_basename, $options['plugins'])) {
-            // 更新前の有効状態を取得
-            $was_active = get_site_transient('news_crawler_pre_update_state');
-            
-            // キャッシュクリア
-            delete_transient('news_crawler_latest_version');
-            delete_transient('news_crawler_latest_version_backup');
-            delete_site_transient('update_plugins');
-            delete_site_transient('update_plugins_checked');
-            wp_clean_plugins_cache();
-            
-            // 更新前の状態に応じてプラグインを再有効化
-            if ($was_active && isset($was_active['was_active']) && $was_active['was_active']) {
-                // プラグインが無効化されている場合のみ再有効化
-                if (!is_plugin_active($plugin_basename)) {
-                    if (isset($was_active['network_active']) && $was_active['network_active']) {
-                        // ネットワーク有効化
-                        activate_plugin($plugin_basename, '', true);
-                    } else {
-                        // 通常の有効化
-                        activate_plugin($plugin_basename);
-                    }
-                }
-            }
-            
-            // 一時的な状態を削除
-            delete_site_transient('news_crawler_pre_update_state');
-        }
-    }
-}, 10, 2);
+// 更新後の自動有効化処理（NewsCrawlerUpdaterクラスで処理）
 
 // プラグイン初期化
 function news_crawler_init() {

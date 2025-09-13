@@ -65,6 +65,9 @@ class NewsCrawlerUpdater {
         
         // プラグイン情報ページでの表示
         add_filter('plugin_row_meta', array($this, 'plugin_row_meta'), 10, 2);
+        
+        // 更新後の自動有効化処理
+        add_action('upgrader_process_complete', array($this, 'handle_auto_activation'), 10, 2);
     }
     
     
@@ -551,6 +554,44 @@ class NewsCrawlerUpdater {
         return true;
     }
     
+    
+    /**
+     * 更新後の自動有効化処理
+     */
+    public function handle_auto_activation($upgrader_object, $options) {
+        // プラグインの更新が完了した場合のみ処理
+        if ($options['action'] === 'update' && $options['type'] === 'plugin') {
+            // 対象プラグインが更新されたかチェック
+            if (isset($options['plugins']) && in_array($this->plugin_basename, $options['plugins'])) {
+                // 更新前の有効状態を取得
+                $was_active = get_site_transient('news_crawler_pre_update_state');
+                
+                // キャッシュクリア
+                delete_transient('news_crawler_latest_version');
+                delete_transient('news_crawler_latest_version_backup');
+                delete_site_transient('update_plugins');
+                delete_site_transient('update_plugins_checked');
+                wp_clean_plugins_cache();
+                
+                // 更新前の状態に応じてプラグインを再有効化
+                if ($was_active && isset($was_active['was_active']) && $was_active['was_active']) {
+                    // プラグインが無効化されている場合のみ再有効化
+                    if (!is_plugin_active($this->plugin_basename)) {
+                        if (isset($was_active['network_active']) && $was_active['network_active']) {
+                            // ネットワーク有効化
+                            activate_plugin($this->plugin_basename, '', true);
+                        } else {
+                            // 通常の有効化
+                            activate_plugin($this->plugin_basename);
+                        }
+                    }
+                }
+                
+                // 更新前状態のキャッシュをクリア
+                delete_site_transient('news_crawler_pre_update_state');
+            }
+        }
+    }
     
     /**
      * Cleanup on deactivation
