@@ -1044,7 +1044,8 @@ class NewsCrawlerGenreSettings {
                                             <strong>設定手順：</strong><br>
                                             1. <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブを設定<br>
                                             2. サーバーのcrontabに設定を追加<br>
-                                            3. この設定で自動投稿を有効化
+                                            3. この設定で自動投稿を有効化<br>
+                                            <strong>※ 実行時刻はサーバーのcronジョブ設定に従います</strong>
                                         </p>
                                     </div>
                                     
@@ -1066,7 +1067,7 @@ class NewsCrawlerGenreSettings {
                                                     <div id="custom-frequency-settings" style="margin-top: 5px; display: none;">
                                                         <input type="number" id="custom-frequency-days" name="custom_frequency_days" value="7" min="1" max="365" style="width: 80px;" /> 日ごと
                                                     </div>
-                                                    <p class="description" style="margin: 5px 0 0 0; color: #d63638;">※ 実際の実行頻度はサーバーのcronジョブ設定に依存します</p>
+                                                    <p class="description" style="margin: 5px 0 0 0; color: #d63638;">※ 実際の実行頻度と時刻はサーバーのcronジョブ設定に依存します</p>
                                                 </td>
                                             </tr>
                                             <tr>
@@ -1074,13 +1075,6 @@ class NewsCrawlerGenreSettings {
                                                 <td style="padding: 5px 0;">
                                                     <input type="number" id="max-posts-per-execution" name="max_posts_per_execution" value="3" min="1" max="20" style="width: 80px;" /> 件
                                                     <p class="description" style="margin: 5px 0 0 0;">1回の実行で作成する投稿の最大数</p>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <th scope="row" style="padding: 5px 0;">開始実行日時</th>
-                                                <td style="padding: 5px 0;">
-                                                    <input type="datetime-local" id="start-execution-time" name="start_execution_time" style="width: 200px;">
-                                                    <p class="description" style="margin: 5px 0 0 0;">自動投稿の開始実行日時を選択してください</p>
                                                 </td>
                                             </tr>
                                             <tr>
@@ -1248,76 +1242,13 @@ $('#content-type').change(function() {
                 updateNextExecutionTime();
             });
             
-            // 開始実行日時変更時
-            $('#start-execution-time').change(function() {
-                updateNextExecutionTime();
-            });
             
-            // 次回実行予定時刻を更新（投稿頻度を考慮）
+            // 次回実行予定時刻を更新（cronジョブ設定に基づく）
             function updateNextExecutionTime() {
-                var frequency = $('#posting-frequency').val();
-                var customDays = $('#custom-frequency-days').val();
-                var startTime = $('#start-execution-time').val();
-                
-                if (!startTime) {
-                    $('#next-execution-time').text('未設定');
-                    return;
-                }
-                
-                var startDate = new Date(startTime);
-                var now = new Date();
-                var nextExecution = new Date(startDate);
-                
-                // 開始日時が未来の場合は、その日時が次回実行予定
-                if (startDate > now) {
-                    nextExecution = new Date(startDate);
-                } else {
-                    // 開始日時が過去の場合は、投稿頻度に基づいて次回実行予定を計算
-                    var intervalMs = 0;
-                    switch (frequency) {
-                        case 'daily':
-                            intervalMs = 24 * 60 * 60 * 1000; // 24時間
-                            break;
-                        case 'weekly':
-                            intervalMs = 7 * 24 * 60 * 60 * 1000; // 7日
-                            break;
-                        case 'monthly':
-                            intervalMs = 30 * 24 * 60 * 60 * 1000; // 30日
-                            break;
-                        case 'custom':
-                            intervalMs = parseInt(customDays || 1) * 24 * 60 * 60 * 1000;
-                            break;
-                        default:
-                            intervalMs = 24 * 60 * 60 * 1000;
-                    }
-                    
-                    // 開始時刻から現在時刻までの経過時間を計算
-                    var elapsed = now.getTime() - startDate.getTime();
-                    
-                    // 次回実行までの回数を計算
-                    var cycles = Math.ceil(elapsed / intervalMs);
-                    
-                    // 次回実行時刻を計算
-                    nextExecution = new Date(startDate.getTime() + (cycles * intervalMs));
-                }
-                
-                var timeString = nextExecution.getFullYear() + '年' + 
-                               (nextExecution.getMonth() + 1) + '月' + 
-                               nextExecution.getDate() + '日 ' +
-                               nextExecution.getHours().toString().padStart(2, '0') + ':' +
-                               nextExecution.getMinutes().toString().padStart(2, '0');
-                
-                $('#next-execution-time').text(timeString);
+                // cronジョブ設定に基づいて表示を更新
+                $('#next-execution-time').text('サーバーcronジョブで管理');
             }
             
-            // 初期表示時に開始実行日時を現在時刻に設定
-            var now = new Date();
-            var nowString = now.getFullYear() + '-' + 
-                           (now.getMonth() + 1).toString().padStart(2, '0') + '-' + 
-                           now.getDate().toString().padStart(2, '0') + 'T' +
-                           now.getHours().toString().padStart(2, '0') + ':' +
-                           now.getMinutes().toString().padStart(2, '0');
-            $('#start-execution-time').val(nowString);
             
             // 初期表示時に次回実行予定時刻を更新
             updateNextExecutionTime();
@@ -1364,7 +1295,6 @@ $('#content-type').trigger('change');
                     posting_frequency: $('#posting-frequency').val(),
                     custom_frequency_days: $('#custom-frequency-days').val(),
                     max_posts_per_execution: $('#max-posts-per-execution').val(),
-                    start_execution_time: $('#start-execution-time').val(),
                     next_execution_display: $('#next-execution-time').text().trim().replace(/\n/g, ' ')
                 };
                 
@@ -2404,7 +2334,6 @@ $('#cancel-edit').click(function() {
             'posting_frequency' => sanitize_text_field($_POST['posting_frequency'] ?? 'daily'),
             'custom_frequency_days' => intval($_POST['custom_frequency_days'] ?? 7),
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
-            'start_execution_time' => sanitize_text_field($_POST['start_execution_time'] ?? ''),
             'next_execution_display' => $cleaned_next_execution,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql')
@@ -2474,9 +2403,7 @@ $('#cancel-edit').click(function() {
             $this->update_next_execution_time($genre_id, $setting);
             
             // 個別スケジュールを設定
-            if (!empty($setting['start_execution_time'])) {
-                $this->schedule_genre_auto_posting($genre_id, $setting);
-            }
+            $this->schedule_genre_auto_posting($genre_id, $setting);
         } else {
             // 自動投稿が無効な場合、次回実行時刻とログをクリア
             error_log('Genre Settings Save - Auto posting disabled, clearing execution time and logs');
@@ -3323,8 +3250,8 @@ $('#cancel-edit').click(function() {
         $genre_settings = $this->get_genre_settings();
         
         foreach ($genre_settings as $genre_id => $setting) {
-            // 自動投稿が有効で、開始実行日時が設定されている場合のみスケジュール
-            if (isset($setting['auto_posting']) && $setting['auto_posting'] && !empty($setting['start_execution_time'])) {
+            // 自動投稿が有効な場合のみスケジュール（開始実行日時は不要）
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
                 $this->schedule_genre_auto_posting($genre_id, $setting);
             }
         }
@@ -3360,7 +3287,7 @@ $('#cancel-edit').click(function() {
     }
     
     /**
-     * 個別ジャンルの自動投稿スケジュール設定
+     * 個別ジャンルの自動投稿スケジュール設定（cronジョブ設定に基づく）
      */
     private function schedule_genre_auto_posting($genre_id, $setting) {
         $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
@@ -3368,31 +3295,21 @@ $('#cancel-edit').click(function() {
         // 既存のスケジュールをクリア
         wp_clear_scheduled_hook($hook_name);
         
-        // 開始実行日時を取得
-        $datetime = $setting['start_execution_time'];
-        
-        // WordPressのローカルタイムゾーンでのタイムスタンプを取得
-        $local_timestamp = strtotime($datetime);
-        
-        // 現在時刻と比較（両方ともWordPressローカルタイム）
+        // cronジョブ設定に基づいて実行時刻を決定
+        // サーバーのcronジョブが実行される時刻に合わせて設定
         $current_time = current_time('timestamp');
         
-        if ($local_timestamp > $current_time) {
-            // 未来の時刻の場合はそのまま使用
-            $timestamp = $local_timestamp;
-        } else {
-            // 過去の時刻の場合は次回実行時刻を計算
-            $timestamp = $this->calculate_next_execution_from_start_time($setting, $local_timestamp);
-        }
+        // 次回のcronジョブ実行時刻を計算（1時間後から開始）
+        $next_execution = $current_time + (60 * 60);
         
         // UTCタイムスタンプに変換してcronに登録
-        $utc_timestamp = get_gmt_from_date(date('Y-m-d H:i:s', $timestamp), 'U');
+        $utc_timestamp = get_gmt_from_date(date('Y-m-d H:i:s', $next_execution), 'U');
         
         // 単発イベントとしてスケジュール
         $scheduled = wp_schedule_single_event($utc_timestamp, $hook_name, array($genre_id));
         
         if ($scheduled) {
-            error_log('Genre Auto Posting - Successfully scheduled for genre ' . $setting['genre_name'] . ' at: ' . date('Y-m-d H:i:s', $timestamp) . ' (Local) / ' . date('Y-m-d H:i:s', $utc_timestamp) . ' (UTC)');
+            error_log('Genre Auto Posting - Successfully scheduled for genre ' . $setting['genre_name'] . ' at: ' . date('Y-m-d H:i:s', $next_execution) . ' (Local) / ' . date('Y-m-d H:i:s', $utc_timestamp) . ' (UTC)');
         } else {
             error_log('Genre Auto Posting - Failed to schedule for genre ' . $setting['genre_name']);
         }
@@ -3994,21 +3911,9 @@ $('#cancel-edit').click(function() {
     private function update_next_execution_time($genre_id, $setting) {
         $now = current_time('timestamp');
         
-        // 開始実行日時が設定されている場合
-        if (!empty($setting['start_execution_time'])) {
-            $start_time = strtotime($setting['start_execution_time']);
-            
-            // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
-            if ($start_time > $now) {
-                $next_execution_time = $start_time;
-            } else {
-                // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
-                $next_execution_time = $this->calculate_next_execution_from_start_time($setting, $start_time);
-            }
-        } else {
-            // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度分後
-            $next_execution_time = $this->calculate_next_execution_from_now($setting, $now);
-        }
+        // cronジョブ設定に基づいて次回実行時刻を計算
+        // サーバーのcronジョブが実行される時刻に合わせて設定
+        $next_execution_time = $now + (60 * 60); // 1時間後から開始
         
         // デバッグログ
         error_log('Update Next Execution Time - Genre ID: ' . $genre_id . ', Next execution: ' . date('Y-m-d H:i:s', $next_execution_time));
@@ -4297,21 +4202,9 @@ $('#cancel-edit').click(function() {
         $now = current_time('timestamp');
         $next_execution_time = $now;
         
-        // 開始実行日時が設定されている場合は、その設定を優先
-        if (!empty($setting['start_execution_time'])) {
-            $start_time = strtotime($setting['start_execution_time']);
-            
-            // 開始日時が現在時刻より後の場合は、その日時を次回実行時刻とする
-            if ($start_time > $now) {
-                $next_execution_time = $start_time;
-            } else {
-                // 開始日時が過去の場合は、開始日時から投稿頻度に基づいて計算
-                $next_execution_time = $this->calculate_next_execution_from_start_time($setting, $start_time);
-            }
-        } else {
-            // 開始実行日時が設定されていない場合は、現在時刻から投稿頻度に基づいて計算
-            $next_execution_time = $this->calculate_next_execution_from_now($setting, $now);
-        }
+        // cronジョブ設定に基づいて次回実行時刻を計算
+        // サーバーのcronジョブが実行される時刻に合わせて設定
+        $next_execution_time = $now + (60 * 60); // 1時間後から開始
         
         // 正しいスケジュールを設定
         update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);

@@ -637,3 +637,11 @@ Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servna
 [2025-09-12 07:35:51] wp-cli経由でNews Crawlerを実行しました
 [2025-09-12 07:35:51] News Crawler Cron 実行終了
 ---
+[2025-09-12 19:00:01] News Crawler Cron 実行開始
+[2025-09-12 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
+[2025-09-12 19:00:01] WordPressパス: /var/www/html/
+[2025-09-12 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-12 19:00:01] Docker環境で実行中...
+[2025-09-12 19:00:01] Docker環境でwp-cliが見つかりません
+[2025-09-12 19:00:01] News Crawler Cron 実行終了
+---
