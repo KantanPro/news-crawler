@@ -52,6 +52,8 @@ class NewsCrawlerUpdater {
         add_filter('site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
+        // コピー直後にGitHub由来のフォルダ名を正規のスラッグへ統一
+        add_filter('upgrader_post_install', array($this, 'rename_github_source'), 9, 3);
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
         add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 10, 3);
         
@@ -285,9 +287,24 @@ class NewsCrawlerUpdater {
         
         // バージョン情報を整理
         $normalized_version = ltrim($data['tag_name'], 'v');
+        // 配布アセット(zip)があればそれを優先（ルートフォルダ名を正しく保つため）
+        $download_url = isset($data['zipball_url']) ? $data['zipball_url'] : '';
+        if (isset($data['assets']) && is_array($data['assets'])) {
+            foreach ($data['assets'] as $asset) {
+                if (!empty($asset['browser_download_url']) && preg_match('/\.zip$/i', $asset['browser_download_url'])) {
+                    // 名前に news-crawler を含むzipを優先
+                    if (!empty($asset['name']) && stripos($asset['name'], 'news-crawler') !== false) {
+                        $download_url = $asset['browser_download_url'];
+                        break;
+                    }
+                    // どれでもzipがあれば最後に採用
+                    $download_url = $asset['browser_download_url'];
+                }
+            }
+        }
         $version_info = array(
             'version' => $normalized_version,
-            'download_url' => isset($data['zipball_url']) ? $data['zipball_url'] : '',
+            'download_url' => $download_url,
             'published_at' => isset($data['published_at']) ? $data['published_at'] : '',
             'description' => isset($data['body']) && $data['body'] ? $data['body'] : '',
             'changelog' => $this->get_changelog_for_version($normalized_version),
@@ -432,6 +449,59 @@ class NewsCrawlerUpdater {
         }
         
         return $response;
+    }
+
+    /**
+     * GitHub由来のフォルダ名を正規スラッグに統一
+     */
+    public function rename_github_source($response, $hook_extra, $result) {
+        if (!isset($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_basename) {
+            return $response;
+        }
+        if (empty($result) || empty($result['destination']) || empty($result['source'])) {
+            return $response;
+        }
+        $destination = trailingslashit($result['destination']);
+        $source      = trailingslashit($result['source']);
+
+        // 期待する最終パス
+        $expected_dir = trailingslashit(WP_PLUGIN_DIR) . 'news-crawler/';
+
+        // すでに正しい場所にある場合は何もしない
+        if (untrailingslashit($destination) === untrailingslashit($expected_dir)) {
+            return $response;
+        }
+
+        // source が news-crawler-* のような一時ディレクトリなら、expected_dir へリネーム
+        if (strpos(basename($source), 'news-crawler') === 0) {
+            // 既存の expected_dir を削除（古い残骸回避）
+            if (is_dir($expected_dir)) {
+                // 安全に削除
+                $this->rmdir_recursive($expected_dir);
+            }
+            // 上位に移動/リネーム
+            @rename($source, $expected_dir);
+            // destination を更新
+            $result['destination'] = $expected_dir;
+            $response = $result;
+        }
+
+        return $response;
+    }
+
+    private function rmdir_recursive($dir) {
+        if (!is_dir($dir)) return;
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path)) {
+                $this->rmdir_recursive($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
     
     
