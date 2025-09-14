@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-14 22:45:00 (デバッグ機能強化版)
+# 修正版 - 2025-09-15 09:00:00 (本番環境デバッグ強化版 + 次回実行時刻修正)
 
 set -euo pipefail
 
@@ -158,6 +158,9 @@ ini_set('mysql.connect_timeout', 10);
 set_time_limit(110);
 
 echo "[PHP] 実行開始 - ディレクトリ: " . getcwd() . "\n";
+echo "[PHP] PHP版本: " . phpversion() . "\n";
+echo "[PHP] 現在時刻: " . date('Y-m-d H:i:s') . "\n";
+echo "[PHP] メモリ制限: " . ini_get('memory_limit') . "\n";
 
 // WordPressパスの動的検出（新しいパスを優先）
 \$wp_paths = array(
@@ -250,6 +253,16 @@ echo "[PHP] スクリプト実行完了\n";
 EOF
 
     cd "$WP_PATH"
+    
+    # デバッグ: PHPスクリプト実行前の状態をログに記録
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスクリプト実行前の状態:" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] - 現在のディレクトリ: $(pwd)" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] - PHPファイルのサイズ: $(wc -c < "$TEMP_PHP_FILE" 2>/dev/null || echo "不明")" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] - PHPファイルの存在確認: $([ -f "$TEMP_PHP_FILE" ] && echo "存在する" || echo "存在しない")" >> "$LOG_FILE"
+    
+    # PHPスクリプトの実行
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスクリプト実行開始..." >> "$LOG_FILE"
+    
     if command -v timeout &> /dev/null; then
         timeout 120s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
         PHP_STATUS=$?
@@ -257,12 +270,22 @@ EOF
         "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
         PHP_STATUS=$?
     fi
+    
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスクリプト実行完了" >> "$LOG_FILE"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: $PHP_STATUS" >> "$LOG_FILE"
+    
+    # 一時ファイルのクリーンアップ
     rm -f "$TEMP_PHP_FILE"
+    
     if [ "$PHP_STATUS" -eq 0 ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー (exit=$PHP_STATUS)" >> "$LOG_FILE"
+        
+        # エラー時の追加デバッグ情報
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] エラーデバッグ情報:" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] - PHPバージョン: $("$PHP_CMD" -v 2>/dev/null | head -1 || echo "取得失敗")" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] - wp-load.php存在確認: $([ -f "/virtual/kantan/public_html/wp-load.php" ] && echo "存在する" || echo "存在しない")" >> "$LOG_FILE"
     fi
 fi
 
