@@ -320,6 +320,9 @@ class NewsCrawlerCronSettings {
             }
         }
         
+        // 設定保存時にシェルスクリプトを自動生成
+        $this->auto_generate_script_on_save($sanitized);
+        
         return $sanitized;
     }
     
@@ -985,6 +988,48 @@ echo \"---\" >> \"\$LOG_FILE\"
         }
         
         return false;
+    }
+    
+    /**
+     * 設定保存時にシェルスクリプトを自動生成
+     */
+    private function auto_generate_script_on_save($sanitized) {
+        // シェルスクリプト名を取得
+        $script_name = isset($sanitized['shell_script_name']) ? $sanitized['shell_script_name'] : 'news-crawler-cron.sh';
+        
+        // スクリプトの内容を生成
+        $script_content = $this->generate_script_content();
+        
+        // プラグインディレクトリの書き込み権限をチェック
+        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
+        
+        if (!is_writable(NEWS_CRAWLER_PLUGIN_DIR)) {
+            // 代替手段として、WordPressのアップロードディレクトリを試す
+            $upload_dir = wp_upload_dir();
+            if (is_writable($upload_dir['basedir'])) {
+                $script_path = $upload_dir['basedir'] . '/' . $script_name;
+            } else {
+                // どちらも書き込み不可の場合はスキップ
+                error_log('News Crawler: シェルスクリプトの自動生成をスキップしました（書き込み権限なし）');
+                return false;
+            }
+        }
+        
+        // ファイルを作成
+        $result = file_put_contents($script_path, $script_content, LOCK_EX);
+        
+        if ($result !== false) {
+            // 実行権限を設定
+            chmod($script_path, 0755);
+            
+            // ログに記録
+            error_log("News Crawler: 設定保存時にシェルスクリプトを自動生成しました: " . $script_path);
+            
+            return true;
+        } else {
+            error_log('News Crawler: シェルスクリプトの自動生成に失敗しました: ' . $script_path);
+            return false;
+        }
     }
     
     /**
