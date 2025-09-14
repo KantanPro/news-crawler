@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.92-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.92)
+[![Version](https://img.shields.io/badge/version-2.3.93-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.93)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -169,12 +169,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
 
-- **v2.3.92** (2025-09-15): Improved cron script with enhanced auto-posting functionality
-  - Improved cron script: added debug information for auto-posting functionality
-  - Modified to return execution results
-  - Improved next execution time calculation based on posting frequency
-  - Enhanced execution status monitoring capabilities
-  - Achieved more stable cron execution
+- **v2.3.93** (2025-09-15): Major GitHub update system improvements
+  - Fixed update notification display issues
+  - Implemented more robust update check logic
+  - Added automatic reactivation and safe reload functionality
+  - Enhanced debug functionality
+  - Achieved more stable update process
   - Enhanced plugin reliability
 
 - **v2.3.91** (2025-09-14): Improved cron script with path priority optimization
