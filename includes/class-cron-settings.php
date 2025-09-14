@@ -785,13 +785,17 @@ set_time_limit(110);
 echo \"[PHP] before require: \" . getcwd() . \"\\n\";
 
 require_once('" . $wp_path . "wp-load.php');
+echo \"[PHP] after require: WordPress loaded successfully\\n\";
 
+echo \"[PHP] checking class NewsCrawlerGenreSettings\\n\";
 if (class_exists('NewsCrawlerGenreSettings')) {
+    echo \"[PHP] class found, getting instance\\n\";
     \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+    echo \"[PHP] executing auto posting\\n\";
     \$genre_settings->execute_auto_posting();
-    echo 'News Crawler自動投稿を実行しました';
+    echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
 } else {
-    echo 'News CrawlerGenreSettingsクラスが見つかりません';
+    echo \"[PHP] News CrawlerGenreSettingsクラスが見つかりません\\n\";
 }
 ?>
 EOF
