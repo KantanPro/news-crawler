@@ -778,7 +778,7 @@ else
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once('$WP_PATH/wp-load.php');
+require_once('" . $wp_path . "wp-load.php');
 
 if (class_exists('NewsCrawlerGenreSettings')) {
     \$genre_settings = NewsCrawlerGenreSettings::get_instance();
