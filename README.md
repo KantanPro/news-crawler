@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.78-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.78)
+[![Version](https://img.shields.io/badge/version-2.3.79-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.79)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,13 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.79** (2025-09-14): Added GitHub folder name normalization and asset download URL prioritization
+  - Added GitHub folder name normalization to standard slug
+  - Implemented asset download URL prioritization logic
+  - Achieved more consistent folder name management
+  - Improved distribution process
+  - Enhanced plugin distribution quality
 
 - **v2.3.78** (2025-09-14): Added automatic shell script generation on settings save
   - Added automatic shell script generation on settings save
