@@ -790,12 +790,12 @@ if (class_exists('NewsCrawlerGenreSettings')) {
 ?>
 EOF
 
-    cd "\$WP_PATH"
+    cd \"\$WP_PATH\"
     if command -v timeout &> /dev/null; then
-        timeout 120s "\$PHP_CMD" "\$TEMP_PHP_FILE" >> "\$LOG_FILE" 2>&1
+        timeout 120s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
     else
-        "\$PHP_CMD" "\$TEMP_PHP_FILE" >> "\$LOG_FILE" 2>&1
+        \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
     fi
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
