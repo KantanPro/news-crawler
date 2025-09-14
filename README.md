@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.88-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.88)
+[![Version](https://img.shields.io/badge/version-2.3.89-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.3.89)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.3.89** (2025-09-14): Improved cron script with path detection optimization
+  - Improved cron script: changed wp-config.php alternative path priority order
+  - Added new paths to wp-load.php dynamic detection
+  - Improved to use higher priority paths
+  - Enhanced path detection accuracy
+  - Achieved more stable cron execution
+  - Enhanced plugin reliability
 
 - **v2.3.88** (2025-09-14): Improved cron script with Docker environment support
   - Improved cron script: added News Crawler execution in Docker environment
