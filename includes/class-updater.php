@@ -229,18 +229,52 @@ class NewsCrawlerUpdater {
             }
         }
         
-        // GitHub APIから最新リリース情報を取得
+        // GitHub API共通ヘッダー
+        $headers = array(
+            'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
+            'Accept' => 'application/vnd.github.v3+json',
+            'Cache-Control' => 'no-cache'
+        );
+        // オプションのトークン対応（レート制限回避）
+        if (defined('NEWS_CRAWLER_GITHUB_TOKEN') && NEWS_CRAWLER_GITHUB_TOKEN) {
+            $headers['Authorization'] = 'Bearer ' . NEWS_CRAWLER_GITHUB_TOKEN;
+        }
+        
+        // /releases/latest で取得を試行
         $response = wp_remote_get($this->github_api_url, array(
-            'timeout' => 10,
-            'headers' => array(
-                'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
-                'Accept' => 'application/vnd.github.v3+json',
-                'Cache-Control' => 'no-cache'
-            )
+            'timeout' => 15,
+            'headers' => $headers,
         ));
         
-        if (is_wp_error($response)) {
-            error_log('News Crawler: GitHub API request failed: ' . $response->get_error_message());
+        $data = null;
+        if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+        }
+        
+        // latestが取れない、または下書き/プレリリースの場合は /releases から安定版を探索
+        if (!$data || !isset($data['tag_name']) || !empty($data['draft']) || !empty($data['prerelease'])) {
+            $releases_url = 'https://api.github.com/repos/KantanPro/news-crawler/releases';
+            $resp2 = wp_remote_get($releases_url, array(
+                'timeout' => 15,
+                'headers' => $headers,
+            ));
+            if (!is_wp_error($resp2) && wp_remote_retrieve_response_code($resp2) === 200) {
+                $list = json_decode(wp_remote_retrieve_body($resp2), true);
+                if (is_array($list)) {
+                    foreach ($list as $release) {
+                        if (!empty($release['draft']) || !empty($release['prerelease'])) {
+                            continue;
+                        }
+                        if (isset($release['tag_name'])) {
+                            $data = $release;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!$data || !isset($data['tag_name'])) {
             // エラー時は古いキャッシュがあれば返す
             $old_cached = get_transient('news_crawler_latest_version_backup');
             if ($old_cached !== false) {
@@ -249,39 +283,19 @@ class NewsCrawlerUpdater {
             return false;
         }
         
-        $response_code = wp_remote_retrieve_response_code($response);
-        if ($response_code !== 200) {
-            error_log('News Crawler: GitHub API returned status code: ' . $response_code);
-            // レート制限の場合は古いキャッシュを返す
-            if ($response_code === 403) {
-                $old_cached = get_transient('news_crawler_latest_version_backup');
-                if ($old_cached !== false) {
-                    return $old_cached;
-                }
-            }
-            return false;
-        }
-        
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        
-        if (!$data || !isset($data['tag_name'])) {
-            error_log('News Crawler: Invalid GitHub API response');
-            return false;
-        }
-        
         // バージョン情報を整理
+        $normalized_version = ltrim($data['tag_name'], 'v');
         $version_info = array(
-            'version' => ltrim($data['tag_name'], 'v'),
-            'download_url' => $data['zipball_url'],
-            'published_at' => $data['published_at'],
-            'description' => $data['body'] ?: '',
-            'changelog' => $this->get_changelog_for_version(ltrim($data['tag_name'], 'v')),
+            'version' => $normalized_version,
+            'download_url' => isset($data['zipball_url']) ? $data['zipball_url'] : '',
+            'published_at' => isset($data['published_at']) ? $data['published_at'] : '',
+            'description' => isset($data['body']) && $data['body'] ? $data['body'] : '',
+            'changelog' => $this->get_changelog_for_version($normalized_version),
             'prerelease' => isset($data['prerelease']) ? $data['prerelease'] : false,
             'draft' => isset($data['draft']) ? $data['draft'] : false
         );
         
-        // 15分キャッシュ（より頻繁なチェック）
+        // 15分キャッシュ
         set_transient('news_crawler_latest_version', $version_info, 15 * MINUTE_IN_SECONDS);
         // バックアップキャッシュ（24時間）
         set_transient('news_crawler_latest_version_backup', $version_info, DAY_IN_SECONDS);
