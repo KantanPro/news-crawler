@@ -84,8 +84,8 @@ class NewsCrawlerUpdater {
             return $transient;
         }
         
-        // $transient が null の場合は防御的に初期化
-        if ($transient === null) {
+        // $transient が null または false の場合は防御的に初期化
+        if ($transient === null || $transient === false) {
             $transient = new stdClass();
         }
         
