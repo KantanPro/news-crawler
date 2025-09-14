@@ -3307,6 +3307,13 @@ $('#cancel-edit').click(function() {
         }
         
         error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
+        
+        // 実行結果を返す
+        return array(
+            'executed_count' => $executed_count,
+            'skipped_count' => $skipped_count,
+            'total_genres' => count($genre_settings)
+        );
     }
     
     /**
@@ -3667,6 +3674,12 @@ $('#cancel-edit').click(function() {
         $last_execution = get_option('news_crawler_last_execution_' . $setting['id'], 0);
         $frequency = $setting['posting_frequency'] ?? 'daily';
         
+        // 初回実行の場合（last_executionが0または空の場合）
+        if ($last_execution == 0 || empty($last_execution)) {
+            error_log('Next Execution - Genre ' . $setting['genre_name'] . ' - First execution, returning current time');
+            return current_time('timestamp'); // 即座に実行可能
+        }
+        
         switch ($frequency) {
             case 'daily':
                 return $last_execution + (24 * 60 * 60); // 24時間後
@@ -3840,17 +3853,38 @@ $('#cancel-edit').click(function() {
     private function update_next_execution_time($genre_id, $setting) {
         $now = current_time('timestamp');
         
-        // cronジョブ設定に基づいて次回実行時刻を計算
-        // サーバーのcronジョブが実行される時刻に合わせて設定
-        $next_execution_time = $now + (60 * 60); // 1時間後から開始
+        // 投稿頻度に基づいて次回実行時刻を正しく計算
+        $frequency = $setting['posting_frequency'] ?? 'daily';
+        
+        switch ($frequency) {
+            case 'daily':
+                $next_execution_time = $now + (24 * 60 * 60); // 24時間後
+                break;
+            case 'weekly':
+                $next_execution_time = $now + (7 * 24 * 60 * 60); // 7日後
+                break;
+            case 'monthly':
+                $next_execution_time = $now + (30 * 24 * 60 * 60); // 30日後
+                break;
+            case 'custom':
+                $days = $setting['custom_frequency_days'] ?? 7;
+                $next_execution_time = $now + ($days * 24 * 60 * 60);
+                break;
+            default:
+                $next_execution_time = $now + (24 * 60 * 60); // デフォルトは24時間後
+                break;
+        }
         
         // デバッグログ
-        error_log('Update Next Execution Time - Genre ID: ' . $genre_id . ', Next execution: ' . date('Y-m-d H:i:s', $next_execution_time));
+        error_log('Update Next Execution Time - Genre ID: ' . $genre_id . ' (' . $setting['genre_name'] . ')');
+        error_log('Update Next Execution Time - Frequency: ' . $frequency);
+        error_log('Update Next Execution Time - Current time: ' . date('Y-m-d H:i:s', $now));
+        error_log('Update Next Execution Time - Next execution: ' . date('Y-m-d H:i:s', $next_execution_time));
         
-        // 最後の実行時刻を更新
-        update_option('news_crawler_last_execution_' . $genre_id, $next_execution_time);
+        // 最後の実行時刻を現在時刻で更新
+        update_option('news_crawler_last_execution_' . $genre_id, $now);
         
-        // 次回実行時刻も保存
+        // 次回実行時刻を保存
         update_option('news_crawler_next_execution_' . $genre_id, $next_execution_time);
     }
     

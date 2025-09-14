@@ -63,7 +63,26 @@ if (class_exists('NewsCrawlerGenreSettings')) {
     echo "[PHP] クラスが見つかりました。インスタンスを取得中\n";
     $genre_settings = NewsCrawlerGenreSettings::get_instance();
     echo "[PHP] 自動投稿を実行中\n";
-    $genre_settings->execute_auto_posting();
+    
+    // デバッグ用にジャンル設定の状況を確認
+    $debug_info = array();
+    if (method_exists($genre_settings, 'get_genre_settings')) {
+        $genre_configs = $genre_settings->get_genre_settings();
+        $debug_info['genre_count'] = count($genre_configs);
+        $debug_info['auto_posting_enabled'] = 0;
+        
+        foreach ($genre_configs as $genre_id => $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                $debug_info['auto_posting_enabled']++;
+                echo "[PHP] 自動投稿有効ジャンル: " . $setting['genre_name'] . " (ID: " . $genre_id . ")\n";
+            }
+        }
+    }
+    
+    echo "[PHP] デバッグ情報: " . json_encode($debug_info) . "\n";
+    
+    $result = $genre_settings->execute_auto_posting();
+    echo "[PHP] 自動投稿実行結果: " . var_export($result, true) . "\n";
     echo "[PHP] News Crawler自動投稿を実行しました\n";
 } else {
     echo "[PHP] News CrawlerGenreSettingsクラスが見つかりません\n";
@@ -186,6 +205,24 @@ if (class_exists('NewsCrawlerGenreSettings')) {
         \$genre_settings = NewsCrawlerGenreSettings::get_instance();
         echo "[PHP] インスタンス取得成功\n";
         echo "[PHP] 自動投稿を実行中\n";
+        
+        // デバッグ用にジャンル設定の状況を確認
+        \$debug_info = array();
+        if (method_exists(\$genre_settings, 'get_genre_settings')) {
+            \$genre_configs = \$genre_settings->get_genre_settings();
+            \$debug_info['genre_count'] = count(\$genre_configs);
+            \$debug_info['auto_posting_enabled'] = 0;
+            
+            foreach (\$genre_configs as \$genre_id => \$setting) {
+                if (isset(\$setting['auto_posting']) && \$setting['auto_posting']) {
+                    \$debug_info['auto_posting_enabled']++;
+                    echo "[PHP] 自動投稿有効ジャンル: " . \$setting['genre_name'] . " (ID: " . \$genre_id . ")\n";
+                }
+            }
+        }
+        
+        echo "[PHP] デバッグ情報: " . json_encode(\$debug_info) . "\n";
+        
         \$result = \$genre_settings->execute_auto_posting();
         echo "[PHP] 自動投稿実行結果: " . var_export(\$result, true) . "\n";
         echo "[PHP] News Crawler自動投稿を実行しました\n";
