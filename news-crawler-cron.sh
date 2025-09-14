@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-14 05:19:14 (wp-load起動・ログ改善)
+# 修正版 - 2025-09-14 09:24:32 (wp-load起動・ログ改善)
 
 set -euo pipefail
 
@@ -73,22 +73,44 @@ else
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+ini_set('default_socket_timeout', 10);
+ini_set('mysqli.default_socket_timeout', 10);
+ini_set('mysql.connect_timeout', 10);
+set_time_limit(110);
 
-require_once('/wp-load.php');
+echo "[PHP] before require: " . getcwd() . "\n";
 
+require_once('/var/www/html/wp-load.php');
+echo "[PHP] after require: WordPress loaded successfully\n";
+
+echo "[PHP] checking class NewsCrawlerGenreSettings\n";
 if (class_exists('NewsCrawlerGenreSettings')) {
+    echo "[PHP] class found, getting instance\n";
     $genre_settings = NewsCrawlerGenreSettings::get_instance();
+    echo "[PHP] executing auto posting\n";
     $genre_settings->execute_auto_posting();
-    echo 'News Crawler自動投稿を実行しました';
+    echo "[PHP] News Crawler自動投稿を実行しました\n";
 } else {
-    echo 'News CrawlerGenreSettingsクラスが見つかりません';
+    echo "[PHP] News CrawlerGenreSettingsクラスが見つかりません\n";
 }
 ?>
 EOF
 
-    "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1 || echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー" >> "$LOG_FILE"
+    cd "$WP_PATH"
+    if command -v timeout &> /dev/null; then
+        timeout 120s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
+        PHP_STATUS=$?
+    else
+        "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
+        PHP_STATUS=$?
+    fi
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: $PHP_STATUS" >> "$LOG_FILE"
     rm -f "$TEMP_PHP_FILE"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
+    if [ "$PHP_STATUS" -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー (exit=$PHP_STATUS)" >> "$LOG_FILE"
+    fi
 fi
 
 # ログに実行終了を記録
