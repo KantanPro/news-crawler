@@ -777,6 +777,12 @@ else
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+ini_set('default_socket_timeout', 10);
+ini_set('mysqli.default_socket_timeout', 10);
+ini_set('mysql.connect_timeout', 10);
+set_time_limit(110);
+
+echo \"[PHP] before require: \" . getcwd() . \"\\n\";
 
 require_once('" . $wp_path . "wp-load.php');
 
