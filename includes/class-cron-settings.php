@@ -717,7 +717,7 @@ WP_PATH=\"\$(dirname \"\$(dirname \"\$(dirname \"\$SCRIPT_DIR\")\")\")/\"
 # WordPressのパスが正しいかチェック（wp-config.phpの存在確認）
 if [ ! -f \"\$WP_PATH/wp-config.php\" ]; then
     # 代替パスを試行
-    for alt_path in \"/var/www/html/\" \"/virtual/kantan/public_html/\" \"{$wp_path}\" \"\$(dirname \"\$SCRIPT_DIR\")/../../\"; do
+    for alt_path in \"/virtual/kantan/public_html/\" \"/var/www/html/\" \"{$wp_path}\" \"\$(dirname \"\$SCRIPT_DIR\")/../../\"; do
         if [ -f \"\$alt_path/wp-config.php\" ]; then
             WP_PATH=\"\$alt_path\"
             break
@@ -844,11 +844,12 @@ set_time_limit(110);
 
 echo \"[PHP] 実行開始 - ディレクトリ: \" . getcwd() . \"\\n\";
 
-// WordPressパスの動的検出
+// WordPressパスの動的検出（新しいパスを優先）
 \$wp_paths = array(
-    '/var/www/html/wp-load.php',
     '/virtual/kantan/public_html/wp-load.php',
-    dirname(__FILE__) . '/../../../wp-load.php'
+    '/var/www/html/wp-load.php',
+    dirname(__FILE__) . '/../../../wp-load.php',
+    \$_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'
 );
 
 \$wp_load_path = null;
