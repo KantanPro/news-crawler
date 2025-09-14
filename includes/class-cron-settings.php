@@ -790,9 +790,21 @@ if (class_exists('NewsCrawlerGenreSettings')) {
 ?>
 EOF
 
-    \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1 || echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー\" >> \"\$LOG_FILE\"
+    cd "\$WP_PATH"
+    if command -v timeout &> /dev/null; then
+        timeout 120s "\$PHP_CMD" "\$TEMP_PHP_FILE" >> "\$LOG_FILE" 2>&1
+        PHP_STATUS=\$?
+    else
+        "\$PHP_CMD" "\$TEMP_PHP_FILE" >> "\$LOG_FILE" 2>&1
+        PHP_STATUS=\$?
+    fi
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
     rm -f \"\$TEMP_PHP_FILE\"
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
+    if [ \"\$PHP_STATUS\" -eq 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
+    else
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー (exit=\$PHP_STATUS)\" >> \"\$LOG_FILE\"
+    fi
 fi
 
 # ログに実行終了を記録
