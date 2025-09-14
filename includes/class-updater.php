@@ -68,6 +68,9 @@ class NewsCrawlerUpdater {
         
         // 更新後の自動有効化処理
         add_action('upgrader_process_complete', array($this, 'handle_auto_activation'), 10, 2);
+
+        // 有効化直後の管理画面リロード処理
+        add_action('admin_init', array($this, 'maybe_reload_admin_after_activation'));
     }
     
     
@@ -587,9 +590,38 @@ class NewsCrawlerUpdater {
                     }
                 }
                 
+                // 次回の管理画面読み込み時に一度だけリロードさせるフラグをセット
+                set_transient('news_crawler_admin_reload', 1, 5 * MINUTE_IN_SECONDS);
+                
                 // 更新前状態のキャッシュをクリア
                 delete_site_transient('news_crawler_pre_update_state');
             }
+        }
+    }
+
+    /**
+     * 有効化直後に一度だけ管理画面を安全にリロード
+     */
+    public function maybe_reload_admin_after_activation() {
+        if (!is_admin()) {
+            return;
+        }
+        if (!current_user_can('activate_plugins')) {
+            return;
+        }
+        $needs_reload = get_transient('news_crawler_admin_reload');
+        if (!$needs_reload) {
+            return;
+        }
+        // ループ回避のため一度だけフラグ付きで同一URLに遷移
+        if (!isset($_GET['nc_reloaded'])) {
+            $url = add_query_arg('nc_reloaded', '1');
+            if ($url) {
+                wp_safe_redirect($url);
+                exit;
+            }
+        } else {
+            delete_transient('news_crawler_admin_reload');
         }
     }
     
