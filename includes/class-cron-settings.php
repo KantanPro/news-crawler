@@ -782,21 +782,76 @@ ini_set('mysqli.default_socket_timeout', 10);
 ini_set('mysql.connect_timeout', 10);
 set_time_limit(110);
 
-echo \"[PHP] before require: \" . getcwd() . \"\\n\";
+echo \"[PHP] 実行開始 - ディレクトリ: \" . getcwd() . \"\\n\";
 
-require_once('" . $wp_path . "wp-load.php');
-echo \"[PHP] after require: WordPress loaded successfully\\n\";
+// WordPressパスの動的検出
+\$wp_paths = array(
+    '/var/www/html/wp-load.php',
+    '/virtual/kantan/public_html/wp-load.php',
+    dirname(__FILE__) . '/../../../wp-load.php'
+);
 
-echo \"[PHP] checking class NewsCrawlerGenreSettings\\n\";
+\$wp_load_path = null;
+foreach (\$wp_paths as \$path) {
+    if (file_exists(\$path)) {
+        \$wp_load_path = \$path;
+        echo \"[PHP] wp-load.phpを発見: \" . \$path . \"\\n\";
+        break;
+    }
+}
+
+if (!\$wp_load_path) {
+    echo \"[PHP] エラー: wp-load.phpが見つかりません\\n\";
+    echo \"[PHP] 検索したパス:\\n\";
+    foreach (\$wp_paths as \$path) {
+        echo \"[PHP] - \" . \$path . \" (存在しない)\\n\";
+    }
+    exit(1);
+}
+
+echo \"[PHP] wp-load.php読み込み開始: \" . \$wp_load_path . \"\\n\";
+require_once(\$wp_load_path);
+echo \"[PHP] WordPress読み込み完了\\n\";
+
+echo \"[PHP] WordPress関数確認中\\n\";
+if (function_exists('get_option')) {
+    echo \"[PHP] get_option関数: 利用可能\\n\";
+    \$site_url = get_option('siteurl');
+    echo \"[PHP] サイトURL: \" . \$site_url . \"\\n\";
+} else {
+    echo \"[PHP] エラー: get_option関数が利用できません\\n\";
+}
+
+echo \"[PHP] NewsCrawlerGenreSettingsクラスをチェック中\\n\";
 if (class_exists('NewsCrawlerGenreSettings')) {
-    echo \"[PHP] class found, getting instance\\n\";
-    \$genre_settings = NewsCrawlerGenreSettings::get_instance();
-    echo \"[PHP] executing auto posting\\n\";
-    \$genre_settings->execute_auto_posting();
-    echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
+    echo \"[PHP] クラスが見つかりました。インスタンスを取得中\\n\";
+    try {
+        \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+        echo \"[PHP] インスタンス取得成功\\n\";
+        echo \"[PHP] 自動投稿を実行中\\n\";
+        \$result = \$genre_settings->execute_auto_posting();
+        echo \"[PHP] 自動投稿実行結果: \" . var_export(\$result, true) . \"\\n\";
+        echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
+    } catch (Exception \$e) {
+        echo \"[PHP] エラー: \" . \$e->getMessage() . \"\\n\";
+        echo \"[PHP] スタックトレース: \" . \$e->getTraceAsString() . \"\\n\";
+    }
 } else {
     echo \"[PHP] News CrawlerGenreSettingsクラスが見つかりません\\n\";
+    echo \"[PHP] 利用可能なクラス一覧:\\n\";
+    \$declared_classes = get_declared_classes();
+    \$crawler_classes = array_filter(\$declared_classes, function(\$class) {
+        return strpos(\$class, 'NewsCrawler') !== false || strpos(\$class, 'Genre') !== false;
+    });
+    if (!empty(\$crawler_classes)) {
+        foreach (\$crawler_classes as \$class) {
+            echo \"[PHP] - \" . \$class . \"\\n\";
+        }
+    } else {
+        echo \"[PHP] News Crawler関連のクラスが見つかりません\\n\";
+    }
 }
+echo \"[PHP] スクリプト実行完了\\n\";
 ?>
 EOF
 
