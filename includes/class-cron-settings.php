@@ -704,7 +704,7 @@ class NewsCrawlerCronSettings {
         
         return "#!/bin/bash
 # News Crawler Cron Script
-# 修正版 - " . date('Y-m-d H:i:s') . " (wp-load起動・ログ改善)
+# 修正版 - " . date('Y-m-d H:i:s') . " (デバッグ機能強化版)
 
 set -euo pipefail
 
@@ -848,8 +848,7 @@ echo \"[PHP] 実行開始 - ディレクトリ: \" . getcwd() . \"\\n\";
 \$wp_paths = array(
     '/virtual/kantan/public_html/wp-load.php',
     '/var/www/html/wp-load.php',
-    dirname(__FILE__) . '/../../../wp-load.php',
-    \$_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'
+    dirname(__FILE__) . '/../../../wp-load.php'
 );
 
 \$wp_load_path = null;

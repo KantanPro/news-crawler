@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-14 09:24:32 (wp-load起動・ログ改善)
+# 修正版 - 2025-09-14 22:45:00 (デバッグ機能強化版)
 
 set -euo pipefail
 
@@ -12,8 +12,8 @@ WP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")/"
 
 # WordPressのパスが正しいかチェック（wp-config.phpの存在確認）
 if [ ! -f "$WP_PATH/wp-config.php" ]; then
-    # 代替パスを試行
-    for alt_path in "/var/www/html/" "/virtual/kantan/public_html/" "/var/www/html/" "$(dirname "$SCRIPT_DIR")/../../"; do
+    # 代替パスを試行（新しいパスを優先）
+    for alt_path in "/virtual/kantan/public_html/" "/var/www/html/" "$(dirname "$SCRIPT_DIR")/../../"; do
         if [ -f "$alt_path/wp-config.php" ]; then
             WP_PATH="$alt_path"
             break
@@ -33,8 +33,68 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: $SCRIPT_
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: $WP_PATH" >> "$LOG_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$LOG_FILE"
 
-# wp-cliが存在する場合は優先して使用
-if command -v wp &> /dev/null; then
+# Docker環境チェック（Mac開発環境用）
+if command -v docker &> /dev/null && docker ps --format "{{.Names}}" | grep -q "KantanPro_wordpress"; then
+    # Docker環境の場合
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でdocker exec経由でNews Crawlerを実行中..." >> "$LOG_FILE"
+    
+    CONTAINER_NAME="KantanPro_wordpress"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するコンテナ: $CONTAINER_NAME" >> "$LOG_FILE"
+    
+    # 一時的なPHPファイルを作成してコンテナ内で実行
+    TEMP_PHP_FILE="/tmp/news-crawler-cron-$(date +%s).php"
+    cat > "$TEMP_PHP_FILE" << 'DOCKER_EOF'
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('default_socket_timeout', 10);
+ini_set('mysqli.default_socket_timeout', 10);
+ini_set('mysql.connect_timeout', 10);
+set_time_limit(110);
+
+echo "[PHP] Docker環境での実行を開始\n";
+echo "[PHP] WordPressディレクトリ: " . getcwd() . "\n";
+
+require_once('/var/www/html/wp-load.php');
+echo "[PHP] WordPress読み込み完了\n";
+
+echo "[PHP] NewsCrawlerGenreSettingsクラスをチェック中\n";
+if (class_exists('NewsCrawlerGenreSettings')) {
+    echo "[PHP] クラスが見つかりました。インスタンスを取得中\n";
+    $genre_settings = NewsCrawlerGenreSettings::get_instance();
+    echo "[PHP] 自動投稿を実行中\n";
+    $genre_settings->execute_auto_posting();
+    echo "[PHP] News Crawler自動投稿を実行しました\n";
+} else {
+    echo "[PHP] News CrawlerGenreSettingsクラスが見つかりません\n";
+}
+?>
+DOCKER_EOF
+
+    # ホストの一時ファイルをコンテナにコピーして実行
+    docker cp "$TEMP_PHP_FILE" "$CONTAINER_NAME:/tmp/news-crawler-exec.php"
+    
+    if command -v timeout &> /dev/null; then
+        timeout 120s docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
+        PHP_STATUS=$?
+    else
+        docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
+        PHP_STATUS=$?
+    fi
+    
+    # 一時ファイルのクリーンアップ
+    rm -f "$TEMP_PHP_FILE"
+    docker exec "$CONTAINER_NAME" rm -f /tmp/news-crawler-exec.php 2>/dev/null
+    
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker exec exit status: $PHP_STATUS" >> "$LOG_FILE"
+    
+    if [ "$PHP_STATUS" -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でNews Crawlerを実行しました" >> "$LOG_FILE"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境での実行でエラー (exit=$PHP_STATUS)" >> "$LOG_FILE"
+    fi
+# wp-cliが存在する場合は優先して使用（サーバー環境）
+elif command -v wp &> /dev/null; then
     cd "$WP_PATH"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
     wp --path="$WP_PATH" eval "
@@ -78,21 +138,77 @@ ini_set('mysqli.default_socket_timeout', 10);
 ini_set('mysql.connect_timeout', 10);
 set_time_limit(110);
 
-echo "[PHP] before require: " . getcwd() . "\n";
+echo "[PHP] 実行開始 - ディレクトリ: " . getcwd() . "\n";
 
-require_once('/var/www/html/wp-load.php');
-echo "[PHP] after require: WordPress loaded successfully\n";
+// WordPressパスの動的検出（新しいパスを優先）
+\$wp_paths = array(
+    '/virtual/kantan/public_html/wp-load.php',
+    '/var/www/html/wp-load.php',
+    dirname(__FILE__) . '/../../../wp-load.php',
+    \$_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'
+);
 
-echo "[PHP] checking class NewsCrawlerGenreSettings\n";
+\$wp_load_path = null;
+foreach (\$wp_paths as \$path) {
+    if (file_exists(\$path)) {
+        \$wp_load_path = \$path;
+        echo "[PHP] wp-load.phpを発見: " . \$path . "\n";
+        break;
+    }
+}
+
+if (!\$wp_load_path) {
+    echo "[PHP] エラー: wp-load.phpが見つかりません\n";
+    echo "[PHP] 検索したパス:\n";
+    foreach (\$wp_paths as \$path) {
+        echo "[PHP] - " . \$path . " (存在しない)\n";
+    }
+    exit(1);
+}
+
+echo "[PHP] wp-load.php読み込み開始: " . \$wp_load_path . "\n";
+require_once(\$wp_load_path);
+echo "[PHP] WordPress読み込み完了\n";
+
+echo "[PHP] WordPress関数確認中\n";
+if (function_exists('get_option')) {
+    echo "[PHP] get_option関数: 利用可能\n";
+    \$site_url = get_option('siteurl');
+    echo "[PHP] サイトURL: " . \$site_url . "\n";
+} else {
+    echo "[PHP] エラー: get_option関数が利用できません\n";
+}
+
+echo "[PHP] NewsCrawlerGenreSettingsクラスをチェック中\n";
 if (class_exists('NewsCrawlerGenreSettings')) {
-    echo "[PHP] class found, getting instance\n";
-    $genre_settings = NewsCrawlerGenreSettings::get_instance();
-    echo "[PHP] executing auto posting\n";
-    $genre_settings->execute_auto_posting();
-    echo "[PHP] News Crawler自動投稿を実行しました\n";
+    echo "[PHP] クラスが見つかりました。インスタンスを取得中\n";
+    try {
+        \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+        echo "[PHP] インスタンス取得成功\n";
+        echo "[PHP] 自動投稿を実行中\n";
+        \$result = \$genre_settings->execute_auto_posting();
+        echo "[PHP] 自動投稿実行結果: " . var_export(\$result, true) . "\n";
+        echo "[PHP] News Crawler自動投稿を実行しました\n";
+    } catch (Exception \$e) {
+        echo "[PHP] エラー: " . \$e->getMessage() . "\n";
+        echo "[PHP] スタックトレース: " . \$e->getTraceAsString() . "\n";
+    }
 } else {
     echo "[PHP] News CrawlerGenreSettingsクラスが見つかりません\n";
+    echo "[PHP] 利用可能なクラス一覧:\n";
+    \$declared_classes = get_declared_classes();
+    \$crawler_classes = array_filter(\$declared_classes, function(\$class) {
+        return strpos(\$class, 'NewsCrawler') !== false || strpos(\$class, 'Genre') !== false;
+    });
+    if (!empty(\$crawler_classes)) {
+        foreach (\$crawler_classes as \$class) {
+            echo "[PHP] - " . \$class . "\n";
+        }
+    } else {
+        echo "[PHP] News Crawler関連のクラスが見つかりません\n";
+    }
 }
+echo "[PHP] スクリプト実行完了\n";
 ?>
 EOF
 
