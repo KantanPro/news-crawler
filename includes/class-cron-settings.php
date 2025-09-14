@@ -737,8 +737,68 @@ echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: \$SCRI
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: \$WP_PATH\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: \$PLUGIN_PATH\" >> \"\$LOG_FILE\"
 
-# wp-cliが存在する場合は優先して使用
-if command -v wp &> /dev/null; then
+# Docker環境チェック（Mac開発環境用）
+if command -v docker &> /dev/null && docker ps --format \"{{.Names}}\" | grep -q \"KantanPro_wordpress\"; then
+    # Docker環境の場合
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でdocker exec経由でNews Crawlerを実行中...\" >> \"\$LOG_FILE\"
+    
+    CONTAINER_NAME=\"KantanPro_wordpress\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 使用するコンテナ: \$CONTAINER_NAME\" >> \"\$LOG_FILE\"
+    
+    # 一時的なPHPファイルを作成してコンテナ内で実行
+    TEMP_PHP_FILE=\"/tmp/news-crawler-cron-\$(date +%s).php\"
+    cat > \"\$TEMP_PHP_FILE\" << 'DOCKER_EOF'
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('default_socket_timeout', 10);
+ini_set('mysqli.default_socket_timeout', 10);
+ini_set('mysql.connect_timeout', 10);
+set_time_limit(110);
+
+echo \"[PHP] Docker環境での実行を開始\\n\";
+echo \"[PHP] WordPressディレクトリ: \" . getcwd() . \"\\n\";
+
+require_once('/var/www/html/wp-load.php');
+echo \"[PHP] WordPress読み込み完了\\n\";
+
+echo \"[PHP] NewsCrawlerGenreSettingsクラスをチェック中\\n\";
+if (class_exists('NewsCrawlerGenreSettings')) {
+    echo \"[PHP] クラスが見つかりました。インスタンスを取得中\\n\";
+    \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+    echo \"[PHP] 自動投稿を実行中\\n\";
+    \$genre_settings->execute_auto_posting();
+    echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
+} else {
+    echo \"[PHP] News CrawlerGenreSettingsクラスが見つかりません\\n\";
+}
+?>
+DOCKER_EOF
+
+    # ホストの一時ファイルをコンテナにコピーして実行
+    docker cp \"\$TEMP_PHP_FILE\" \"\$CONTAINER_NAME:/tmp/news-crawler-exec.php\"
+    
+    if command -v timeout &> /dev/null; then
+        timeout 120s docker exec \"\$CONTAINER_NAME\" php /tmp/news-crawler-exec.php >> \"\$LOG_FILE\" 2>&1
+        PHP_STATUS=\$?
+    else
+        docker exec \"\$CONTAINER_NAME\" php /tmp/news-crawler-exec.php >> \"\$LOG_FILE\" 2>&1
+        PHP_STATUS=\$?
+    fi
+    
+    # 一時ファイルのクリーンアップ
+    rm -f \"\$TEMP_PHP_FILE\"
+    docker exec \"\$CONTAINER_NAME\" rm -f /tmp/news-crawler-exec.php 2>/dev/null
+    
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker exec exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
+    
+    if [ \"\$PHP_STATUS\" -eq 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
+    else
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker環境での実行でエラー (exit=\$PHP_STATUS)\" >> \"\$LOG_FILE\"
+    fi
+# wp-cliが存在する場合は優先して使用（サーバー環境）
+elif command -v wp &> /dev/null; then
     cd \"\$WP_PATH\"
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中...\" >> \"\$LOG_FILE\"
     wp --path=\"\$WP_PATH\" eval \"
