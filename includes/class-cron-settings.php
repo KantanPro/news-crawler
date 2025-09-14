@@ -701,7 +701,7 @@ class NewsCrawlerCronSettings {
         
         return "#!/bin/bash
 # News Crawler Cron Script
-# 修正版 - " . date('Y-m-d H:i:s') . "
+        # 修正版 - " . date('Y-m-d H:i:s') . " (PHPコマンド実行エラー修正)
 
 # スクリプトのディレクトリを取得
 SCRIPT_DIR=\"\$(cd \"\$(dirname \"\${BASH_SOURCE[0]}\")\" && pwd)\"
@@ -798,8 +798,26 @@ else
         
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: \$PHP_CMD\" >> \"\$LOG_FILE\"
         
-        # PHPコマンドを使用して実行
-        \$PHP_CMD -r \"
+        # 一時的なPHPファイルを作成して実行（-rオプションの問題を回避）
+        TEMP_PHP_FILE=\"/tmp/news-crawler-cron-\$(date +%s).php\"
+        
+        cat > \"\$TEMP_PHP_FILE\" << 'EOF'
+<?php
+require_once('wp-config.php');
+require_once('wp-includes/pluggable.php');
+
+if (class_exists('NewsCrawlerGenreSettings')) {
+    \$genre_settings = NewsCrawlerGenreSettings::get_instance();
+    \$genre_settings->execute_auto_posting();
+    echo 'News Crawler自動投稿を実行しました';
+} else {
+    echo 'NewsCrawlerGenreSettingsクラスが見つかりません';
+}
+?>
+EOF
+        
+        # PHPファイルを実行
+        \$PHP_CMD \"\$TEMP_PHP_FILE\"
             require_once('wp-config.php');
             require_once('wp-includes/pluggable.php');
             if (class_exists('NewsCrawlerGenreSettings')) {
