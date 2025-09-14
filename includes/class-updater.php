@@ -49,6 +49,7 @@ class NewsCrawlerUpdater {
         
         // WordPress更新システムにフック
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_updates'));
+        add_filter('site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
@@ -88,13 +89,7 @@ class NewsCrawlerUpdater {
             $transient = new stdClass();
         }
         
-        // プラグインの更新チェックが無効化されている場合はスキップ
-        if (isset($transient->no_update) && is_array($transient->no_update) && isset($transient->no_update[$this->plugin_basename])) {
-            // ただし、強制更新チェックの場合はスキップしない
-            if (!isset($_GET['force-check']) || $_GET['force-check'] != '1') {
-                return $transient;
-            }
-        }
+        // 以前のno_update状態に関わらず常に最新を評価（強制スキップは行わない）
         
         // get_plugin_data()を使ってローカルのプラグインバージョンを取得
         if (!function_exists('get_plugin_data')) {
@@ -223,10 +218,15 @@ class NewsCrawlerUpdater {
      * Get latest version from GitHub
      */
     private function get_latest_version() {
-        // キャッシュをチェック（1時間に短縮）
-        $cached = get_transient('news_crawler_latest_version');
-        if ($cached !== false) {
-            return $cached;
+        // 強制更新チェックが指定されている場合はキャッシュを無視
+        $force_refresh = (is_admin() && isset($_GET['force-check']) && $_GET['force-check'] == '1');
+        
+        // キャッシュをチェック（15分）
+        if (!$force_refresh) {
+            $cached = get_transient('news_crawler_latest_version');
+            if ($cached !== false) {
+                return $cached;
+            }
         }
         
         // GitHub APIから最新リリース情報を取得
@@ -281,8 +281,8 @@ class NewsCrawlerUpdater {
             'draft' => isset($data['draft']) ? $data['draft'] : false
         );
         
-        // 1時間キャッシュ（より頻繁なチェック）
-        set_transient('news_crawler_latest_version', $version_info, HOUR_IN_SECONDS);
+        // 15分キャッシュ（より頻繁なチェック）
+        set_transient('news_crawler_latest_version', $version_info, 15 * MINUTE_IN_SECONDS);
         // バックアップキャッシュ（24時間）
         set_transient('news_crawler_latest_version_backup', $version_info, DAY_IN_SECONDS);
         
