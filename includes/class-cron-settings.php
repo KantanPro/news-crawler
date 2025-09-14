@@ -716,8 +716,8 @@ WP_PATH=\"\$(dirname \"\$(dirname \"\$(dirname \"\$SCRIPT_DIR\")\")\")/\"
 
 # WordPressのパスが正しいかチェック（wp-config.phpの存在確認）
 if [ ! -f \"\$WP_PATH/wp-config.php\" ]; then
-    # 代替パスを試行
-    for alt_path in \"/virtual/kantan/public_html/\" \"/var/www/html/\" \"{$wp_path}\" \"\$(dirname \"\$SCRIPT_DIR\")/../../\"; do
+    # 代替パスを試行（新しいパスを優先）
+    for alt_path in \"/virtual/kantan/public_html/\" \"/var/www/html/\" \"\$(dirname \"\$SCRIPT_DIR\")/../../\"; do
         if [ -f \"\$alt_path/wp-config.php\" ]; then
             WP_PATH=\"\$alt_path\"
             break
