@@ -33,6 +33,33 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: $SCRIPT_
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: $WP_PATH" >> "$LOG_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$LOG_FILE"
 
+# 事前に使用するPHPコマンドを検出（全パス共通で使用）
+PHP_CMD=""
+PHP_SAPI=""
+detect_php_cli() {
+    for php_path in "/usr/bin/php" "/usr/local/bin/php" "/opt/homebrew/bin/php" "$(command -v php || true)"; do
+        if [ -n "$php_path" ] && [ -x "$php_path" ]; then
+            sapi="$($php_path -r 'echo php_sapi_name();' 2>/dev/null || true)"
+            if [ "$sapi" = "cli" ]; then
+                PHP_CMD="$php_path"
+                PHP_SAPI="$sapi"
+                return 0
+            fi
+        fi
+    done
+    # 最後の手段: 実行可能なものを採用（SAPIは不明）
+    for php_path in "/usr/bin/php" "/usr/local/bin/php" "/opt/homebrew/bin/php" "$(command -v php || true)"; do
+        if [ -n "$php_path" ] && [ -x "$php_path" ]; then
+            PHP_CMD="$php_path"
+            PHP_SAPI="$($php_path -r 'echo php_sapi_name();' 2>/dev/null || true)"
+            return 0
+        fi
+    done
+    return 1
+}
+
+detect_php_cli || true
+
 # Docker環境チェック（Mac開発環境用）
 if command -v docker &> /dev/null && docker ps --format "{{.Names}}" | grep -q "KantanPro_wordpress"; then
     # Docker環境の場合
@@ -113,10 +140,11 @@ DOCKER_EOF
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境での実行でエラー (exit=$PHP_STATUS)" >> "$LOG_FILE"
     fi
 # wp-cliが存在する場合は優先して使用（サーバー環境）
-elif command -v wp &> /dev/null; then
+elif command -v wp &> /dev/null && [ "$PHP_SAPI" = "cli" ]; then
     cd "$WP_PATH"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行中..." >> "$LOG_FILE"
-    wp --path="$WP_PATH" eval "
+    # CLI版PHPを明示的に指定してwp-cliを実行（CGIを掴む環境対策）
+    WP_CLI_PHP="$PHP_CMD" wp --path="$WP_PATH" eval "
         if (class_exists('NewsCrawlerGenreSettings')) {
             \$genre_settings = NewsCrawlerGenreSettings::get_instance();
             \$genre_settings->execute_auto_posting();
@@ -130,21 +158,12 @@ else
     # wp-cliが無い場合はPHP直接実行
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
 
-    # PHPのフルパスを複数の候補から検索
-    PHP_CMD=""
-    for php_path in "/usr/bin/php" "/usr/local/bin/php" "/opt/homebrew/bin/php" "$(command -v php || true)"; do
-        if [ -n "$php_path" ] && [ -x "$php_path" ]; then
-            PHP_CMD="$php_path"
-            break
-        fi
-    done
-
     if [ -z "$PHP_CMD" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンドが見つかりません。スクリプトを終了します。" >> "$LOG_FILE"
         exit 1
     fi
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD (SAPI=${PHP_SAPI})" >> "$LOG_FILE"
 
     # 一時的なPHPファイルを作成して実行（wp-load.phpを使用）
     TEMP_PHP_FILE="/tmp/news-crawler-cron-$(date +%s).php"

@@ -1858,7 +1858,6 @@ $('#cancel-edit').click(function() {
                 });
             }
         }
-        
         function showForceProgressPopup() {
             var popup = jQuery('<div id="force-progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
                 '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
@@ -2413,7 +2412,6 @@ $('#cancel-edit').click(function() {
         
         wp_send_json_success($genre_settings[$genre_id]);
     }
-    
     public function execute_genre_setting() {
         // 実行時間制限を延長（5分）
         set_time_limit(300);
@@ -3062,7 +3060,6 @@ $('#cancel-edit').click(function() {
     public function get_genre_settings() {
         return get_option($this->option_name, array());
     }
-    
     /**
      * 行リスト（キーワード/URL/IDなど）をトリムし、空行を除去して順序を維持したまま重複を除去
      */
@@ -3671,30 +3668,45 @@ $('#cancel-edit').click(function() {
      * 次回実行時刻を取得
      */
     private function get_next_execution_time($setting) {
-        $last_execution = get_option('news_crawler_last_execution_' . $setting['id'], 0);
+        $genre_id = $setting['id'];
+        $now = current_time('timestamp');
         $frequency = $setting['posting_frequency'] ?? 'daily';
         
-        // 初回実行の場合（last_executionが0または空の場合）
-        if ($last_execution == 0 || empty($last_execution)) {
-            error_log('Next Execution - Genre ' . $setting['genre_name'] . ' - First execution, returning current time');
-            return current_time('timestamp'); // 即座に実行可能
+        // まず next_execution オプションがあればそれを優先
+        $saved_next = intval(get_option('news_crawler_next_execution_' . $genre_id, 0));
+        if ($saved_next > 0) {
+            return $saved_next;
+        }
+        
+        // 無い場合は last_execution から計算
+        $last_execution = intval(get_option('news_crawler_last_execution_' . $genre_id, 0));
+        
+        // 初回実行（未設定）は即時
+        if ($last_execution === 0) {
+            error_log('Next Execution - Genre ' . $setting['genre_name'] . ' - First execution (no last), allow now');
+            return $now;
+        }
+        
+        // 何らかの理由で last_execution が未来を指している場合は補正（すぐ実行可能に）
+        if ($last_execution > $now) {
+            error_log('Next Execution - Genre ' . $setting['genre_name'] . ' - Last execution is in the future. Correcting.');
+            $last_execution = $now - (24 * 60 * 60);
         }
         
         switch ($frequency) {
             case 'daily':
-                return $last_execution + (24 * 60 * 60); // 24時間後
+                return $last_execution + (24 * 60 * 60);
             case 'weekly':
-                return $last_execution + (7 * 24 * 60 * 60); // 7日後
+                return $last_execution + (7 * 24 * 60 * 60);
             case 'monthly':
-                return $last_execution + (30 * 24 * 60 * 60); // 30日後
+                return $last_execution + (30 * 24 * 60 * 60);
             case 'custom':
-                $days = $setting['custom_frequency_days'] ?? 7;
+                $days = intval($setting['custom_frequency_days'] ?? 7);
                 return $last_execution + ($days * 24 * 60 * 60);
             default:
                 return $last_execution + (24 * 60 * 60);
         }
     }
-    
     /**
      * 開始時刻から次回実行時刻を計算
      */
@@ -4340,7 +4352,6 @@ $('#cancel-edit').click(function() {
         error_log('News Crawler Debug: No matches found across all sources');
         return 0;
     }
-    
     /**
      * RSSフィードかどうかを判定
      */
@@ -4925,7 +4936,6 @@ $('#cancel-edit').click(function() {
         $plugin_data = get_plugin_data($plugin_file, false, false);
         return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
-    
     /**
      * ライセンス入力画面を表示
      */
