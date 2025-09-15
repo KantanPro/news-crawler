@@ -3261,6 +3261,9 @@ $('#cancel-edit').click(function() {
     public function execute_auto_posting() {
         error_log('Auto Posting Execution - Starting...');
         
+        // 実行対象のみ候補数キャッシュを軽量更新（UI/強制実行と整合させるため）
+        $this->refresh_candidates_cache_for_due_genres();
+        
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
@@ -3311,6 +3314,35 @@ $('#cancel-edit').click(function() {
             'skipped_count' => $skipped_count,
             'total_genres' => count($genre_settings)
         );
+    }
+
+    /**
+     * 実行予定のジャンルについて候補数キャッシュを更新
+     * - 実際の投稿ロジックには依存しないが、強制実行やUI表示と整合させる目的
+     * - 過負荷回避のため、次回実行時刻が到来しているジャンルのみを対象
+     */
+    private function refresh_candidates_cache_for_due_genres() {
+        try {
+            $genre_settings = $this->get_genre_settings();
+            $now = current_time('timestamp');
+            foreach ($genre_settings as $genre_id => $setting) {
+                if (empty($setting['auto_posting'])) {
+                    continue;
+                }
+                $next_execution = $this->get_next_execution_time($setting);
+                if ($next_execution > $now) {
+                    continue; // まだ実行時刻でないものはスキップ
+                }
+                try {
+                    $available = intval($this->test_news_source_availability($setting));
+                } catch (Exception $e) {
+                    $available = 0;
+                }
+                set_transient('news_crawler_available_count_' . $setting['id'], $available, 5 * MINUTE_IN_SECONDS);
+            }
+        } catch (Exception $e) {
+            // 静かに失敗（自動投稿自体には影響させない）
+        }
     }
     
     /**
