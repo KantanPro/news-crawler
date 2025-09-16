@@ -3258,8 +3258,8 @@ class NewsCrawler {
                             return wp_trim_words($fb, 50, '...');
                         }
 
-                        // 改行をスペースに変換して整形
-                        $summary = str_replace(array("\r\n", "\r", "\n"), ' ', $summary);
+                        // 改行を適切に処理（SNS投稿用に改行を保持）
+                        $summary = $this->format_text_for_sns($summary);
                         return $summary;
                     }
                 } elseif ($response_code === 401) {
@@ -3274,6 +3274,37 @@ class NewsCrawler {
 
         // API呼び出しに失敗した場合は簡易要約を使用
         return wp_trim_words($clean_content, 50, '...');
+    }
+    
+    /**
+     * SNS投稿用にテキストをフォーマット
+     */
+    private function format_text_for_sns($text) {
+        // 連続する改行を単一の改行に統一
+        $text = preg_replace('/\r\n|\r|\n/', "\n", $text);
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
+        
+        // 行頭行末の空白を削除
+        $lines = explode("\n", $text);
+        $lines = array_map('trim', $lines);
+        
+        // 空行を削除（連続する空行は1つに）
+        $formatted_lines = array();
+        $prev_empty = false;
+        
+        foreach ($lines as $line) {
+            if (empty($line)) {
+                if (!$prev_empty) {
+                    $formatted_lines[] = '';
+                }
+                $prev_empty = true;
+            } else {
+                $formatted_lines[] = $line;
+                $prev_empty = false;
+            }
+        }
+        
+        return implode("\n", $formatted_lines);
     }
 
     /**
