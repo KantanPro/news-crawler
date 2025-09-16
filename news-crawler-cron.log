@@ -720,3 +720,42 @@ Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servna
 [2025-09-15 08:36:37] Docker環境でNews Crawlerを実行しました
 [2025-09-15 08:36:37] News Crawler Cron 実行終了
 ---
+[2025-09-15 19:00:01] News Crawler Cron 実行開始
+[2025-09-15 19:00:01] スクリプトディレクトリ: /var/www/html/wp-content/plugins/news-crawler
+[2025-09-15 19:00:01] WordPressパス: /var/www/html/
+[2025-09-15 19:00:01] プラグインパス: /var/www/html/wp-content/plugins/news-crawler/
+[2025-09-15 19:00:01] PHP直接実行でNews Crawlerを実行中...
+[2025-09-15 19:00:02] 使用するPHPコマンド: /usr/local/bin/php (SAPI=cli)
+[2025-09-15 19:00:02] PHPスクリプト実行前の状態:
+[2025-09-15 19:00:02] - 現在のディレクトリ: /var/www/html
+[2025-09-15 19:00:02] - PHPファイルのサイズ: 3857
+[2025-09-15 19:00:02] - PHPファイルの存在確認: 存在する
+[2025-09-15 19:00:02] PHPスクリプト実行開始...
+[PHP] 実行開始 - ディレクトリ: /var/www/html
+[PHP] PHP版本: 8.3.23
+[PHP] 現在時刻: 2025-09-15 19:00:02
+[PHP] メモリ制限: 256M
+[PHP] wp-load.phpを発見: /var/www/html/wp-load.php
+[PHP] wp-load.php読み込み開始: /var/www/html/wp-load.php
+[PHP] WordPress読み込み完了
+[PHP] WordPress関数確認中
+[PHP] get_option関数: 利用可能
+[PHP] サイトURL: http://localhost:8081
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] インスタンス取得成功
+[PHP] 自動投稿を実行中
+[PHP] 自動投稿有効ジャンル: テクノロジー (ID: genre_68aaf75b319a2)
+[PHP] デバッグ情報: {"genre_count":5,"auto_posting_enabled":1}
+[PHP] 自動投稿実行結果: array (
+  'executed_count' => 1,
+  'skipped_count' => 4,
+  'total_genres' => 5,
+)
+[PHP] News Crawler自動投稿を実行しました
+[PHP] スクリプト実行完了
+[2025-09-15 19:00:57] PHPスクリプト実行完了
+[2025-09-15 19:00:57] PHP exit status: 0
+[2025-09-15 19:00:57] PHP直接実行でNews Crawlerを実行しました
+[2025-09-15 19:00:57] News Crawler Cron 実行終了
+---

@@ -833,7 +833,7 @@ else
 
     # 一時的なPHPファイルを作成して実行（wp-load.phpを使用）
     TEMP_PHP_FILE=\"/tmp/news-crawler-cron-\$(date +%s).php\"
-    cat > \"\$TEMP_PHP_FILE\" << EOF
+    cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
