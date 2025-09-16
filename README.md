@@ -173,6 +173,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
   - Improved News Crawler summary processing with new method for SNS posting text formatting
   - Optimized OGP meta tag output and enhanced automatic featured image setting functionality
   - Added OGP image settings menu to admin interface with generated image setting feature
+  - Unified plugin constant version number to 2.4.1 for improved version management consistency
   - Achieved more efficient SNS posting and OGP management
   - Enhanced plugin reliability
 
