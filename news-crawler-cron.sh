@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-16 00:28:29 (デバッグ機能強化版)
+# 修正版 - 2025-09-16 01:03:24 (デバッグ機能強化版)
 
 set -euo pipefail
 
