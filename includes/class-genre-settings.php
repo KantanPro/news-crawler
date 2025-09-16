@@ -3239,31 +3239,45 @@ $('#cancel-edit').click(function() {
         
         foreach ($genre_settings as $genre_id => $setting) {
             $display_id = $this->get_display_genre_id($genre_id);
-            error_log('Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ')');
+            
+            // ログをファイルに直接出力（error_logが機能しない場合の対策）
+            $log_message = 'Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ', Full ID: ' . $genre_id . ')';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 自動投稿が無効または設定されていない場合はスキップ
             if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
-                error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting disabled');
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting disabled';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
                 continue;
             }
             
-            error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled');
+            $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
-            // 次回実行時刻をチェック
-            $next_execution = $this->get_next_execution_time($setting);
-            error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution: ' . date('Y-m-d H:i:s', $next_execution));
+            // 次回実行時刻をチェック（genre_idを渡す）
+            $next_execution = $this->get_next_execution_time($setting, $genre_id);
+            $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution: ' . date('Y-m-d H:i:s', $next_execution) . ' (Current: ' . date('Y-m-d H:i:s', $current_time) . ')';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             if ($next_execution > $current_time) {
-                error_log('Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet');
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
                 continue;
             }
             
-            error_log('Auto Posting Execution - Executing genre: ' . $setting['genre_name']);
+            $log_message = 'Auto Posting Execution - Executing genre: ' . $setting['genre_name'];
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 自動投稿を実行
-            $this->execute_auto_posting_for_genre($setting);
+            $this->execute_auto_posting_for_genre($setting, false, $genre_id);
             $executed_count++;
             
             // 次回実行時刻を更新
@@ -3273,11 +3287,16 @@ $('#cancel-edit').click(function() {
         error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
         
         // 実行結果を返す
-        return array(
+        $result = array(
             'executed_count' => $executed_count,
             'skipped_count' => $skipped_count,
             'total_genres' => count($genre_settings)
         );
+        
+        // 結果をログに出力（cronスクリプトで確認できるように）
+        error_log('Auto Posting Result: ' . json_encode($result));
+        
+        return $result;
     }
 
     /**
@@ -3293,7 +3312,7 @@ $('#cancel-edit').click(function() {
                 if (empty($setting['auto_posting'])) {
                     continue;
                 }
-                $next_execution = $this->get_next_execution_time($setting);
+                $next_execution = $this->get_next_execution_time($setting, $genre_id);
                 if ($next_execution > $now) {
                     continue; // まだ実行時刻でないものはスキップ
                 }
@@ -3333,7 +3352,7 @@ $('#cancel-edit').click(function() {
         error_log('Genre Auto Posting - Executing for genre: ' . $setting['genre_name']);
         
         // 自動投稿を実行
-        $this->execute_auto_posting_for_genre($setting);
+        $this->execute_auto_posting_for_genre($setting, false, $genre_id);
         
         // 次回実行時刻を更新して次のスケジュールを設定
         $this->update_next_execution_time($genre_id, $setting);
@@ -3345,30 +3364,50 @@ $('#cancel-edit').click(function() {
     /**
      * 指定されたジャンルの自動投稿を実行
      */
-    private function execute_auto_posting_for_genre($setting, $is_forced = false) {
-        $genre_id = $setting['id'];
+    private function execute_auto_posting_for_genre($setting, $is_forced = false, $genre_id = null) {
+        // genre_idが渡されていない場合は、settingから取得を試行
+        if ($genre_id === null) {
+            $genre_id = isset($setting['id']) ? $setting['id'] : null;
+        }
+        
+        // genre_idが取得できない場合はエラーログを出力して終了
+        if ($genre_id === null) {
+            error_log('Execute Auto Posting For Genre - Genre ID not found');
+            return;
+        }
+        
         $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
         
         try {
-            // 実行前のチェック
-            $check_result = $this->pre_execution_check($setting);
+            error_log('Execute Auto Posting For Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            
+                // 実行前のチェック
+                $check_result = $this->pre_execution_check($setting, $genre_id, $is_forced);
             
             if (!$check_result['can_execute']) {
+                error_log('Execute Auto Posting For Genre - Pre-execution check failed for genre: ' . $setting['genre_name'] . ' - Reason: ' . $check_result['reason']);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - Pre-execution check failed for genre: ' . $setting['genre_name'] . ' - Reason: ' . $check_result['reason'] . PHP_EOL, FILE_APPEND | LOCK_EX);
                 return;
             }
             
+            error_log('Execute Auto Posting For Genre - Pre-execution check passed for genre: ' . $setting['genre_name']);
+            
             // 投稿記事数上限をチェック
             $existing_posts = $this->count_recent_posts_by_genre($genre_id);
+            error_log('Execute Auto Posting For Genre - Existing posts: ' . $existing_posts . ', Max posts: ' . $max_posts);
             
             if ($existing_posts >= $max_posts) {
+                error_log('Execute Auto Posting For Genre - Post limit reached for genre: ' . $setting['genre_name']);
                 return;
             }
             
             // 実行可能な投稿数を計算（1件ずつ実行するように制限）
             $available_posts = min(1, $max_posts - $existing_posts);
+            error_log('Execute Auto Posting For Genre - Available posts: ' . $available_posts);
             
             // 利用可能な投稿数が0以下の場合はスキップ
             if ($available_posts <= 0) {
+                error_log('Execute Auto Posting For Genre - No available posts for genre: ' . $setting['genre_name']);
                 return;
             }
             
@@ -3376,19 +3415,43 @@ $('#cancel-edit').click(function() {
             $result = '';
             $post_id = null;
             
+            error_log('Execute Auto Posting For Genre - Starting crawl for genre: ' . $setting['genre_name'] . ', Content type: ' . $setting['content_type']);
+            
             if ($setting['content_type'] === 'news') {
+                error_log('Execute Auto Posting For Genre - Executing news crawling for genre: ' . $setting['genre_name']);
                 $result = $this->execute_news_crawling_with_limit($setting, $available_posts);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
+                    error_log('Execute Auto Posting For Genre - News post created with ID: ' . $post_id);
+                } else {
+                    error_log('Execute Auto Posting For Genre - No post ID found in news crawling result');
                 }
             } elseif ($setting['content_type'] === 'youtube') {
+                error_log('Execute Auto Posting For Genre - Executing YouTube crawling for genre: ' . $setting['genre_name']);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - Executing YouTube crawling for genre: ' . $setting['genre_name'] . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $result = $this->execute_youtube_crawling_with_limit($setting, $available_posts);
+                
+                // YouTubeクロール結果を詳細にログ出力
+                error_log('Execute Auto Posting For Genre - YouTube crawling result: ' . substr($result, 0, 500));
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - YouTube crawling result: ' . substr($result, 0, 500) . PHP_EOL, FILE_APPEND | LOCK_EX);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
+                    error_log('Execute Auto Posting For Genre - YouTube post created with ID: ' . $post_id);
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - YouTube post created with ID: ' . $post_id . PHP_EOL, FILE_APPEND | LOCK_EX);
+                } else {
+                    error_log('Execute Auto Posting For Genre - No post ID found in YouTube crawling result');
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - No post ID found in YouTube crawling result' . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    
+                    // 投稿作成数のパターンもチェック
+                    if (preg_match('/(\d+)件の[^\n]*?動画投稿を作成/u', $result, $matches)) {
+                        $posts_created = intval($matches[1]);
+                        error_log('Execute Auto Posting For Genre - YouTube posts created count: ' . $posts_created);
+                        file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - YouTube posts created count: ' . $posts_created . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    }
                 }
             }
             
@@ -3397,19 +3460,37 @@ $('#cancel-edit').click(function() {
             // 次回実行スケジュールを更新
             $this->reschedule_next_execution($genre_id, $setting);
             
+            // 投稿作成数を返す
+            return ($post_id !== null) ? 1 : 0;
+            
         } catch (Exception $e) {
             // エラーログを記録
+            error_log('Execute Auto Posting For Genre - Exception: ' . $e->getMessage());
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - Exception: ' . $e->getMessage() . PHP_EOL, FILE_APPEND | LOCK_EX);
+            return 0;
         }
         
         // デバッグログを削除（パフォーマンス向上のため）
+        return 0;
     }
     
     /**
      * 実行前のチェック
      */
-    private function pre_execution_check($setting) {
+    private function pre_execution_check($setting, $genre_id = null, $is_forced = false) {
         $result = array('can_execute' => true, 'reason' => '');
-        $genre_id = $setting['id'];
+        
+        // genre_idが渡されていない場合は、settingから取得を試行
+        if ($genre_id === null) {
+            $genre_id = isset($setting['id']) ? $setting['id'] : null;
+        }
+        
+        // genre_idが取得できない場合はエラー
+        if ($genre_id === null) {
+            $result['can_execute'] = false;
+            $result['reason'] = 'ジャンルIDが取得できません';
+            return $result;
+        }
         
         // 基本設定のチェック
         if ($setting['content_type'] === 'youtube') {
@@ -3456,19 +3537,21 @@ $('#cancel-edit').click(function() {
             return $result;
         }
         
-        // 候補数のチェック
-        $cache_key = 'news_crawler_available_count_' . $genre_id;
-        $available_candidates = get_transient($cache_key);
-        
-        if ($available_candidates === false) {
-            // キャッシュがない場合は0を表示（再評価ボタンで更新）
-                    $available_candidates = 0;
-        }
-        
-        if ($available_candidates <= 0) {
-            $result['can_execute'] = false;
-            $result['reason'] = '候補がありません';
-            return $result;
+        // 候補数のチェック（強制実行時はスキップ）
+        if (!$is_forced) {
+            $cache_key = 'news_crawler_available_count_' . $genre_id;
+            $available_candidates = get_transient($cache_key);
+            
+            if ($available_candidates === false) {
+                // キャッシュがない場合は0を表示（再評価ボタンで更新）
+                $available_candidates = 0;
+            }
+            
+            if ($available_candidates <= 0) {
+                $result['can_execute'] = false;
+                $result['reason'] = '候補がありません';
+                return $result;
+            }
         }
         
         // 取得上限のチェック
@@ -3663,8 +3746,18 @@ $('#cancel-edit').click(function() {
     /**
      * 次回実行時刻を取得
      */
-    private function get_next_execution_time($setting) {
-        $genre_id = $setting['id'];
+    private function get_next_execution_time($setting, $genre_id = null) {
+        // genre_idが渡されていない場合は、settingから取得を試行
+        if ($genre_id === null) {
+            $genre_id = isset($setting['id']) ? $setting['id'] : null;
+        }
+        
+        // genre_idが取得できない場合は即座に実行可能とする
+        if ($genre_id === null) {
+            error_log('Next Execution - Genre ID not found, allowing immediate execution');
+            return current_time('timestamp');
+        }
+        
         $now = current_time('timestamp');
         $frequency = $setting['posting_frequency'] ?? 'daily';
         
@@ -4075,38 +4168,25 @@ $('#cancel-edit').click(function() {
         ob_start();
         
         try {
-            // 強制実行前のログ数を記録
-            $logs_before = get_option('news_crawler_auto_posting_logs', array());
+            // 強制実行用の自動投稿処理を実行し、結果を取得
+            $result = $this->execute_auto_posting_forced();
             
-            // 強制実行用の自動投稿処理を実行
-            $this->execute_auto_posting_forced();
-            
-            // 実行後のログ確認
-            $logs_after = get_option('news_crawler_auto_posting_logs', array());
-            
-            // 今回の実行で新しく追加されたログから成功した投稿数をカウント
-            $new_logs = array_slice($logs_after, count($logs_before));
-            $success_count = 0;
-            
-            foreach ($new_logs as $log) {
-                if (isset($log['status']) && $log['status'] === 'success' && isset($log['post_id'])) {
-                    $success_count++;
-                }
-            }
+            // 結果から成功した投稿数を取得
+            $success_count = isset($result['posts_created']) ? $result['posts_created'] : 0;
             
             // 分かりやすいレポートを生成
             if ($success_count > 0) {
-                $result = "自動投稿が完了しました。\n\n";
-                $result .= "{$success_count}件の投稿が成功しましたのでご確認ください。";
+                $message = "自動投稿が完了しました。\n\n";
+                $message .= "{$success_count}件の投稿が成功しましたのでご確認ください。";
             } else {
-                $result = "自動投稿が完了しました。\n\n";
-                $result .= "今回の実行では新しい投稿は作成されませんでした。";
+                $message = "自動投稿が完了しました。\n\n";
+                $message .= "今回の実行では新しい投稿は作成されませんでした。";
             }
             
             // 出力バッファをクリア
             ob_end_clean();
             
-            wp_send_json_success($result);
+            wp_send_json_success($message);
             
         } catch (Exception $e) {
             // 出力バッファをクリア
@@ -4125,44 +4205,71 @@ $('#cancel-edit').click(function() {
             error_log('NewsCrawler: Single-run guard active. Skipping forced auto posting.');
             return;
         }
+        
         $genre_settings = $this->get_genre_settings();
         $current_time = current_time('timestamp');
         
+        error_log('Force Auto Posting - Starting forced execution. Total genres: ' . count($genre_settings));
+        file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Starting forced execution. Total genres: ' . count($genre_settings) . PHP_EOL, FILE_APPEND | LOCK_EX);
+        
         $executed_count = 0;
         $skipped_count = 0;
+        $posts_created = 0;
         
-        // 候補がある有効なジャンルのみを取得
-        $genres_with_candidates = $this->get_genres_with_candidates();
+        // 強制実行では、自動投稿が有効なジャンルをすべて実行（キャッシュの有無に関係なく）
+        $enabled_genres = array();
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                $enabled_genres[$genre_id] = $setting;
+                error_log('Force Auto Posting - Found enabled genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Found enabled genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')' . PHP_EOL, FILE_APPEND | LOCK_EX);
+            }
+        }
         
-        if (empty($genres_with_candidates)) {
+        if (empty($enabled_genres)) {
+            error_log('Force Auto Posting - No enabled genres found');
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - No enabled genres found' . PHP_EOL, FILE_APPEND | LOCK_EX);
             return;
         }
         
-        // 強制実行時のグローバル投稿数制限をチェック（候補があるジャンル数が上限）
-        $total_recent_posts = $this->count_all_recent_posts();
-        $global_max_posts = count($genres_with_candidates); // 候補があるジャンル数が上限
+        error_log('Force Auto Posting - Processing ' . count($enabled_genres) . ' enabled genres');
+        file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Processing ' . count($enabled_genres) . ' enabled genres' . PHP_EOL, FILE_APPEND | LOCK_EX);
         
-        if ($total_recent_posts >= $global_max_posts) {
-            return;
-        }
-        
-        foreach ($genres_with_candidates as $genre_id => $setting) {
-            // 個別ジャンルの制限をチェック
-            $check_result = $this->pre_execution_check($setting);
+        foreach ($enabled_genres as $genre_id => $setting) {
+            error_log('Force Auto Posting - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')' . PHP_EOL, FILE_APPEND | LOCK_EX);
+            
+                    // 個別ジャンルの制限をチェック（強制実行時はキャッシュチェックをスキップ）
+                    $check_result = $this->pre_execution_check($setting, $genre_id, true);
             
             if (!$check_result['can_execute']) {
+                error_log('Force Auto Posting - Pre-execution check failed for genre: ' . $setting['genre_name'] . ' - Reason: ' . $check_result['reason']);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Pre-execution check failed for genre: ' . $setting['genre_name'] . ' - Reason: ' . $check_result['reason'] . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
                 continue;
             }
             
+            error_log('Force Auto Posting - Pre-execution check passed for genre: ' . $setting['genre_name']);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Pre-execution check passed for genre: ' . $setting['genre_name'] . PHP_EOL, FILE_APPEND | LOCK_EX);
+            
             // 強制実行時は開始実行日時の制限を無視して即座に実行
             // 次回実行時刻は既存の自動投稿設定のスケジュールを復元・維持
-            $this->execute_auto_posting_for_genre($setting, true);
+            $genre_posts_created = $this->execute_auto_posting_for_genre($setting, true, $genre_id);
+            $posts_created += $genre_posts_created;
             $executed_count++;
             
             // 強制実行時は既存の自動投稿設定に基づいて正しいスケジュールを復元・維持
             $this->update_next_execution_time_forced($genre_id, $setting);
         }
+        
+        error_log('Force Auto Posting - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Posts Created: ' . $posts_created);
+        file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Posts Created: ' . $posts_created . PHP_EOL, FILE_APPEND | LOCK_EX);
+        
+        return array(
+            'executed_count' => $executed_count,
+            'skipped_count' => $skipped_count,
+            'posts_created' => $posts_created
+        );
     }
     
     /**
