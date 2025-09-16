@@ -759,3 +759,20 @@ Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servna
 [2025-09-15 19:00:57] PHP直接実行でNews Crawlerを実行しました
 [2025-09-15 19:00:57] News Crawler Cron 実行終了
 ---
+[2025-09-16 10:08:20] News Crawler Cron 実行開始
+[2025-09-16 10:08:20] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 10:08:20] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 10:08:20] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 10:08:20] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 10:08:20] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 10:08:22] Docker exec exit status: 0
+[2025-09-16 10:08:22] Docker環境でNews Crawlerを実行しました
+[2025-09-16 10:08:22] News Crawler Cron 実行終了
+---
