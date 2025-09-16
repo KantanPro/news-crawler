@@ -776,3 +776,105 @@ Error: `php_network_getaddresses: getaddrinfo for db failed: nodename nor servna
 [2025-09-16 10:08:22] Docker環境でNews Crawlerを実行しました
 [2025-09-16 10:08:22] News Crawler Cron 実行終了
 ---
+[2025-09-16 10:26:20] News Crawler Cron 実行開始
+[2025-09-16 10:26:20] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 10:26:20] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 10:26:20] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 10:26:20] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 10:26:20] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 10:26:21] Docker exec exit status: 0
+[2025-09-16 10:26:21] Docker環境でNews Crawlerを実行しました
+[2025-09-16 10:26:21] News Crawler Cron 実行終了
+---
+[2025-09-16 10:26:42] News Crawler Cron 実行開始
+[2025-09-16 10:26:42] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 10:26:42] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 10:26:42] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 10:26:42] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 10:26:42] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 10:26:45] Docker exec exit status: 0
+[2025-09-16 10:26:45] Docker環境でNews Crawlerを実行しました
+[2025-09-16 10:26:45] News Crawler Cron 実行終了
+---
+[2025-09-16 10:51:36] News Crawler Cron 実行開始
+[2025-09-16 10:51:36] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 10:51:36] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 10:51:36] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 10:51:36] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 10:51:36] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 10:51:38] Docker exec exit status: 0
+[2025-09-16 10:51:38] Docker環境でNews Crawlerを実行しました
+[2025-09-16 10:51:38] News Crawler Cron 実行終了
+---
+[2025-09-16 10:51:51] News Crawler Cron 実行開始
+[2025-09-16 10:51:51] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 10:51:51] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 10:51:51] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 10:51:51] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 10:51:51] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 10:51:55] Docker exec exit status: 0
+[2025-09-16 10:51:55] Docker環境でNews Crawlerを実行しました
+[2025-09-16 10:51:55] News Crawler Cron 実行終了
+---
+[2025-09-16 11:28:44] News Crawler Cron 実行開始
+[2025-09-16 11:28:44] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 11:28:44] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 11:28:44] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 11:28:44] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 11:28:44] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 11:28:45] Docker exec exit status: 0
+[2025-09-16 11:28:45] Docker環境でNews Crawlerを実行しました
+[2025-09-16 11:28:45] News Crawler Cron 実行終了
+---
+[2025-09-16 11:42:47] News Crawler Cron 実行開始
+[2025-09-16 11:42:47] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-16 11:42:47] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-16 11:42:47] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-16 11:42:47] Docker環境でdocker exec経由でNews Crawlerを実行中...
+[2025-09-16 11:42:47] 使用するコンテナ: KantanPro_wordpress
+[PHP] Docker環境での実行を開始
+[PHP] WordPressディレクトリ: /var/www/html
+[PHP] WordPress読み込み完了
+[PHP] NewsCrawlerGenreSettingsクラスをチェック中
+[PHP] クラスが見つかりました。インスタンスを取得中
+[PHP] 自動投稿を実行中
+[PHP] News Crawler自動投稿を実行しました
+[2025-09-16 11:42:48] Docker exec exit status: 0
+[2025-09-16 11:42:48] Docker環境でNews Crawlerを実行しました
+[2025-09-16 11:42:48] News Crawler Cron 実行終了
+---

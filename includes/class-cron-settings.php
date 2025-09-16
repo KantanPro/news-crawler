@@ -24,6 +24,9 @@ class NewsCrawlerCronSettings {
         
         // プラグイン初期化時にCronスクリプトの存在チェックと自動作成
         add_action('init', array($this, 'check_and_create_cron_script'), 20);
+        
+        // 既存のcronスクリプトを統合（管理画面の設定を優先）
+        add_action('init', array($this, 'integrate_existing_cron_script'), 25);
     }
     
     /**
@@ -320,8 +323,18 @@ class NewsCrawlerCronSettings {
             }
         }
         
-        // 設定保存時にシェルスクリプトを自動生成
-        $this->auto_generate_script_on_save($sanitized);
+        // 設定保存時にシェルスクリプトを自動生成（エラーが発生しても設定は保存）
+        try {
+            $this->auto_generate_script_on_save($sanitized);
+        } catch (Exception $e) {
+            error_log('News Crawler: シェルスクリプト自動生成でエラーが発生しましたが、設定は保存します: ' . $e->getMessage());
+        }
+        
+        // 設定保存後にcronジョブを更新
+        $this->update_cron_job_from_settings($sanitized);
+        
+        // ホスト側のcronジョブも更新
+        $this->update_host_cron_job($sanitized);
         
         return $sanitized;
     }
@@ -463,6 +476,26 @@ class NewsCrawlerCronSettings {
                 </div>
                 
                 <?php if (!empty($cron_command)): ?>
+                <div class="ktp-admin-card">
+                    <h2>現在のCron設定</h2>
+                    <p>以下のコマンドをサーバーのcrontabに設定してください：</p>
+                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace; word-break: break-all;">
+                        <?php echo esc_html($cron_command); ?>
+                    </div>
+                    
+                    <h3>現在のサーバーcron設定</h3>
+                    <p>現在のサーバーcron設定を確認するには、以下のコマンドを実行してください：</p>
+                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace;">
+                        crontab -l
+                    </div>
+                    
+                    <h3>設定の適用</h3>
+                    <p>上記のコマンドをサーバーのcrontabに追加するには、以下のコマンドを実行してください：</p>
+                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace;">
+                        (crontab -l; echo "<?php echo esc_html($cron_command); ?>") | crontab -
+                    </div>
+                </div>
+                
                 <div class="ktp-admin-card">
                     <h2>生成されたCronジョブ設定</h2>
                     <p>以下の設定をサーバーのcronジョブに追加してください：</p>
@@ -1050,6 +1083,217 @@ echo \"---\" >> \"\$LOG_FILE\"
     }
     
     /**
+     * 設定に基づいてcronジョブを更新
+     */
+    private function update_cron_job_from_settings($settings) {
+        try {
+            $cron_command = $this->generate_cron_command($settings);
+            
+            if (empty($cron_command)) {
+                error_log('News Crawler: Cronコマンドの生成に失敗しました');
+                return false;
+            }
+            
+            // 現在のcronジョブからNews Crawler関連の設定を削除
+            $this->remove_news_crawler_cron_jobs();
+            
+            // 新しいcronジョブを追加
+            $this->add_news_crawler_cron_job($cron_command);
+            
+            error_log('News Crawler: Cronジョブを更新しました: ' . $cron_command);
+            return true;
+            
+        } catch (Exception $e) {
+            error_log('News Crawler: Cronジョブ更新でエラー: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 既存のNews Crawler関連のcronジョブを削除
+     */
+    private function remove_news_crawler_cron_jobs() {
+        // Docker環境ではcrontabコマンドが利用できないため、ログに記録のみ
+        error_log('News Crawler: 既存のcronジョブを削除する必要があります（手動で実行してください）');
+        
+        // 現在のcronジョブを取得（ホスト側で実行）
+        $current_cron = shell_exec('crontab -l 2>/dev/null');
+        
+        if ($current_cron === null) {
+            return;
+        }
+        
+        // News Crawler関連の行を除外
+        $lines = explode("\n", $current_cron);
+        $filtered_lines = array();
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            // 空行やコメント行は保持
+            if (empty($line) || strpos($line, '#') === 0) {
+                $filtered_lines[] = $line;
+                continue;
+            }
+            
+            // News Crawler関連の行を除外
+            if (strpos($line, 'news-crawler-cron.sh') === false) {
+                $filtered_lines[] = $line;
+            }
+        }
+        
+        // フィルタリングされたcronジョブを設定
+        $new_cron = implode("\n", $filtered_lines);
+        if (!empty(trim($new_cron))) {
+            $temp_file = tempnam(sys_get_temp_dir(), 'cron_');
+            file_put_contents($temp_file, $new_cron . "\n");
+            shell_exec("crontab $temp_file");
+            unlink($temp_file);
+        }
+    }
+    
+    /**
+     * News Crawlerのcronジョブを追加
+     */
+    private function add_news_crawler_cron_job($cron_command) {
+        // Docker環境ではcrontabコマンドが利用できないため、ログに記録のみ
+        error_log('News Crawler: 以下のcronジョブを手動で追加してください: ' . $cron_command);
+        
+        // 現在のcronジョブを取得（ホスト側で実行）
+        $current_cron = shell_exec('crontab -l 2>/dev/null');
+        
+        // 新しいcronジョブを追加
+        $new_cron = $current_cron . "\n" . $cron_command . "\n";
+        
+        // 一時ファイルに保存してcrontabに設定
+        $temp_file = tempnam(sys_get_temp_dir(), 'cron_');
+        file_put_contents($temp_file, $new_cron);
+        shell_exec("crontab $temp_file");
+        unlink($temp_file);
+    }
+    
+    /**
+     * ホスト側のcronジョブを更新
+     */
+    private function update_host_cron_job($settings) {
+        try {
+            $cron_command = $this->generate_cron_command($settings);
+            
+            if (empty($cron_command)) {
+                error_log('News Crawler: Cronコマンドの生成に失敗しました');
+                return false;
+            }
+            
+            // ホスト側でcronジョブを更新
+            $this->update_host_crontab($cron_command);
+            
+            error_log('News Crawler: ホスト側のcronジョブを更新しました: ' . $cron_command);
+            return true;
+            
+        } catch (Exception $e) {
+            error_log('News Crawler: ホスト側cronジョブ更新でエラー: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * ホスト側のcrontabを更新
+     */
+    private function update_host_crontab($cron_command) {
+        // 現在のcronジョブを取得
+        $current_cron = shell_exec('crontab -l 2>/dev/null');
+        
+        // News Crawler関連の行を除外
+        $lines = explode("\n", $current_cron);
+        $filtered_lines = array();
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            // 空行やコメント行は保持
+            if (empty($line) || strpos($line, '#') === 0) {
+                $filtered_lines[] = $line;
+                continue;
+            }
+            
+            // News Crawler関連の行を除外
+            if (strpos($line, 'news-crawler-cron.sh') === false) {
+                $filtered_lines[] = $line;
+            }
+        }
+        
+        // 新しいcronジョブを追加
+        $filtered_lines[] = $cron_command;
+        
+        // フィルタリングされたcronジョブを設定
+        $new_cron = implode("\n", $filtered_lines);
+        
+        // 一時ファイルに保存してcrontabに設定
+        $temp_file = tempnam(sys_get_temp_dir(), 'cron_');
+        file_put_contents($temp_file, $new_cron . "\n");
+        shell_exec("crontab $temp_file");
+        unlink($temp_file);
+        
+        error_log('News Crawler: ホスト側crontabを更新しました');
+    }
+    
+    /**
+     * 既存のcronスクリプトをNews Crawlerの管理下に置く（一度だけ実行）
+     */
+    public function integrate_existing_cron_script_once() {
+        // 既に統合済みかチェック
+        if (get_option('news_crawler_cron_integrated', false)) {
+            return;
+        }
+        
+        $result = $this->integrate_existing_cron_script();
+        
+        // 統合が完了したらフラグを設定
+        if ($result) {
+            update_option('news_crawler_cron_integrated', true);
+        }
+    }
+    
+    /**
+     * 既存のcronスクリプトをNews Crawlerの管理下に置く
+     */
+    public function integrate_existing_cron_script() {
+        $script_path = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler-cron.sh';
+        
+        // 既存のスクリプトが存在する場合
+        if (file_exists($script_path)) {
+            // 実行権限を確認・設定
+            if (!is_executable($script_path)) {
+                chmod($script_path, 0755);
+            }
+            
+            // 既存の設定があっても上書きする（管理画面の設定を優先）
+            error_log('News Crawler: 既存のcronスクリプトを統合し、管理画面の設定を適用します');
+            
+            // 既存の設定を取得し、cronジョブを更新
+            $existing_options = get_option($this->option_name);
+            if (!empty($existing_options)) {
+                // 既存の設定に基づいてcronジョブを更新
+                $this->update_cron_job_from_settings($existing_options);
+            } else {
+                // 設定が存在しない場合のみデフォルト設定を保存
+                $options = array();
+                $options['shell_script_name'] = 'news-crawler-cron.sh';
+                $options['minute'] = '10';
+                $options['hour'] = '10';
+                $options['day'] = '*';
+                $options['month'] = '*';
+                $options['weekday'] = '*';
+                update_option($this->option_name, $options);
+                $this->update_cron_job_from_settings($options);
+            }
+            
+            error_log('News Crawler: 既存のcronスクリプトを統合しました（デフォルト設定）');
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
      * Cronスクリプトを自動作成
      */
     private function auto_create_cron_script($script_name) {
@@ -1090,40 +1334,50 @@ echo \"---\" >> \"\$LOG_FILE\"
      * 設定保存時にシェルスクリプトを自動生成
      */
     private function auto_generate_script_on_save($sanitized) {
-        // シェルスクリプト名を取得
-        $script_name = isset($sanitized['shell_script_name']) ? $sanitized['shell_script_name'] : 'news-crawler-cron.sh';
-        
-        // スクリプトの内容を生成
-        $script_content = $this->generate_script_content();
-        
-        // プラグインディレクトリの書き込み権限をチェック
-        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
-        
-        if (!is_writable(NEWS_CRAWLER_PLUGIN_DIR)) {
-            // 代替手段として、WordPressのアップロードディレクトリを試す
-            $upload_dir = wp_upload_dir();
-            if (is_writable($upload_dir['basedir'])) {
-                $script_path = $upload_dir['basedir'] . '/' . $script_name;
+        try {
+            // シェルスクリプト名を取得
+            $script_name = isset($sanitized['shell_script_name']) ? $sanitized['shell_script_name'] : 'news-crawler-cron.sh';
+            
+            // 既存のスクリプトが存在する場合はスキップ
+            if ($this->check_script_exists($script_name)) {
+                return true;
+            }
+            
+            // スクリプトの内容を生成
+            $script_content = $this->generate_script_content();
+            
+            // プラグインディレクトリの書き込み権限をチェック
+            $script_path = NEWS_CRAWLER_PLUGIN_DIR . $script_name;
+            
+            if (!is_writable(NEWS_CRAWLER_PLUGIN_DIR)) {
+                // 代替手段として、WordPressのアップロードディレクトリを試す
+                $upload_dir = wp_upload_dir();
+                if (is_writable($upload_dir['basedir'])) {
+                    $script_path = $upload_dir['basedir'] . '/' . $script_name;
+                } else {
+                    // どちらも書き込み不可の場合はスキップ
+                    error_log('News Crawler: シェルスクリプトの自動生成をスキップしました（書き込み権限なし）');
+                    return true; // エラーではなく、スキップとして扱う
+                }
+            }
+            
+            // ファイルを作成
+            $result = file_put_contents($script_path, $script_content, LOCK_EX);
+            
+            if ($result !== false) {
+                // 実行権限を設定
+                chmod($script_path, 0755);
+                
+                // ログに記録
+                error_log("News Crawler: 設定保存時にシェルスクリプトを自動生成しました: " . $script_path);
+                
+                return true;
             } else {
-                // どちらも書き込み不可の場合はスキップ
-                error_log('News Crawler: シェルスクリプトの自動生成をスキップしました（書き込み権限なし）');
+                error_log('News Crawler: シェルスクリプトの自動生成に失敗しました: ' . $script_path);
                 return false;
             }
-        }
-        
-        // ファイルを作成
-        $result = file_put_contents($script_path, $script_content, LOCK_EX);
-        
-        if ($result !== false) {
-            // 実行権限を設定
-            chmod($script_path, 0755);
-            
-            // ログに記録
-            error_log("News Crawler: 設定保存時にシェルスクリプトを自動生成しました: " . $script_path);
-            
-            return true;
-        } else {
-            error_log('News Crawler: シェルスクリプトの自動生成に失敗しました: ' . $script_path);
+        } catch (Exception $e) {
+            error_log('News Crawler: シェルスクリプト自動生成でエラー: ' . $e->getMessage());
             return false;
         }
     }
