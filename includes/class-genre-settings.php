@@ -442,6 +442,8 @@ class NewsCrawlerGenreSettings {
     // X（Twitter）自動シェア設定セクション
     public function twitter_section_callback() {
         echo '<p>X（旧Twitter）への自動投稿に関する設定です。投稿作成後に自動的にXにシェアされます。</p>';
+        echo '<p><button type="button" id="test-x-connection" class="button button-secondary">接続テスト</button></p>';
+        wp_nonce_field('twitter_connection_test_nonce', 'twitter_connection_test_nonce');
     }
     
     public function twitter_enabled_callback() {
@@ -489,9 +491,18 @@ class NewsCrawlerGenreSettings {
     
     public function twitter_message_template_callback() {
         $options = get_option('news_crawler_basic_settings', array());
-        $template = isset($options['twitter_message_template']) ? $options['twitter_message_template'] : '{title}';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_message_template]" value="' . esc_attr($template) . '" size="50" />';
-        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。{title}で投稿タイトルを挿入できます。</p>';
+        $template = isset($options['twitter_message_template']) ? $options['twitter_message_template'] : '%TITLE%';
+        
+        // 旧形式の{title}を%TITLE%に自動変換
+        if ($template === '{title}') {
+            $template = '%TITLE%';
+            // 設定を更新
+            $options['twitter_message_template'] = $template;
+            update_option('news_crawler_basic_settings', $options);
+        }
+        
+        echo '<textarea name="news_crawler_basic_settings[twitter_message_template]" rows="3" cols="50">' . esc_textarea($template) . '</textarea>';
+        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。%TITLE%で投稿タイトルを挿入できます。</p>';
     }
     
     public function twitter_include_link_callback() {
@@ -677,7 +688,7 @@ class NewsCrawlerGenreSettings {
         }
         
         if (isset($input['twitter_message_template'])) {
-            $sanitized['twitter_message_template'] = sanitize_text_field($input['twitter_message_template']);
+            $sanitized['twitter_message_template'] = sanitize_textarea_field($input['twitter_message_template']);
         }
         
         if (isset($input['twitter_include_link'])) {

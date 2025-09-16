@@ -252,6 +252,86 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings-quality',
             'quality_settings'
         );
+        
+        // X（Twitter）設定セクション（専用スラッグ）
+        add_settings_section(
+            'twitter_settings',
+            'X（旧Twitter）自動シェア設定',
+            array($this, 'twitter_section_callback'),
+            'news-crawler-settings-twitter'
+        );
+        
+        add_settings_field(
+            'twitter_enabled',
+            'X（Twitter）への自動シェアを有効にする',
+            array($this, 'twitter_enabled_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_bearer_token',
+            'Bearer Token',
+            array($this, 'twitter_bearer_token_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_api_key',
+            'API Key（Consumer Key）',
+            array($this, 'twitter_api_key_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_api_secret',
+            'API Secret（Consumer Secret）',
+            array($this, 'twitter_api_secret_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_access_token',
+            'Access Token',
+            array($this, 'twitter_access_token_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_access_token_secret',
+            'Access Token Secret',
+            array($this, 'twitter_access_token_secret_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_message_template',
+            'メッセージテンプレート',
+            array($this, 'twitter_message_template_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_include_link',
+            '投稿へのリンクを含める',
+            array($this, 'twitter_include_link_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
+        
+        add_settings_field(
+            'twitter_hashtags',
+            'ハッシュタグ',
+            array($this, 'twitter_hashtags_callback'),
+            'news-crawler-settings-twitter',
+            'twitter_settings'
+        );
     }
 
     /**
@@ -405,7 +485,7 @@ class NewsCrawlerSettingsManager {
      */
     public function display_post_settings_page($page_title_suffix = '投稿設定') {
         // アクティブタブを決定（保存後も同じタブを維持）
-        $valid_tabs = array('api-settings', 'feature-settings', 'quality-settings', 'seo-settings');
+        $valid_tabs = array('api-settings', 'feature-settings', 'quality-settings', 'seo-settings', 'twitter-settings', 'youtube-settings');
         $requested_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : '';
         $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
@@ -423,6 +503,8 @@ class NewsCrawlerSettingsManager {
                 <a href="#feature-settings" class="nav-tab<?php echo ($active_tab === 'feature-settings' ? ' nav-tab-active' : ''); ?>" data-tab="feature-settings">機能設定</a>
                 <a href="#quality-settings" class="nav-tab<?php echo ($active_tab === 'quality-settings' ? ' nav-tab-active' : ''); ?>" data-tab="quality-settings">品質管理</a>
                 <a href="#seo-settings" class="nav-tab<?php echo ($active_tab === 'seo-settings' ? ' nav-tab-active' : ''); ?>" data-tab="seo-settings">SEO設定</a>
+                <a href="#twitter-settings" class="nav-tab<?php echo ($active_tab === 'twitter-settings' ? ' nav-tab-active' : ''); ?>" data-tab="twitter-settings">X（Twitter）設定</a>
+                <a href="#youtube-settings" class="nav-tab<?php echo ($active_tab === 'youtube-settings' ? ' nav-tab-active' : ''); ?>" data-tab="youtube-settings">YouTube設定</a>
                 
             </div>
             
@@ -437,7 +519,7 @@ class NewsCrawlerSettingsManager {
                         <p>設定したAPIキーの接続をテストできます。</p>
                         <button type="button" id="test-youtube-api" class="button">YouTube API テスト</button>
                         <button type="button" id="test-openai-api" class="button">OpenAI API テスト</button>
-                        <div id="api-test-results" style="margin-top: 10px;"></div>
+                        <div id="api-test-results" style="margin-top: 15px; padding: 10px; border-radius: 4px; min-height: 50px;"></div>
                     </div>
 
                     <?php submit_button(); ?>
@@ -474,6 +556,29 @@ class NewsCrawlerSettingsManager {
                 </form>
             </div>
             
+            <div id="twitter-settings" class="tab-content<?php echo ($active_tab === 'twitter-settings' ? ' active' : ''); ?>">
+                <form method="post" action="options.php">
+                    <?php 
+                    // X（Twitter）設定のフィールドを表示
+                    settings_fields('news_crawler_basic_settings');
+                    do_settings_sections('news-crawler-settings-twitter');
+                    ?>
+                    <input type="hidden" name="current_tab" value="twitter-settings" />
+                    <?php submit_button(); ?>
+                </form>
+            </div>
+            
+            <div id="youtube-settings" class="tab-content<?php echo ($active_tab === 'youtube-settings' ? ' active' : ''); ?>">
+                <form method="post" action="options.php">
+                    <?php 
+                    // YouTube設定のフィールドを表示
+                    settings_fields('youtube_crawler_settings');
+                    do_settings_sections('youtube-crawler');
+                    ?>
+                    <input type="hidden" name="current_tab" value="youtube-settings" />
+                    <?php submit_button(); ?>
+                </form>
+            </div>
             
             
             
@@ -592,9 +697,9 @@ class NewsCrawlerSettingsManager {
                     },
                     success: function(response) {
                         if (response.success) {
-                            resultsDiv.html('<div class="notice notice-success"><p>' + response.data + '</p></div>');
+                            resultsDiv.html('<div class="notice notice-success inline"><p>' + response.data + '</p></div>');
                         } else {
-                            resultsDiv.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
+                            resultsDiv.html('<div class="notice notice-error inline"><p>' + response.data + '</p></div>');
                         }
                     },
                     error: function() {
@@ -911,6 +1016,107 @@ class NewsCrawlerSettingsManager {
         echo '<p class="description">この日数より古いコンテンツをスキップします。</p>';
     }
     
+    // X（Twitter）設定のコールバック関数
+    public function twitter_section_callback() {
+        echo '<p>X（旧Twitter）への自動投稿に関する設定です。投稿作成後に自動的にXにシェアされます。</p>';
+        echo '<p><button type="button" id="test-x-connection" class="button button-secondary">接続テスト</button></p>';
+        wp_nonce_field('twitter_connection_test_nonce', 'twitter_connection_test_nonce');
+    }
+    
+    public function twitter_enabled_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_enabled']) ? $settings['twitter_enabled'] : false;
+        echo '<input type="hidden" name="' . $this->option_name . '[twitter_enabled]" value="0" />';
+        echo '<input type="checkbox" name="' . $this->option_name . '[twitter_enabled]" value="1" ' . checked(1, $value, false) . ' />';
+        echo '<p class="description">投稿作成後に自動的にXにシェアされます。</p>';
+    }
+    
+    public function twitter_bearer_token_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_bearer_token']) ? $settings['twitter_bearer_token'] : '';
+        echo '<input type="text" name="' . $this->option_name . '[twitter_bearer_token]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したBearer Tokenを入力してください。</p>';
+    }
+    
+    public function twitter_api_key_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_api_key']) ? $settings['twitter_api_key'] : '';
+        echo '<input type="text" name="' . $this->option_name . '[twitter_api_key]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAPI Key（Consumer Key）を入力してください。</p>';
+    }
+    
+    public function twitter_api_secret_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_api_secret']) ? $settings['twitter_api_secret'] : '';
+        echo '<input type="password" name="' . $this->option_name . '[twitter_api_secret]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAPI Secret（Consumer Secret）を入力してください。</p>';
+    }
+    
+    public function twitter_access_token_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_access_token']) ? $settings['twitter_access_token'] : '';
+        echo '<input type="text" name="' . $this->option_name . '[twitter_access_token]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAccess Tokenを入力してください。</p>';
+    }
+    
+    public function twitter_access_token_secret_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_access_token_secret']) ? $settings['twitter_access_token_secret'] : '';
+        echo '<input type="password" name="' . $this->option_name . '[twitter_access_token_secret]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
+    }
+    
+    public function twitter_message_template_callback() {
+        $settings = get_option($this->option_name, array());
+        if (!is_array($settings)) {
+            $settings = array();
+        }
+        $value = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : '%TITLE%';
+        
+        // 旧形式の{title}を%TITLE%に自動変換
+        if ($value === '{title}') {
+            $value = '%TITLE%';
+            // 設定を更新
+            $settings['twitter_message_template'] = $value;
+            update_option($this->option_name, $settings);
+        }
+        
+        echo '<textarea name="' . $this->option_name . '[twitter_message_template]" rows="3" cols="50">' . esc_textarea($value) . '</textarea>';
+        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。以下のプレースホルダーが使用できます：</p>';
+        echo '<div class="description" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 5px; margin: 10px 0;">';
+        echo '<div><strong>%TITLE%</strong> - 投稿タイトル</div>';
+        echo '<div><strong>%URL%</strong> - 投稿URL</div>';
+        echo '<div><strong>%SURL%</strong> - 短縮URL</div>';
+        echo '<div><strong>%IMG%</strong> - アイキャッチ画像URL</div>';
+        echo '<div><strong>%EXCERPT%</strong> - 抜粋（処理済み）</div>';
+        echo '<div><strong>%RAWEXCERPT%</strong> - 抜粋（生）</div>';
+        echo '<div><strong>%ANNOUNCE%</strong> - アナウンス文</div>';
+        echo '<div><strong>%FULLTEXT%</strong> - 本文（処理済み）</div>';
+        echo '<div><strong>%RAWTEXT%</strong> - 本文（生）</div>';
+        echo '<div><strong>%TAGS%</strong> - タグ</div>';
+        echo '<div><strong>%CATS%</strong> - カテゴリー</div>';
+        echo '<div><strong>%HTAGS%</strong> - タグ（ハッシュタグ）</div>';
+        echo '<div><strong>%HCATS%</strong> - カテゴリー（ハッシュタグ）</div>';
+        echo '<div><strong>%AUTHORNAME%</strong> - 投稿者名</div>';
+        echo '<div><strong>%SITENAME%</strong> - サイト名</div>';
+        echo '</div>';
+    }
+    
+    public function twitter_include_link_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_include_link']) ? $settings['twitter_include_link'] : true;
+        echo '<input type="hidden" name="' . $this->option_name . '[twitter_include_link]" value="0" />';
+        echo '<input type="checkbox" name="' . $this->option_name . '[twitter_include_link]" value="1" ' . checked(1, $value, false) . ' />';
+        echo '<p class="description">X投稿に投稿へのリンクを含めます。</p>';
+    }
+    
+    public function twitter_hashtags_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['twitter_hashtags']) ? $settings['twitter_hashtags'] : '';
+        echo '<input type="text" name="' . $this->option_name . '[twitter_hashtags]" value="' . esc_attr($value) . '" size="50" />';
+        echo '<p class="description">X投稿に含めるハッシュタグをスペース区切りで入力してください（例：ニュース テクノロジー）。</p>';
+    }
+    
     /**
      * 設定をサニタイズ
      */
@@ -929,7 +1135,7 @@ class NewsCrawlerSettingsManager {
         }
 
         // チェックボックス（送信があった項目のみ更新）
-        $checkboxes = array('auto_featured_image', 'auto_summary_generation', 'age_limit_enabled');
+        $checkboxes = array('auto_featured_image', 'auto_summary_generation', 'age_limit_enabled', 'twitter_enabled', 'twitter_include_link');
         foreach ($checkboxes as $checkbox) {
             if (array_key_exists($checkbox, $input)) {
                 $sanitized[$checkbox] = $input[$checkbox] ? true : false;
@@ -950,6 +1156,19 @@ class NewsCrawlerSettingsManager {
             if (array_key_exists($number, $input)) {
                 $sanitized[$number] = max(1, min(365, intval($input[$number])));
             }
+        }
+        
+        // X（Twitter）設定
+        $twitter_fields = array('twitter_bearer_token', 'twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_token_secret', 'twitter_hashtags');
+        foreach ($twitter_fields as $field) {
+            if (array_key_exists($field, $input)) {
+                $sanitized[$field] = sanitize_text_field($input[$field]);
+            }
+        }
+        
+        // メッセージテンプレートは改行を保持
+        if (array_key_exists('twitter_message_template', $input)) {
+            $sanitized['twitter_message_template'] = sanitize_textarea_field($input['twitter_message_template']);
         }
 
         return $sanitized;
@@ -985,9 +1204,34 @@ class NewsCrawlerSettingsManager {
                 $data = json_decode($body, true);
                 
                 if (isset($data['error'])) {
-                    wp_send_json_error('YouTube API エラー: ' . $data['error']['message']);
+                    $error_message = $data['error']['message'];
+                    $error_code = isset($data['error']['code']) ? $data['error']['code'] : '';
+                    
+                    // クォータ超過エラーの特別処理
+                    if (strpos($error_message, 'quotaExceeded') !== false || 
+                        strpos($error_message, 'exceeded your quota') !== false ||
+                        strpos($error_message, 'quota') !== false ||
+                        $error_code == 403) {
+                        // クォータ超過時刻を記録
+                        update_option('youtube_api_quota_exceeded', time());
+                        
+                        $quota_exceeded_time = get_option('youtube_api_quota_exceeded', 0);
+                        $remaining_hours = ceil((86400 - (time() - $quota_exceeded_time)) / 3600);
+                        
+                        wp_send_json_error('🚫 YouTube API クォータ超過エラー<br><br>' .
+                            '<strong>【エラー詳細】</strong><br>' .
+                            '• エラー内容: ' . $error_message . '<br>' .
+                            '• エラーコード: ' . $error_code . '<br><br>' .
+                            '<strong>【対処方法】</strong><br>' .
+                            '• 自動リセットまで: 約' . $remaining_hours . '時間後<br>' .
+                            '• 手動リセット: YouTube基本設定の「クォータをリセット」ボタンをクリック<br>' .
+                            '• 設定調整: 1日のリクエスト制限数を減らすことを検討<br><br>' .
+                            '<em>※ このエラーは一時的なもので、24時間後に自動的にリセットされます。</em>');
+                    } else {
+                        wp_send_json_error('YouTube API エラー: ' . $error_message . ($error_code ? ' (コード: ' . $error_code . ')' : ''));
+                    }
                 } elseif (isset($data['items']) && is_array($data['items'])) {
-                    wp_send_json_success('YouTube API接続成功！');
+                    wp_send_json_success('✅ YouTube API接続成功！<br>APIキーが正しく設定されています。');
                 } else {
                     wp_send_json_error('YouTube API エラー: 予期しない応答');
                 }

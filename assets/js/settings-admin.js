@@ -114,4 +114,48 @@ jQuery(document).ready(function($) {
             });
         }
     });
+    
+    // X（Twitter）接続テスト機能
+    $('#test-x-connection').on('click', function() {
+        const button = $(this);
+        const originalText = button.text();
+        
+        console.log('X接続テスト開始');
+        console.log('ajaxurl:', ajaxurl);
+        console.log('nonce:', $('#twitter_connection_test_nonce').val());
+        
+        // ボタンを無効化
+        button.prop('disabled', true).text('接続テスト中...');
+        
+        const requestData = {
+            action: 'test_x_connection',
+            nonce: $('#twitter_connection_test_nonce').val()
+        };
+        
+        console.log('送信データ:', requestData);
+        
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: requestData,
+            dataType: 'json',
+            success: function(response) {
+                console.log('X接続テストレスポンス:', response);
+                if (response.success) {
+                    showSuccess(response.data.message);
+                } else {
+                    showError(response.data.message || '接続テストに失敗しました。');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('X接続テストエラー:', xhr, status, error);
+                console.error('レスポンステキスト:', xhr.responseText);
+                showError('接続テストに失敗しました。エラー: ' + error + ' (ステータス: ' + xhr.status + ')');
+            },
+            complete: function() {
+                // ボタンを有効化
+                button.prop('disabled', false).text(originalText);
+            }
+        });
+    });
 });

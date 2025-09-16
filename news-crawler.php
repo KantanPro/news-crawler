@@ -45,6 +45,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
 
 
 // アップデータクラスを初期化（WordPress標準更新システム）
@@ -313,6 +314,19 @@ function news_crawler_init_components() {
     // OGP管理クラス（フロントでも必要なため常時）
     if (class_exists('NewsCrawlerOGPManager')) {
         new NewsCrawlerOGPManager();
+    }
+    
+    // X（Twitter）投稿クラス（常時初期化）
+    if (class_exists('News_Crawler_X_Poster')) {
+        $x_poster = new News_Crawler_X_Poster();
+        
+        // 直接フックを登録（確実性を高める）
+        add_action('publish_post', array($x_poster, 'auto_post_to_x'), 10, 1);
+        add_action('transition_post_status', array($x_poster, 'handle_post_status_change'), 10, 3);
+        add_action('wp_insert_post', array($x_poster, 'handle_wp_insert_post'), 10, 3);
+        add_action('save_post', array($x_poster, 'handle_save_post'), 10, 3);
+        
+        error_log('News Crawler: X Posterクラスを初期化し、フックを直接登録しました');
     }
     
     // 更新チェッククラスは早期初期化で処理済み

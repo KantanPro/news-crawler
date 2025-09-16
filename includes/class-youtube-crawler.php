@@ -13,6 +13,40 @@ if (!defined('ABSPATH')) {
 class NewsCrawlerYouTubeCrawler {
     private $api_key;
     private $option_name = 'youtube_crawler_settings';
+    private $rate_limit_delay = 1; // API呼び出し間隔（秒）
+    private $daily_request_limit = 100; // 1日のリクエスト制限
+    
+    /**
+     * レート制限チェック
+     */
+    private function check_rate_limit() {
+        $last_request = get_transient('youtube_api_last_request');
+        if ($last_request && (time() - $last_request) < $this->rate_limit_delay) {
+            $wait_time = $this->rate_limit_delay - (time() - $last_request);
+            error_log("YouTube API: レート制限のため {$wait_time}秒待機します");
+            sleep($wait_time);
+        }
+        set_transient('youtube_api_last_request', time(), 300); // 5分間キャッシュ
+    }
+    
+    /**
+     * 日次クォータチェック
+     */
+    private function check_daily_quota() {
+        $today = date('Y-m-d');
+        $daily_requests = get_transient("youtube_api_daily_requests_{$today}");
+        
+        if ($daily_requests && $daily_requests >= $this->daily_request_limit) {
+            error_log("YouTube API: 日次クォータ制限に達しました ({$daily_requests}/{$this->daily_request_limit})");
+            return false;
+        }
+        
+        // リクエスト数をカウント
+        $count = $daily_requests ? $daily_requests + 1 : 1;
+        set_transient("youtube_api_daily_requests_{$today}", $count, 86400); // 24時間キャッシュ
+        
+        return true;
+    }
     
     /**
      * OpenAI APIキー取得（News Crawler 基本設定から）
@@ -305,10 +339,46 @@ class NewsCrawlerYouTubeCrawler {
         return array('message' => '変更はありませんでした');
     }
     
+    /**
+     * クォータリセット
+     */
+    public function reset_quota() {
+        // セキュリティチェック
+        if (!wp_verify_nonce($_POST['nonce'], 'youtube_reset_quota')) {
+            wp_send_json_error(array('message' => 'セキュリティエラー'));
+            return;
+        }
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => '権限がありません'));
+            return;
+        }
+        
+        // クォータ関連のデータをリセット
+        $today = date('Y-m-d');
+        delete_transient("youtube_api_daily_requests_{$today}");
+        delete_transient('youtube_api_last_request');
+        delete_option('youtube_api_quota_exceeded');
+        
+        error_log('YouTube API: クォータが手動でリセットされました');
+        
+        wp_send_json_success(array('message' => 'クォータがリセットされました'));
+    }
+    
+    
     public function __construct() {
         // APIキーは基本設定から取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $this->api_key = isset($basic_settings['youtube_api_key']) ? $basic_settings['youtube_api_key'] : '';
+        
+        // 設定からレート制限値を取得
+        $options = get_option($this->option_name, array());
+        if (isset($options['daily_request_limit'])) {
+            $this->daily_request_limit = intval($options['daily_request_limit']);
+        }
+        if (isset($options['rate_limit_delay'])) {
+            $this->rate_limit_delay = floatval($options['rate_limit_delay']);
+        }
         
         // APIキーの設定状況をログに記録
         if (empty($this->api_key)) {
@@ -322,6 +392,10 @@ class NewsCrawlerYouTubeCrawler {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_youtube_crawler_manual_run', array($this, 'manual_run'));
         add_action('wp_ajax_youtube_crawler_test_fetch', array($this, 'test_fetch'));
+        add_action('wp_ajax_youtube_reset_quota', array($this, 'reset_quota'));
+        
+        // 設定の登録
+        register_setting('youtube_crawler_settings', $this->option_name, array($this, 'sanitize_settings'));
     }
     
     public function add_admin_menu() {
@@ -339,77 +413,33 @@ class NewsCrawlerYouTubeCrawler {
             'youtube-crawler'
         );
         
+        
         add_settings_field(
-            'youtube_api_key',
-            'YouTube API キー',
-            array($this, 'api_key_callback'),
+            'daily_request_limit',
+            '1日のリクエスト制限',
+            array($this, 'daily_limit_callback'),
             'youtube-crawler',
             'youtube_crawler_main',
-            array('label_for' => 'youtube_api_key')
+            array('label_for' => 'daily_request_limit')
         );
         
         add_settings_field(
-            'youtube_channels',
-            'YouTubeチャンネルID',
-            array($this, 'channels_callback'),
+            'rate_limit_delay',
+            'API呼び出し間隔（秒）',
+            array($this, 'rate_limit_callback'),
             'youtube-crawler',
             'youtube_crawler_main',
-            array('label_for' => 'youtube_channels')
+            array('label_for' => 'rate_limit_delay')
         );
         
         add_settings_field(
-            'youtube_max_videos',
-            '最大動画数',
-            array($this, 'max_videos_callback'),
+            'quota_reset',
+            'クォータリセット',
+            array($this, 'quota_reset_callback'),
             'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_max_videos')
+            'youtube_crawler_main'
         );
         
-        add_settings_field(
-            'youtube_keywords',
-            'キーワード設定',
-            array($this, 'keywords_callback'),
-            'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_keywords')
-        );
-        
-        add_settings_field(
-            'youtube_post_categories',
-            '投稿カテゴリー',
-            array($this, 'post_category_callback'),
-            'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_post_categories')
-        );
-        
-        add_settings_field(
-            'youtube_post_status',
-            '投稿ステータス',
-            array($this, 'post_status_callback'),
-            'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_post_status')
-        );
-        
-        add_settings_field(
-            'youtube_embed_type',
-            '動画埋め込みタイプ',
-            array($this, 'embed_type_callback'),
-            'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_embed_type')
-        );
-        
-        add_settings_field(
-            'youtube_skip_duplicates',
-            '重複チェック',
-            array($this, 'skip_duplicates_callback'),
-            'youtube-crawler',
-            'youtube_crawler_main',
-            array('label_for' => 'youtube_skip_duplicates')
-        );
     }
     
     public function main_section_callback() {
@@ -417,197 +447,93 @@ class NewsCrawlerYouTubeCrawler {
         echo '<p><strong>注意:</strong> YouTube Data API v3のAPIキーが必要です。<a href="https://developers.google.com/youtube/v3/getting-started" target="_blank">こちら</a>から取得できます。</p>';
     }
     
-    public function api_key_callback() {
+    
+    public function daily_limit_callback() {
         $options = get_option($this->option_name, array());
-        $api_key = isset($options['api_key']) && !empty($options['api_key']) ? $options['api_key'] : '';
-        echo '<input type="text" id="youtube_api_key" name="' . $this->option_name . '[api_key]" value="' . esc_attr($api_key) . '" size="50" />';
-        echo '<p class="description">YouTube Data API v3のAPIキーを入力してください。</p>';
+        $limit = isset($options['daily_request_limit']) ? $options['daily_request_limit'] : $this->daily_request_limit;
+        echo '<input type="number" id="daily_request_limit" name="' . $this->option_name . '[daily_request_limit]" value="' . esc_attr($limit) . '" min="1" max="10000" />';
+        echo '<p class="description">1日のAPIリクエスト制限数（デフォルト: 100）。クォータ制限を回避するために調整してください。</p>';
     }
     
-    public function channels_callback() {
+    public function rate_limit_callback() {
         $options = get_option($this->option_name, array());
-        $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
-        $channels_text = implode("\n", $channels);
-        echo '<textarea id="youtube_channels" name="' . $this->option_name . '[channels]" rows="5" cols="50" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">' . esc_textarea($channels_text) . '</textarea>';
-        echo '<p class="description">1行に1チャンネルIDを入力してください。チャンネルIDは通常「UC」で始まります。</p>';
+        $delay = isset($options['rate_limit_delay']) ? $options['rate_limit_delay'] : $this->rate_limit_delay;
+        echo '<input type="number" id="rate_limit_delay" name="' . $this->option_name . '[rate_limit_delay]" value="' . esc_attr($delay) . '" min="0" max="60" step="0.1" />';
+        echo '<p class="description">API呼び出し間隔（秒）。レート制限を回避するために調整してください（デフォルト: 1秒）。</p>';
     }
     
-    public function max_videos_callback() {
-        $options = get_option($this->option_name, array());
-        $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
-        echo '<input type="number" id="youtube_max_videos" name="' . $this->option_name . '[max_videos]" value="' . esc_attr($max_videos) . '" min="1" max="20" />';
-        echo '<p class="description">キーワードにマッチした動画の最大取得数（1-20件）。各チャンネルから最新の動画を1件ずつ取得します。</p>';
-    }
-    
-    public function keywords_callback() {
-        $options = get_option($this->option_name, array());
-        $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-        $keywords_text = implode("\n", $keywords);
-        echo '<textarea id="youtube_keywords" name="' . $this->option_name . '[keywords]" rows="5" cols="50" placeholder="1行に1キーワードを入力してください">' . esc_textarea($keywords_text) . '</textarea>';
-        echo '<p class="description">1行に1キーワードを入力してください。キーワードにマッチした動画のみを取得します。</p>';
-    }
-    
-    public function post_category_callback() {
-        $options = get_option($this->option_name, array());
-        $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
-        $categories_text = implode("\n", $categories);
-        echo '<textarea id="youtube_post_categories" name="' . $this->option_name . '[post_categories]" rows="3" cols="50" placeholder="1行に1カテゴリー名を入力してください">' . esc_textarea($categories_text) . '</textarea>';
-        echo '<p class="description">投稿するカテゴリー名を1行に1つずつ入力してください。存在しない場合は自動的に作成されます。</p>';
-    }
-    
-    public function post_status_callback() {
-        $options = get_option($this->option_name, array());
-        $status = isset($options['post_status']) && !empty($options['post_status']) ? $options['post_status'] : 'draft';
-        $statuses = array(
-            'draft' => '下書き',
-            'publish' => '公開',
-            'private' => '非公開',
-            'pending' => '承認待ち'
-        );
-        echo '<select id="youtube_post_status" name="' . $this->option_name . '[post_status]">';
-        foreach ($statuses as $value => $label) {
-            echo '<option value="' . $value . '" ' . selected($value, $status, false) . '>' . $label . '</option>';
+    public function quota_reset_callback() {
+        $today = date('Y-m-d');
+        $daily_requests = get_transient("youtube_api_daily_requests_{$today}");
+        $quota_exceeded = get_option('youtube_api_quota_exceeded', 0);
+        
+        echo '<div style="margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border-left: 4px solid #0073aa;">';
+        echo '<strong>📊 現在のクォータ状況:</strong><br><br>';
+        echo '今日のリクエスト数: <strong>' . ($daily_requests ? $daily_requests : 0) . ' / ' . $this->daily_request_limit . '</strong><br>';
+        
+        // クォータ使用率を計算
+        $usage_percentage = $daily_requests ? round(($daily_requests / $this->daily_request_limit) * 100, 1) : 0;
+        echo '使用率: <strong>' . $usage_percentage . '%</strong><br>';
+        
+        if ($quota_exceeded > 0) {
+            $remaining_hours = ceil((86400 - (time() - $quota_exceeded)) / 3600);
+            echo '<br><span style="color: #d63638; font-weight: bold;">⚠️ クォータ超過中</span><br>';
+            echo '超過時刻: ' . date('Y-m-d H:i:s', $quota_exceeded) . '<br>';
+            echo '自動リセットまで: <strong>' . $remaining_hours . '時間</strong><br>';
+        } else {
+            $remaining_requests = $this->daily_request_limit - ($daily_requests ? $daily_requests : 0);
+            echo '残りリクエスト数: <strong>' . $remaining_requests . '件</strong><br>';
         }
-        echo '</select>';
+        echo '</div>';
+        
+        echo '<button type="button" id="reset-youtube-quota" class="button">クォータをリセット</button>';
+        echo '<p class="description">クォータ制限を手動でリセットします。注意: 実際のAPIクォータは24時間後に自動リセットされます。</p>';
+        
+        echo '<script>
+        document.getElementById("reset-youtube-quota").addEventListener("click", function() {
+            if (confirm("クォータをリセットしますか？")) {
+                fetch(ajaxurl, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "action=youtube_reset_quota&nonce=' . wp_create_nonce('youtube_reset_quota') . '"
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("HTTP error! status: " + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        alert(data.data.message || "クォータがリセットされました");
+                    } else {
+                        alert("エラー: " + (data.data.message || data.data || "不明なエラーが発生しました"));
+                    }
+                    location.reload();
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("クォータリセット中にエラーが発生しました: " + error.message);
+                });
+            }
+        });
+        </script>';
     }
     
-    public function embed_type_callback() {
-        $options = get_option($this->option_name, array());
-        $embed_type = isset($options['embed_type']) && !empty($options['embed_type']) ? $options['embed_type'] : 'responsive';
-        $types = array(
-            'responsive' => 'WordPress埋め込みブロック（推奨）',
-            'classic' => 'WordPress埋め込みブロック',
-            'minimal' => 'リンクのみ（軽量）'
-        );
-        echo '<select id="youtube_embed_type" name="' . $this->option_name . '[embed_type]">';
-        foreach ($types as $value => $label) {
-            echo '<option value="' . $value . '" ' . selected($value, $embed_type, false) . '>' . $label . '</option>';
-        }
-        echo '</select>';
-        echo '<p class="description">WordPress埋め込みブロックを選択すると、ブロックエディターで動画プレビューが表示されます。</p>';
-    }
-    
-    public function skip_duplicates_callback() {
-        $options = get_option($this->option_name, array());
-        $skip_duplicates = isset($options['skip_duplicates']) && !empty($options['skip_duplicates']) ? $options['skip_duplicates'] : 'enabled';
-        $options_array = array(
-            'enabled' => '重複チェックを有効にする（推奨）',
-            'disabled' => '重複チェックを無効にする'
-        );
-        echo '<select id="youtube_skip_duplicates" name="' . $this->option_name . '[skip_duplicates]">';
-        foreach ($options_array as $value => $label) {
-            echo '<option value="' . $value . '" ' . selected($value, $skip_duplicates, false) . '>' . $label . '</option>';
-        }
-        echo '</select>';
-        echo '<p class="description">重複チェックを無効にすると、同じ動画が含まれた投稿が複数作成される可能性があります。</p>';
-    }   
  
     public function sanitize_settings($input) {
         $sanitized = array();
         
-        $existing_options = get_option($this->option_name, array());
-        
-        if (isset($input['max_videos'])) {
-            if (is_numeric($input['max_videos']) || (is_string($input['max_videos']) && !empty(trim($input['max_videos'])))) {
-                $max_videos = intval($input['max_videos']);
-                $sanitized['max_videos'] = max(1, min(20, $max_videos));
-            } else {
-                $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
-            }
-        } else {
-            $sanitized['max_videos'] = isset($existing_options['max_videos']) ? $existing_options['max_videos'] : 5;
-        }
-        
-        if (isset($input['keywords'])) {
-            if (is_array($input['keywords']) && !empty($input['keywords'])) {
-                $keywords = array_map('trim', $input['keywords']);
-                $keywords = array_filter($keywords);
-                $sanitized['keywords'] = $keywords;
-            } elseif (is_string($input['keywords']) && !empty(trim($input['keywords']))) {
-                $keywords = explode("\n", $input['keywords']);
-                $keywords = array_map('trim', $keywords);
-                $keywords = array_filter($keywords);
-                $sanitized['keywords'] = $keywords;
-            } else {
-                $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-            }
-        } else {
-            $sanitized['keywords'] = isset($existing_options['keywords']) ? $existing_options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
-        }
-        
         if (isset($input['channels'])) {
-            if (is_array($input['channels']) && !empty($input['channels'])) {
-                $channels = array_map('trim', $input['channels']);
-                $channels = array_filter($channels);
-            } elseif (is_string($input['channels']) && !empty(trim($input['channels']))) {
-                $channels = explode("\n", $input['channels']);
-                $channels = array_map('trim', $channels);
-                $channels = array_filter($channels);
-                $sanitized['channels'] = $channels;
-            } else {
-                $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
-            }
-        } else {
-            $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
+            $sanitized['channels'] = array_map('sanitize_text_field', $input['channels']);
         }
         
-        if (isset($input['post_categories'])) {
-            if (is_array($input['post_categories'])) {
-                $categories = array_map('trim', $input['post_categories']);
-                $categories = array_filter($categories);
-                $sanitized['post_categories'] = !empty($categories) ? $categories : array('blog');
-            } elseif (is_string($input['post_categories']) && !empty(trim($input['post_categories']))) {
-                $categories = explode("\n", $input['post_categories']);
-                $categories = array_map('trim', $categories);
-                $categories = array_filter($categories);
-                $sanitized['post_categories'] = !empty($categories) ? $categories : array('blog');
-            } else {
-                $sanitized['post_categories'] = isset($existing_options['post_categories']) ? $existing_options['post_categories'] : array('blog');
-            }
-        } else {
-            $sanitized['post_categories'] = isset($existing_options['post_categories']) ? $existing_options['post_categories'] : array('blog');
+        if (isset($input['daily_request_limit'])) {
+            $sanitized['daily_request_limit'] = intval($input['daily_request_limit']);
         }
         
-        if (isset($input['post_status'])) {
-            if (is_string($input['post_status']) && !empty(trim($input['post_status']))) {
-                $sanitized['post_status'] = sanitize_text_field($input['post_status']);
-            } else {
-                $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
-            }
-        } else {
-            $sanitized['post_status'] = isset($existing_options['post_status']) ? $existing_options['post_status'] : 'draft';
-        }
-        
-        if (isset($input['embed_type'])) {
-            if (is_string($input['embed_type']) && !empty(trim($input['embed_type']))) {
-                $sanitized['embed_type'] = sanitize_text_field($input['embed_type']);
-            } else {
-                $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
-            }
-        } else {
-            $sanitized['embed_type'] = isset($existing_options['embed_type']) ? $existing_options['embed_type'] : 'responsive';
-        }
-        
-        // API キーの処理
-        if (isset($input['api_key'])) {
-            if (is_string($input['api_key']) && !empty(trim($input['api_key']))) {
-                $sanitized['api_key'] = sanitize_text_field($input['api_key']);
-            } else {
-                $sanitized['api_key'] = isset($existing_options['api_key']) ? $existing_options['api_key'] : '';
-            }
-        } else {
-            $sanitized['api_key'] = isset($existing_options['api_key']) ? $existing_options['api_key'] : '';
-        }
-        
-        // 重複チェック設定の処理
-        if (isset($input['skip_duplicates'])) {
-            if (is_string($input['skip_duplicates']) && !empty(trim($input['skip_duplicates']))) {
-                $sanitized['skip_duplicates'] = sanitize_text_field($input['skip_duplicates']);
-            } else {
-                $sanitized['skip_duplicates'] = isset($existing_options['skip_duplicates']) ? $existing_options['skip_duplicates'] : 'enabled';
-            }
-        } else {
-            $sanitized['skip_duplicates'] = isset($existing_options['skip_duplicates']) ? $existing_options['skip_duplicates'] : 'enabled';
+        if (isset($input['rate_limit_delay'])) {
+            $sanitized['rate_limit_delay'] = floatval($input['rate_limit_delay']);
         }
         
         return $sanitized;
@@ -680,7 +606,12 @@ class NewsCrawlerYouTubeCrawler {
         $quota_exceeded_time = get_option('youtube_api_quota_exceeded', 0);
         if ($quota_exceeded_time > 0 && (time() - $quota_exceeded_time) < 86400) { // 24時間
             $remaining_hours = ceil((86400 - (time() - $quota_exceeded_time)) / 3600);
-            return 'YouTube APIのクォータ制限により、' . $remaining_hours . '時間後に再試行してください。';
+            $exceeded_time = date('Y-m-d H:i:s', $quota_exceeded_time);
+            return 'YouTube APIのクォータ制限により、' . $remaining_hours . '時間後に再試行してください。' . "\n\n" .
+                '【詳細情報】' . "\n" .
+                'クォータ超過時刻: ' . $exceeded_time . "\n" .
+                '現在の設定: ' . $this->daily_request_limit . '件/日' . "\n" .
+                '対処方法: YouTube基本設定の「クォータをリセット」ボタンで手動リセット可能';
         }
         
         $this->api_key = $api_key;
@@ -1285,6 +1216,14 @@ class NewsCrawlerYouTubeCrawler {
             throw new Exception('YouTube APIキーが設定されていません');
         }
         
+        // 日次クォータチェック
+        if (!$this->check_daily_quota()) {
+            throw new Exception('YouTube APIの日次クォータ制限に達しました。明日再試行してください。');
+        }
+        
+        // レート制限チェック
+        $this->check_rate_limit();
+        
         // クォータ効率化のため、検索APIと動画詳細APIを統合
         $api_url = 'https://www.googleapis.com/youtube/v3/search';
         $params = array(
@@ -1340,7 +1279,13 @@ class NewsCrawlerYouTubeCrawler {
             if ($response_code === 403 && strpos($body, 'quotaExceeded') !== false) {
                 // クォータ超過時刻を記録
                 update_option('youtube_api_quota_exceeded', time());
-                throw new Exception('YouTube APIのクォータ（利用制限）を超過しています。24時間後に再試行してください。');
+                error_log('YouTube API: クォータ超過エラーが発生しました。24時間後に自動リセットされます。');
+                throw new Exception('YouTube APIのクォータ（利用制限）を超過しています。\n\n' . 
+                    '【対処方法】\n' .
+                    '1. 24時間後に自動的にリセットされます\n' .
+                    '2. または、YouTube基本設定の「クォータをリセット」ボタンで手動リセットできます\n' .
+                    '3. 1日のリクエスト制限数を減らすことを検討してください\n\n' .
+                    '現在の設定: ' . $this->daily_request_limit . '件/日');
             }
             
             // HTTPエラー時もRSSフィードにフォールバック
