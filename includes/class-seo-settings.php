@@ -100,14 +100,6 @@ class NewsCrawlerSeoSettings {
             'seo_settings'
         );
         
-        add_settings_field(
-            'ogp_image_size',
-            'OGP画像サイズ',
-            array($this, 'ogp_image_size_callback'),
-            'news-crawler-settings-seo',
-            'seo_settings'
-        );
-        
         // 構造化データ設定
         add_settings_field(
             'auto_structured_data',
@@ -227,27 +219,7 @@ class NewsCrawlerSeoSettings {
         $value = isset($settings['auto_ogp_tags']) ? $settings['auto_ogp_tags'] : true;
         echo '<input type="hidden" name="' . $this->option_name . '[auto_ogp_tags]" value="0" />';
         echo '<input type="checkbox" name="' . $this->option_name . '[auto_ogp_tags]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">投稿作成時に自動でOGPタグを生成します。</p>';
-    }
-    
-    /**
-     * OGP画像サイズのコールバック
-     */
-    public function ogp_image_size_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['ogp_image_size']) ? $settings['ogp_image_size'] : '1200x630';
-        $options = array(
-            '1200x630' => '1200x630px（推奨）',
-            '1200x675' => '1200x675px',
-            '1080x1080' => '1080x1080px（正方形）',
-            '1200x900' => '1200x900px'
-        );
-        echo '<select name="' . $this->option_name . '[ogp_image_size]">';
-        foreach ($options as $key => $label) {
-            echo '<option value="' . $key . '" ' . selected($key, $value, false) . '>' . $label . '</option>';
-        }
-        echo '</select>';
-        echo '<p class="description">OGP画像のサイズを選択してください。</p>';
+        echo '<p class="description">投稿作成時に自動でOGPタグを生成し、アイキャッチ画像をOGP画像に設定します。</p>';
     }
     
     /**
@@ -346,7 +318,7 @@ class NewsCrawlerSeoSettings {
         $checkboxes = array(
             'auto_meta_description', 
             'auto_meta_keywords', 
-            'auto_ogp_tags', 
+            'auto_ogp_tags',
             'auto_structured_data',
             'auto_title_optimization',
             'title_include_site_name',
@@ -371,7 +343,7 @@ class NewsCrawlerSeoSettings {
         }
 
         // セレクトボックス
-        $selects = array('ogp_image_size', 'structured_data_type');
+        $selects = array('structured_data_type');
         foreach ($selects as $select) {
             if (array_key_exists($select, $input)) {
                 $sanitized[$select] = sanitize_text_field($input[$select]);

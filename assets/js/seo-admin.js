@@ -50,18 +50,15 @@ jQuery(document).ready(function($) {
         
         // OGPタグ自動生成の制御
         var autoOgp = $('input[name="news_crawler_seo_settings[auto_ogp_tags]"]');
-        var ogpImageSize = $('select[name="news_crawler_seo_settings[ogp_image_size]"]').closest('tr');
         
-        function toggleOgpImageSize() {
-            if (autoOgp.is(':checked')) {
-                ogpImageSize.show();
+        // OGPタグ自動生成が有効な場合の処理（必要に応じて追加）
+        autoOgp.on('change', function() {
+            if ($(this).is(':checked')) {
+                console.log('OGPタグ自動生成が有効になりました');
             } else {
-                ogpImageSize.hide();
+                console.log('OGPタグ自動生成が無効になりました');
             }
-        }
-        
-        autoOgp.on('change', toggleOgpImageSize);
-        toggleOgpImageSize();
+        });
         
         // 構造化データ自動生成の制御
         var autoStructuredData = $('input[name="news_crawler_seo_settings[auto_structured_data]"]');

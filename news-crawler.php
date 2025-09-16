@@ -38,7 +38,6 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-eyecatch-admin.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-openai-summarizer.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-post-editor-summary.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-cron-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
@@ -314,11 +313,6 @@ function news_crawler_init_components() {
     // OGP管理クラス（フロントでも必要なため常時）
     if (class_exists('NewsCrawlerOGPManager')) {
         new NewsCrawlerOGPManager();
-    }
-    
-    // OGP設定クラス（管理画面のみ）
-    if (is_admin() && class_exists('NewsCrawlerOGPSettings')) {
-        new NewsCrawlerOGPSettings();
     }
     
     // 更新チェッククラスは早期初期化で処理済み

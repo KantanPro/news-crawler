@@ -177,15 +177,6 @@ class NewsCrawlerGenreSettings {
             array($this, 'license_settings_page')
         );
         
-        // OGP設定サブメニュー
-        add_submenu_page(
-            'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - OGP設定',
-            'OGP設定',
-            $menu_capability,
-            'news-crawler-ogp-settings',
-            array($this, 'ogp_settings_page')
-        );
     }
     
     public function admin_init() {
@@ -767,33 +758,6 @@ class NewsCrawlerGenreSettings {
         }
     }
     
-    public function ogp_settings_page() {
-        // ライセンス状態をチェック
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            $license_key = get_option( 'news_crawler_license_key' );
-            $is_license_valid = $license_manager->is_license_valid();
-            $license_status = $license_manager->get_license_status();
-            
-            // デバッグログを追加
-            error_log( 'NewsCrawler OGP Settings: license_key = ' . (empty($license_key) ? 'empty' : 'set') . ', is_license_valid = ' . ($is_license_valid ? 'true' : 'false') );
-            
-            // ライセンスキーがないか無効な場合はライセンス入力画面を表示
-            if (empty($license_key) || !$is_license_valid) {
-                error_log( 'NewsCrawler OGP Settings: Displaying license input page' );
-                $this->display_license_input_page($license_status);
-                return;
-            }
-        }
-        
-        // OGP設定クラスのインスタンスを作成してページを表示
-        if (class_exists('NewsCrawlerOGPSettings')) {
-            $ogp_settings = new NewsCrawlerOGPSettings();
-            $ogp_settings->admin_page();
-        } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - OGP設定</h1><p>OGP設定クラスが見つかりません。</p></div>';
-        }
-    }
     
     /**
      * Cron設定ページの表示
