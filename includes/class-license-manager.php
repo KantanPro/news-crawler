@@ -408,7 +408,20 @@ class NewsCrawler_License_Manager {
      * @return array Verification result
      */
     public function verify_license( $license_key ) {
-        
+        // 本番環境でのHTTP 403エラー回避のため、一時的にライセンス認証をスキップ
+        if ( defined( 'NEWS_CRAWLER_SKIP_LICENSE_CHECK' ) && NEWS_CRAWLER_SKIP_LICENSE_CHECK === true ) {
+            error_log( 'NewsCrawler License: License check skipped due to NEWS_CRAWLER_SKIP_LICENSE_CHECK constant' );
+            return array(
+                'success' => true,
+                'valid' => true,
+                'message' => 'ライセンス認証がスキップされました（緊急回避モード）',
+                'data' => array(
+                    'license_key' => $license_key,
+                    'status' => 'skipped',
+                    'reason' => 'NEWS_CRAWLER_SKIP_LICENSE_CHECK enabled'
+                )
+            );
+        }
         
         // ライセンスキーの前処理と形式チェック
         $validation = $this->validate_license_key_format( $license_key );
@@ -542,9 +555,13 @@ class NewsCrawler_License_Manager {
         $args = array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . ' (WordPress/' . get_bloginfo('version') . '; PHP/' . PHP_VERSION . ')',
-                'Accept' => 'application/json',
-                'X-Requested-With' => 'XMLHttpRequest'
+                'User-Agent'   => 'Mozilla/5.0 (compatible; NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . '; +https://www.kantanpro.com/)',
+                'Accept' => 'application/json, text/plain, */*',
+                'Accept-Language' => 'ja,en-US;q=0.9,en;q=0.8',
+                'Accept-Encoding' => 'gzip, deflate, br',
+                'Connection' => 'keep-alive',
+                'Cache-Control' => 'no-cache',
+                'Pragma' => 'no-cache'
             ),
             // data-urlencode 相当の確実なエンコード
             'body' => http_build_query( array(
@@ -556,7 +573,9 @@ class NewsCrawler_License_Manager {
             'sslverify' => true,
             'cookies' => array(), // クッキーをクリア
             'redirection' => 5,
-            'httpversion' => '1.1'
+            'httpversion' => '1.1',
+            'blocking' => true,
+            'reject_unsafe_urls' => false
         );
 
         error_log( 'NewsCrawler License: Outbound payload (urlencoded): ' . $args['body'] );
@@ -685,6 +704,12 @@ class NewsCrawler_License_Manager {
             
             // HTTP 403エラーの詳細ログ
             error_log( 'NewsCrawler License: HTTP 403 Forbidden error detected' );
+            error_log( 'NewsCrawler License: Request URL: ' . $klm_api_url );
+            error_log( 'NewsCrawler License: Request method: POST' );
+            error_log( 'NewsCrawler License: Request headers: ' . json_encode( $args['headers'] ) );
+            error_log( 'NewsCrawler License: Request body: ' . $args['body'] );
+            error_log( 'NewsCrawler License: Response headers: ' . json_encode( $response_headers->getAll() ) );
+            error_log( 'NewsCrawler License: Response body: ' . $body );
             
             return array(
                 'success' => false,
@@ -1497,7 +1522,7 @@ class NewsCrawler_License_Manager {
                             'type' => 'development',
                             'environment' => 'development'
                         ) ),
-                        'is_dev_mode' => true
+                        'is_dev_mode' => defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true
                     );
                 } else {
                     return array(
@@ -1505,7 +1530,7 @@ class NewsCrawler_License_Manager {
                         'message' => __( 'ライセンスが無効です。（開発環境モードで無効化中）', 'news-crawler' ),
                         'icon' => 'dashicons-warning',
                         'color' => '#f56e28',
-                        'is_dev_mode' => true
+                        'is_dev_mode' => defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true
                     );
                 }
             }

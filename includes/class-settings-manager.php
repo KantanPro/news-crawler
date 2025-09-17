@@ -417,7 +417,7 @@ class NewsCrawlerSettingsManager {
                     </p>
                 </div>
 
-                <?php if ( isset($license_status['is_dev_mode']) && ! empty( $license_status['is_dev_mode'] ) ) : ?>
+                <?php if ( isset($license_status['is_dev_mode']) && ! empty( $license_status['is_dev_mode'] ) && defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true ) : ?>
                 <!-- 開発環境モードの説明（開発環境でのみ表示） -->
                 <div class="ktp-dev-mode-info" style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px;">
                     <p style="margin: 0; font-size: 14px; color: #0066cc;">

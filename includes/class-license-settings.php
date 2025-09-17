@@ -127,7 +127,7 @@ class NewsCrawler_License_Settings {
                         <strong><?php echo esc_html( $license_status['message'] ); ?></strong>
                     </p>
                     
-                    <?php if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) : ?>
+                    <?php if ( defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true ) : ?>
                     <!-- 開発環境モードの説明（開発環境でのみ表示） -->
                     <div class="ktp-dev-mode-info" style="margin: 15px 0; padding: 15px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px;">
                         <p style="margin: 0; font-size: 14px; color: #0066cc;">
