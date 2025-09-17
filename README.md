@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.0)
+[![Version](https://img.shields.io/badge/version-2.5.1-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.1)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.1** (2025-09-18): Added license authentication skip functionality and improved request headers
+  - Added license authentication skip functionality for HTTP 403 error avoidance in production environments
+  - Improved request headers to send more detailed information for easier server-side diagnostics
+  - Unified development environment mode conditions for consistent environment detection
+  - Added detailed information to error logs for enhanced troubleshooting functionality
+  - Improved license authentication flexibility for better performance across various environments
+  - Further enhanced plugin reliability and stability
 
 - **v2.5.0** (2025-09-18): Enhanced Twitter API integration and improved error handling
   - Changed Twitter API endpoint from v2 to v1.1 for more stable API access
