@@ -37,10 +37,10 @@ class NewsCrawler_License_Manager {
      * @var array
      */
     private $api_endpoints = array(
-        'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
-        'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
-        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
-        'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
+        'verify' => 'https://license.example.com/wp-json/ktp-license/v1/verify',
+        'info'   => 'https://license.example.com/wp-json/ktp-license/v1/info',
+        'create' => 'https://license.example.com/wp-json/ktp-license/v1/create',
+        'debug'  => 'https://license.example.com/wp-json/ktp-license/v1/debug'
     );
 
     /**
@@ -479,6 +479,19 @@ class NewsCrawler_License_Manager {
         error_log( 'NewsCrawler License: Full license key: ' . $license_key );
         error_log( 'NewsCrawler License: Plugin version: ' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) );
         
+        // まずAPIエンドポイントの基本接続をテスト
+        $test_response = wp_remote_get( rtrim( $klm_api_url, '/verify' ) . '/info', array(
+            'timeout' => 10,
+            'sslverify' => true
+        ) );
+        
+        if ( is_wp_error( $test_response ) ) {
+            error_log( 'NewsCrawler License: API endpoint test failed: ' . $test_response->get_error_message() );
+        } else {
+            $test_code = wp_remote_retrieve_response_code( $test_response );
+            error_log( 'NewsCrawler License: API endpoint test response code: ' . $test_code );
+        }
+        
         // KLMプラグインの存在確認（フォールバック用途にのみ使用）
         error_log( 'NewsCrawler License: Checking for KLM plugin (for fallback)...' );
         $klm_available = class_exists( 'KTP_License_Manager' );
@@ -756,6 +769,33 @@ class NewsCrawler_License_Manager {
         
         error_log( 'NewsCrawler License: Test - Response code: ' . $response_code );
         error_log( 'NewsCrawler License: Test - Response body: ' . $body );
+        
+        // 403エラーの場合の詳細なエラーメッセージ
+        if ( $response_code === 403 ) {
+            return array(
+                'success' => false,
+                'message' => __( 'ライセンスサーバーからエラーレスポンスが返されました。 (HTTP 403)', 'news-crawler' ),
+                'error_code' => 'server_error',
+                'test_type' => 'api_connection',
+                'debug_info' => array(
+                    'license_key' => substr( $license_key, 0, 8 ) . '...',
+                    'site_url' => $site_url,
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                    'wp_version' => get_bloginfo( 'version' ),
+                    'php_version' => PHP_VERSION,
+                    'timestamp' => current_time( 'Y-m-d H:i:s' ),
+                    'is_development' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+                    'wp_debug' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+                    'server_debug' => array(
+                        'response_code' => $response_code,
+                        'response_body' => $body,
+                        'api_url' => $klm_api_url,
+                        'site_url' => $site_url,
+                        'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                    )
+                )
+            );
+        }
         
         $data = json_decode( $body, true );
         
@@ -1623,13 +1663,45 @@ class NewsCrawler_License_Manager {
         error_log( 'NewsCrawler License: API response code: ' . $response_code );
         error_log( 'NewsCrawler License: API response body: ' . $body );
 
+        // 403エラーの場合の詳細なエラーメッセージ
+        if ( $response_code === 403 ) {
+            return array(
+                'success' => false,
+                'message' => __( 'ライセンスサーバーからエラーレスポンスが返されました。 (HTTP 403)', 'news-crawler' ),
+                'error_code' => 'server_error',
+                'debug_info' => array(
+                    'license_key' => substr( $license_key, 0, 8 ) . '...',
+                    'site_url' => $site_url,
+                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                    'wp_version' => get_bloginfo( 'version' ),
+                    'php_version' => PHP_VERSION,
+                    'timestamp' => current_time( 'Y-m-d H:i:s' ),
+                    'is_development' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+                    'wp_debug' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+                    'server_debug' => array(
+                        'response_code' => $response_code,
+                        'response_body' => $body,
+                        'api_url' => $klm_api_url,
+                        'site_url' => $site_url,
+                        'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                    )
+                )
+            );
+        }
+
         if ( $response_code === 200 && $data && isset( $data['success'] ) ) {
             return $data;
         }
 
         return array(
             'success' => false,
-            'message' => __( 'KLM APIからの応答が無効です。', 'news-crawler' )
+            'message' => __( 'KLM APIからの応答が無効です。', 'news-crawler' ),
+            'error_code' => 'invalid_response',
+            'debug_info' => array(
+                'response_code' => $response_code,
+                'response_body' => $body,
+                'api_url' => $klm_api_url
+            )
         );
     }
 

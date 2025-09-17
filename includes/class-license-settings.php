@@ -387,11 +387,27 @@ class NewsCrawler_License_Settings {
                         <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #46b450;">
                             <h4 style="margin-top: 0; color: #46b450;"><?php echo esc_html__( 'KLMエンドポイント情報', 'news-crawler' ); ?></h4>
                             <ul style="margin-left: 20px; line-height: 1.8;">
-                                <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://www.kantanpro.com</li>
+                                <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://license.example.com</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス検証', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/verify</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス情報取得', 'news-crawler' ); ?>:</strong> GET /wp-json/ktp-license/v1/info</li>
                                 <li><strong><?php echo esc_html__( 'デバッグエンドポイント', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/debug</li>
                             </ul>
+                        </div>
+
+                        <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #dc3232;">
+                            <h4 style="margin-top: 0; color: #dc3232;"><?php echo esc_html__( 'HTTP 403エラーのトラブルシューティング', 'news-crawler' ); ?></h4>
+                            <ul style="margin-left: 20px; line-height: 1.8;">
+                                <li><strong><?php echo esc_html__( 'サーバー側の問題', 'news-crawler' ); ?>:</strong> KantanProライセンスサーバーでアクセス制限が設定されている可能性があります</li>
+                                <li><strong><?php echo esc_html__( 'IPアドレス制限', 'news-crawler' ); ?>:</strong> サーバーのIPアドレスがブロックされている可能性があります</li>
+                                <li><strong><?php echo esc_html__( 'APIエンドポイント', 'news-crawler' ); ?>:</strong> エンドポイントが正しく設定されているか確認してください</li>
+                                <li><strong><?php echo esc_html__( '一時的な問題', 'news-crawler' ); ?>:</strong> サーバーメンテナンス中の可能性があります</li>
+                            </ul>
+                            <p style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 3px;">
+                                <strong><?php echo esc_html__( '対処法', 'news-crawler' ); ?>:</strong><br>
+                                1. しばらく時間をおいてから再試行してください<br>
+                                2. サーバー管理者に連絡してIPアドレスの制限を確認してください<br>
+                                3. ライセンスキーが正しいか確認してください
+                            </p>
                         </div>
 
                         <ul style="margin-left: 20px;">
