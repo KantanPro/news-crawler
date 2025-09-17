@@ -37,10 +37,10 @@ class NewsCrawler_License_Manager {
      * @var array
      */
     private $api_endpoints = array(
-        'verify' => 'https://license.example.com/wp-json/ktp-license/v1/verify',
-        'info'   => 'https://license.example.com/wp-json/ktp-license/v1/info',
-        'create' => 'https://license.example.com/wp-json/ktp-license/v1/create',
-        'debug'  => 'https://license.example.com/wp-json/ktp-license/v1/debug'
+        'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
+        'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
+        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
+        'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
     );
 
     /**
@@ -285,6 +285,8 @@ class NewsCrawler_License_Manager {
             add_settings_error( 'news_crawler_license', 'activation_success', $result['message'], 'success' );
         } else {
             error_log( 'NewsCrawler License: License activation failed: ' . $result['message'] );
+            // ライセンス認証失敗時はステータスをinvalidに設定
+            update_option( 'news_crawler_license_status', 'invalid' );
             add_settings_error( 'news_crawler_license', 'activation_failed', $result['message'], 'error' );
         }
     }
@@ -1112,6 +1114,9 @@ class NewsCrawler_License_Manager {
             wp_send_json_success( array( 'message' => $result['message'] ) );
         } else {
             error_log( 'NewsCrawler License: AJAX license activation failed: ' . $result['message'] );
+            
+            // ライセンス認証失敗時はステータスをinvalidに設定
+            update_option( 'news_crawler_license_status', 'invalid' );
             
             // 詳細なエラー情報を含むレスポンス
             $error_response = array(

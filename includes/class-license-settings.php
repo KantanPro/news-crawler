@@ -387,7 +387,7 @@ class NewsCrawler_License_Settings {
                         <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 5px; border-left: 4px solid #46b450;">
                             <h4 style="margin-top: 0; color: #46b450;"><?php echo esc_html__( 'KLMエンドポイント情報', 'news-crawler' ); ?></h4>
                             <ul style="margin-left: 20px; line-height: 1.8;">
-                                <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://license.example.com</li>
+                                <li><strong><?php echo esc_html__( 'ベースURL', 'news-crawler' ); ?>:</strong> https://www.kantanpro.com</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス検証', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/verify</li>
                                 <li><strong><?php echo esc_html__( 'ライセンス情報取得', 'news-crawler' ); ?>:</strong> GET /wp-json/ktp-license/v1/info</li>
                                 <li><strong><?php echo esc_html__( 'デバッグエンドポイント', 'news-crawler' ); ?>:</strong> POST /wp-json/ktp-license/v1/debug</li>

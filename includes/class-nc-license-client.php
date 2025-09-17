@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ===== 設定 =====
 if ( ! defined( 'NC_LICENSE_API_BASE' ) ) {
     // ライセンスサーバー（KantanPro License Manager）側のドメインに置き換え
-    define( 'NC_LICENSE_API_BASE', 'https://license.example.com' );
+    define( 'NC_LICENSE_API_BASE', 'https://www.kantanpro.com' );
 }
 if ( ! defined( 'NC_DEV_MODE' ) ) {
     // ローカルで true にすると厳格チェックを緩めます（本番は未定義 or false）
