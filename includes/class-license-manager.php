@@ -554,14 +554,8 @@ class NewsCrawler_License_Manager {
         
         $args = array(
             'headers' => array(
-                'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'Mozilla/5.0 (compatible; NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . '; +https://www.kantanpro.com/)',
-                'Accept' => 'application/json, text/plain, */*',
-                'Accept-Language' => 'ja,en-US;q=0.9,en;q=0.8',
-                'Accept-Encoding' => 'gzip, deflate, br',
-                'Connection' => 'keep-alive',
-                'Cache-Control' => 'no-cache',
-                'Pragma' => 'no-cache'
+                'Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8',
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ),
             ),
             // data-urlencode 相当の確実なエンコード
             'body' => http_build_query( array(
@@ -570,12 +564,7 @@ class NewsCrawler_License_Manager {
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
             ), '', '&', PHP_QUERY_RFC3986 ),
             'timeout' => 30,
-            'sslverify' => true,
-            'cookies' => array(), // クッキーをクリア
-            'redirection' => 5,
-            'httpversion' => '1.1',
-            'blocking' => true,
-            'reject_unsafe_urls' => false
+            'sslverify' => true
         );
 
         error_log( 'NewsCrawler License: Outbound payload (urlencoded): ' . $args['body'] );
@@ -663,35 +652,6 @@ class NewsCrawler_License_Manager {
         // HTTP 403エラーの特別処理
         if ( $response_code === 403 ) {
             error_log( 'NewsCrawler License: HTTP 403 Forbidden - Possible WAF/Security plugin blocking' );
-            error_log( 'NewsCrawler License: Request URL: ' . $klm_api_url );
-            error_log( 'NewsCrawler License: Request headers: ' . json_encode( $args['headers'] ) );
-            error_log( 'NewsCrawler License: Request body: ' . $args['body'] );
-            
-            // 代替APIエンドポイントを試行
-            $alternative_endpoints = array(
-                'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
-                'https://kantanpro.com/wp-json/ktp-license/v1/verify',
-                home_url() . '/wp-json/ktp-license/v1/verify'
-            );
-            
-            foreach ( $alternative_endpoints as $alt_endpoint ) {
-                if ( $alt_endpoint === $klm_api_url ) continue; // 既に試したエンドポイントはスキップ
-                
-                error_log( 'NewsCrawler License: Trying alternative endpoint: ' . $alt_endpoint );
-                
-                $alt_response = wp_remote_post( $alt_endpoint, $args );
-                if ( ! is_wp_error( $alt_response ) ) {
-                    $alt_code = wp_remote_retrieve_response_code( $alt_response );
-                    if ( $alt_code === 200 ) {
-                        error_log( 'NewsCrawler License: Alternative endpoint succeeded: ' . $alt_endpoint );
-                        $alt_body = wp_remote_retrieve_body( $alt_response );
-                        $alt_data = json_decode( $alt_body, true );
-                        if ( $alt_data && isset( $alt_data['success'] ) ) {
-                            return $alt_data;
-                        }
-                    }
-                }
-            }
             
             // KLMプラグインがあればフォールバック
             if ( $klm_available ) {
@@ -702,28 +662,10 @@ class NewsCrawler_License_Manager {
                 }
             }
             
-            // HTTP 403エラーの詳細ログ
-            error_log( 'NewsCrawler License: HTTP 403 Forbidden error detected' );
-            error_log( 'NewsCrawler License: Request URL: ' . $klm_api_url );
-            error_log( 'NewsCrawler License: Request method: POST' );
-            error_log( 'NewsCrawler License: Request headers: ' . json_encode( $args['headers'] ) );
-            error_log( 'NewsCrawler License: Request body: ' . $args['body'] );
-            error_log( 'NewsCrawler License: Response headers: ' . json_encode( $response_headers->getAll() ) );
-            error_log( 'NewsCrawler License: Response body: ' . $body );
-            
             return array(
                 'success' => false,
                 'message' => 'ライセンスサーバーへのアクセスが拒否されました（HTTP 403）。セキュリティプラグインやWAFがブロックしている可能性があります。',
-                'error_code' => 'access_denied',
-                'debug_info' => array(
-                    'response_code' => $response_code,
-                    'response_body' => $body,
-                    'api_url' => $klm_api_url,
-                    'site_url' => $site_url,
-                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
-                    'possible_cause' => 'WAF/Security plugin blocking or IP restriction',
-                    'tried_alternative_endpoints' => $alternative_endpoints
-                )
+                'error_code' => 'access_denied'
             );
         }
             
