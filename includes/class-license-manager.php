@@ -36,12 +36,7 @@ class NewsCrawler_License_Manager {
      *
      * @var array
      */
-    private $api_endpoints = array(
-        'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
-        'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
-        'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
-        'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
-    );
+    private $api_endpoints = array();
 
     /**
      * Rate limit settings
@@ -72,6 +67,14 @@ class NewsCrawler_License_Manager {
      * @since 2.1.5
      */
     private function __construct() {
+        // Initialize API endpoints
+        $this->api_endpoints = array(
+            'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
+            'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
+            'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
+            'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
+        );
+        
         // Initialize hooks
         add_action( 'admin_init', array( $this, 'handle_license_activation' ) );
         add_action( 'wp_ajax_news_crawler_verify_license', array( $this, 'ajax_verify_license' ) );
@@ -474,6 +477,25 @@ class NewsCrawler_License_Manager {
         // KLMプラグインのAPIエンドポイントを使用
         $klm_api_url = $this->api_endpoints['verify'];
         
+        // 開発環境でのAPIエンドポイントオーバーライド（本番環境では無視）
+        if ( $this->is_development_environment() ) {
+            $dev_api_override = get_option( 'news_crawler_license_api_override' );
+            if ( ! empty( $dev_api_override ) ) {
+                $klm_api_url = $dev_api_override;
+                error_log( 'NewsCrawler License: Using development API override: ' . $klm_api_url );
+            }
+        } else {
+            // 本番環境では確実に本番APIエンドポイントを使用（オーバーライド設定を無視）
+            $klm_api_url = $this->api_endpoints['verify'];
+            error_log( 'NewsCrawler License: Production environment - using production API endpoint: ' . $klm_api_url );
+            
+            // 本番環境では開発用オーバーライド設定を削除（念のため）
+            delete_option( 'news_crawler_license_api_override' );
+        }
+        
+        // デバッグ用: 最終的なAPI URLをログ出力
+        error_log( 'NewsCrawler License: Final API URL: ' . $klm_api_url );
+        
         // APIエンドポイントの接続テスト
         error_log( 'NewsCrawler License: Attempting to connect to ' . $klm_api_url );
         error_log( 'NewsCrawler License: Site URL: ' . $site_url );
@@ -515,8 +537,24 @@ class NewsCrawler_License_Manager {
         );
 
         error_log( 'NewsCrawler License: Outbound payload (urlencoded): ' . $args['body'] );
+        error_log( 'NewsCrawler License: Request headers: ' . json_encode( $args['headers'] ) );
+        error_log( 'NewsCrawler License: Request timeout: ' . $args['timeout'] . ' seconds' );
 
         $response = wp_remote_post( $klm_api_url, $args );
+        
+        // レスポンスの詳細ログ
+        if ( is_wp_error( $response ) ) {
+            error_log( 'NewsCrawler License: WP_Error occurred: ' . $response->get_error_message() );
+            error_log( 'NewsCrawler License: Error code: ' . $response->get_error_code() );
+        } else {
+            $response_code = wp_remote_retrieve_response_code( $response );
+            $response_headers = wp_remote_retrieve_headers( $response );
+            $response_body = wp_remote_retrieve_body( $response );
+            
+            error_log( 'NewsCrawler License: Response code: ' . $response_code );
+            error_log( 'NewsCrawler License: Response headers: ' . json_encode( $response_headers->getAll() ) );
+            error_log( 'NewsCrawler License: Response body: ' . $response_body );
+        }
 
         if ( is_wp_error( $response ) ) {
             // ネットワークエラー時はKLMプラグインがあればフォールバック
@@ -1021,15 +1059,20 @@ class NewsCrawler_License_Manager {
      * @return bool True if development environment
      */
     public function is_development_environment() {
-        // WP_DEBUGが有効で、かつ明示的に開発環境フラグが設定されている場合のみ開発環境と判定
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG && 
-             defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true ) {
-            error_log('NewsCrawler License: Development environment detected via WP_DEBUG + NEWS_CRAWLER_DEVELOPMENT_MODE flags');
+        // 本番環境の判定を優先（より厳密な判定）
+        if ( defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === false ) {
+            error_log('NewsCrawler License: Production environment - NEWS_CRAWLER_DEVELOPMENT_MODE explicitly set to false');
+            return false;
+        }
+        
+        // 開発環境フラグが明示的に設定されている場合のみ開発環境と判定
+        if ( defined( 'NEWS_CRAWLER_DEVELOPMENT_MODE' ) && NEWS_CRAWLER_DEVELOPMENT_MODE === true ) {
+            error_log('NewsCrawler License: Development environment detected via NEWS_CRAWLER_DEVELOPMENT_MODE flag');
             return true;
         }
         
-        // フラグが設定されていない場合は本番環境として扱う
-        error_log('NewsCrawler License: Production environment - Development flags not set');
+        // フラグが設定されていない場合は本番環境として扱う（デフォルト）
+        error_log('NewsCrawler License: Production environment - NEWS_CRAWLER_DEVELOPMENT_MODE not defined or not true');
         return false;
     }
 

@@ -336,6 +336,38 @@
         },
 
         /**
+         * フォーム送信へのフォールバック
+         * JSONレスポンス失敗時に通常のフォーム送信を実行
+         */
+        fallbackToFormSubmission: function(licenseKey) {
+            console.log('Falling back to form submission for license key:', licenseKey.substring(0, 8) + '...');
+            
+            // フォームのライセンスキーフィールドに値を設定
+            $('#news_crawler_license_key').val(licenseKey);
+            
+            // 非表示のnonceフィールドを追加（フォーム送信用）
+            if ($('#news_crawler_license_nonce').length === 0) {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'news_crawler_license_nonce',
+                    value: news_crawler_license_ajax.nonce
+                }).appendTo('#news-crawler-license-form');
+            }
+            
+            // フォーム送信フラグを追加
+            if ($('#news_crawler_license_activation').length === 0) {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'news_crawler_license_activation',
+                    value: '1'
+                }).appendTo('#news-crawler-license-form');
+            }
+            
+            // フォームを送信
+            $('#news-crawler-license-form')[0].submit();
+        },
+
+        /**
          * ライセンスの認証
          */
         verifyLicense: function() {
@@ -351,9 +383,16 @@
                 return;
             }
 
-            // ライセンスキーの基本形式チェック（NCRL-で始まるかどうかのみ）
-            if (!licenseKey.startsWith('NCRL-')) {
-                this.showError('ライセンスキーはNCRL-で始まる必要があります。');
+            // ライセンスキーの軽い正規化のみ（要件に従い厳格な形式チェックは削除）
+            // 全角→半角、制御文字除去、英字大文字化（意味変換はしない）
+            var normalizedKey = licenseKey
+                .replace(/[\u2000-\u206F\u2E00-\u2E7F\u3000-\u303F\uFF00-\uFFEF]/g, '') // 全角文字を除去
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 制御文字を除去
+                .toUpperCase(); // 英字を大文字化
+            
+            // 正規化されたキーが空でないことを確認
+            if (!normalizedKey.trim()) {
+                this.showError('有効なライセンスキーを入力してください。');
                 $licenseKey.focus();
                 return;
             }
@@ -381,10 +420,19 @@
                     // 文字列で返った場合のフォールバック解析
                     try {
                         if (typeof response === 'string') {
+                            // Security check failed等のテキストレスポンスの場合
+                            if (response.includes('Security check failed') || response.includes('parsererror')) {
+                                console.warn('JSON response failed, falling back to form submission');
+                                NewsCrawlerLicenseManager.fallbackToFormSubmission(licenseKey);
+                                return;
+                            }
                             response = JSON.parse(response);
                         }
                     } catch (e) {
                         console.error('Response JSON parse fallback failed:', e);
+                        // JSON解析失敗時もフォーム送信にフォールバック
+                        NewsCrawlerLicenseManager.fallbackToFormSubmission(licenseKey);
+                        return;
                     }
 
                     if (response && response.success) {
