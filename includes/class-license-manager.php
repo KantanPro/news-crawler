@@ -524,7 +524,9 @@ class NewsCrawler_License_Manager {
         $args = array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ) . ' (WordPress/' . get_bloginfo('version') . '; PHP/' . PHP_VERSION . ')',
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest'
             ),
             // data-urlencode 相当の確実なエンコード
             'body' => http_build_query( array(
@@ -533,7 +535,10 @@ class NewsCrawler_License_Manager {
                 'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
             ), '', '&', PHP_QUERY_RFC3986 ),
             'timeout' => 30,
-            'sslverify' => true
+            'sslverify' => true,
+            'cookies' => array(), // クッキーをクリア
+            'redirection' => 5,
+            'httpversion' => '1.1'
         );
 
         error_log( 'NewsCrawler License: Outbound payload (urlencoded): ' . $args['body'] );
@@ -554,6 +559,25 @@ class NewsCrawler_License_Manager {
             error_log( 'NewsCrawler License: Response code: ' . $response_code );
             error_log( 'NewsCrawler License: Response headers: ' . json_encode( $response_headers->getAll() ) );
             error_log( 'NewsCrawler License: Response body: ' . $response_body );
+            
+            // HTTP 403エラーの詳細分析
+            if ( $response_code === 403 ) {
+                error_log( 'NewsCrawler License: HTTP 403 Error Analysis:' );
+                error_log( 'NewsCrawler License: - Request URL: ' . $klm_api_url );
+                error_log( 'NewsCrawler License: - Request Method: POST' );
+                error_log( 'NewsCrawler License: - Request Headers: ' . json_encode( $args['headers'] ) );
+                error_log( 'NewsCrawler License: - Request Body: ' . $args['body'] );
+                error_log( 'NewsCrawler License: - Response Headers: ' . json_encode( $response_headers->getAll() ) );
+                error_log( 'NewsCrawler License: - Response Body: ' . $response_body );
+                
+                // セキュリティプラグインやWAFの可能性をチェック
+                if ( strpos( $response_body, 'Forbidden' ) !== false ) {
+                    error_log( 'NewsCrawler License: Possible WAF/Security plugin blocking detected' );
+                }
+                if ( strpos( $response_body, '403' ) !== false ) {
+                    error_log( 'NewsCrawler License: HTTP 403 Forbidden response detected' );
+                }
+            }
         }
 
         if ( is_wp_error( $response ) ) {
@@ -599,7 +623,35 @@ class NewsCrawler_License_Manager {
         
         // HTTPステータスコードのチェック
         if ( $response_code !== 200 ) {
-            // HTTPエラー時もKLMプラグインがあればフォールバック
+            // HTTP 403エラーの特別処理
+            if ( $response_code === 403 ) {
+                error_log( 'NewsCrawler License: HTTP 403 Forbidden - Possible WAF/Security plugin blocking' );
+                
+                // KLMプラグインがあればフォールバック
+                if ( $klm_available ) {
+                    error_log( 'NewsCrawler License: HTTP 403 error, trying KLM direct fallback' );
+                    $direct = $this->verify_license_with_klm_direct( $license_key );
+                    if ( isset( $direct['success'] ) && $direct['success'] ) {
+                        return $direct;
+                    }
+                }
+                
+                return array(
+                    'success' => false,
+                    'message' => 'ライセンスサーバーへのアクセスが拒否されました（HTTP 403）。セキュリティプラグインやWAFがブロックしている可能性があります。',
+                    'error_code' => 'access_denied',
+                    'debug_info' => array(
+                        'response_code' => $response_code,
+                        'response_body' => $body,
+                        'api_url' => $klm_api_url,
+                        'site_url' => $site_url,
+                        'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                        'possible_cause' => 'WAF/Security plugin blocking or IP restriction'
+                    )
+                );
+            }
+            
+            // その他のHTTPエラー時もKLMプラグインがあればフォールバック
             if ( $klm_available ) {
                 error_log( 'NewsCrawler License: HTTP error response, trying KLM direct fallback' );
                 $direct = $this->verify_license_with_klm_direct( $license_key );
