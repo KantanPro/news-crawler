@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.2-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.4.2)
+[![Version](https://img.shields.io/badge/version-2.4.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.4.3)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,12 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.4.3** (2025-09-17): Updated license API and improved log management
+  - Updated license API base URL to KantanPro's new domain
+  - Added launchd-wp-cron-error.log to .gitignore and updated error log content
+  - Achieved more stable license management and log management
+  - Enhanced plugin reliability
 
 - **v2.4.2** (2025-09-17): Added X (Twitter) auto-posting functionality and enhanced API management
   - Added X (Twitter) auto-posting functionality to News Crawler with new settings section
