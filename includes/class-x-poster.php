@@ -279,7 +279,7 @@ class News_Crawler_X_Poster {
      * @return array 結果配列
      */
     private function post_to_x($message, $settings) {
-        $endpoint = 'https://api.twitter.com/2/tweets';
+        $endpoint = 'https://api.twitter.com/1.1/statuses/update.json';
         
         // OAuth 1.0a認証のための署名を生成
         $oauth_params = array(
@@ -312,10 +312,10 @@ class News_Crawler_X_Poster {
         curl_setopt($ch, CURLOPT_URL, $endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(array('text' => $message)));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array('status' => $message)));
         curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             'Authorization: ' . $auth_header,
-            'Content-Type: application/json'
+            'Content-Type: application/x-www-form-urlencoded'
         ));
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -337,13 +337,18 @@ class News_Crawler_X_Poster {
         }
         $data = json_decode($body, true);
         
-        if ($response_code === 201 && isset($data['data']['id'])) {
+        if ($response_code === 200 && isset($data['id_str'])) {
             return array(
                 'success' => true,
-                'tweet_id' => $data['data']['id']
+                'tweet_id' => $data['id_str']
             );
         } else {
-            $error_message = isset($data['detail']) ? $data['detail'] : '不明なエラー';
+            $error_message = '不明なエラー';
+            if (isset($data['errors'][0]['message'])) {
+                $error_message = $data['errors'][0]['message'];
+            } elseif (isset($data['error'])) {
+                $error_message = $data['error'];
+            }
             return array(
                 'success' => false,
                 'error' => $error_message
