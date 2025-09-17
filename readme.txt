@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 2.4.5
+Stable tag: 2.4.6
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -24,7 +24,16 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 
 * YouTube APIのクォータ制限対応
 
-**新機能（v2.4.5）:**
+**新機能（v2.4.6）:**
+* 2025年9月17日リリース
+* WordPress更新通知の表示問題を修正し、安定した更新システムに基づく改善を実施
+  * WordPress更新通知の表示問題を修正し、ユーザーエクスペリエンスを向上
+  * 重複するフィルターフックを削除し、プラグインのパフォーマンスを最適化
+  * 定期的なキャッシュクリア機能を追加し、データの整合性を保持
+  * 更新システムの安定性を向上し、より信頼性の高いプラグイン動作を実現
+  * プラグインの保守性と拡張性を改善
+
+**前バージョン（v2.4.5）:**
 * 2025年9月17日リリース
 * ライセンス認証の改善とステータス管理の強化
   * ライセンスAPIのベースURLを新しいドメインに更新し、認証処理を最適化
