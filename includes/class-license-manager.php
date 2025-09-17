@@ -68,11 +68,27 @@ class NewsCrawler_License_Manager {
      */
     private function __construct() {
         // Initialize API endpoints
+        // ローカル環境ではローカルのAPIエンドポイントを使用
+        // Dockerコンテナ内ではコンテナ名を使用
+        if (strpos(home_url(), 'localhost') !== false || strpos(home_url(), '127.0.0.1') !== false) {
+            // Dockerコンテナ内かどうかを判定
+            if (file_exists('/.dockerenv') || getenv('DOCKER_CONTAINER')) {
+                // Dockerコンテナ内ではコンテナ名を使用
+                $base_url = 'http://KantanPro_wordpress:80';
+            } else {
+                // 通常のローカル環境ではlocalhostを使用
+                $base_url = home_url();
+            }
+        } else {
+            // 本番環境では本番APIエンドポイントを使用
+            $base_url = 'https://www.kantanpro.com';
+        }
+            
         $this->api_endpoints = array(
-            'verify' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/verify',
-            'info'   => 'https://www.kantanpro.com/wp-json/ktp-license/v1/info',
-            'create' => 'https://www.kantanpro.com/wp-json/ktp-license/v1/create',
-            'debug'  => 'https://www.kantanpro.com/wp-json/ktp-license/v1/debug'
+            'verify' => $base_url . '/wp-json/ktp-license/v1/verify',
+            'info'   => $base_url . '/wp-json/ktp-license/v1/info',
+            'create' => $base_url . '/wp-json/ktp-license/v1/create',
+            'debug'  => $base_url . '/wp-json/ktp-license/v1/debug'
         );
         
         // Initialize hooks
@@ -392,20 +408,7 @@ class NewsCrawler_License_Manager {
      * @return array Verification result
      */
     public function verify_license( $license_key ) {
-        // 本番環境でのHTTP 403エラー回避のため、一時的にライセンス認証をスキップ
-        if ( defined( 'NEWS_CRAWLER_SKIP_LICENSE_CHECK' ) && NEWS_CRAWLER_SKIP_LICENSE_CHECK === true ) {
-            error_log( 'NewsCrawler License: License check skipped due to NEWS_CRAWLER_SKIP_LICENSE_CHECK constant' );
-            return array(
-                'success' => true,
-                'valid' => true,
-                'message' => 'ライセンス認証がスキップされました（開発/デバッグモード）',
-                'data' => array(
-                    'license_key' => $license_key,
-                    'status' => 'skipped',
-                    'reason' => 'NEWS_CRAWLER_SKIP_LICENSE_CHECK enabled'
-                )
-            );
-        }
+        
         
         // ライセンスキーの前処理と形式チェック
         $validation = $this->validate_license_key_format( $license_key );
@@ -680,6 +683,9 @@ class NewsCrawler_License_Manager {
                 }
             }
             
+            // HTTP 403エラーの詳細ログ
+            error_log( 'NewsCrawler License: HTTP 403 Forbidden error detected' );
+            
             return array(
                 'success' => false,
                 'message' => 'ライセンスサーバーへのアクセスが拒否されました（HTTP 403）。セキュリティプラグインやWAFがブロックしている可能性があります。',
@@ -740,6 +746,7 @@ class NewsCrawler_License_Manager {
 
         if ( isset( $data['success'] ) && $data['success'] ) {
             error_log( 'NewsCrawler License: Verification successful - ' . json_encode( $data ) );
+            
             return array(
                 'success' => true,
                 'data'    => $data['data'] ?? array(),
