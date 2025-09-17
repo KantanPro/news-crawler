@@ -36,8 +36,6 @@ class NewsCrawlerGenreSettings {
         add_action('wp_ajax_genre_settings_execute', array($this, 'execute_genre_setting'));
         add_action('wp_ajax_genre_settings_enqueue_execute', array($this, 'enqueue_genre_execution'));
         add_action('wp_ajax_get_genre_job_status', array($this, 'get_genre_job_status'));
-        add_action('wp_ajax_recalculate_candidates_now', array($this, 'recalculate_candidates_now'));
-        add_action('wp_ajax_recalculate_all_candidates_now', array($this, 'recalculate_all_candidates_now'));
         add_action('wp_ajax_news_crawler_run_job_now', array($this, 'run_genre_job_now'));
         add_action('news_crawler_execute_genre_job', array($this, 'run_genre_job'), 10, 2);
         add_action('wp_ajax_genre_settings_duplicate', array($this, 'duplicate_genre_setting'));
@@ -1052,12 +1050,8 @@ class NewsCrawlerGenreSettings {
                 
                 <!-- ジャンル設定リスト -->
                 <div class="card" style="max-width: none; margin-top: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div style="margin-bottom: 15px;">
                         <h2 style="margin: 0;">保存済み投稿設定</h2>
-                        <button type="button" class="button button-primary" onclick="recalculateAllCandidates()" style="display: inline-flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 16px;">&#x21BB;</span>
-                            <span>投稿可能数を再評価</span>
-                        </button>
                     </div>
                     <div id="genre-settings-list">
                         <?php $this->render_genre_settings_list($genre_settings); ?>
@@ -1308,9 +1302,7 @@ $('#cancel-edit').click(function() {
             
             // 強制実行
             $('#force-execution').click(function() {
-                if (!confirm('自動投稿を強制実行します。時間がかかる場合があります。続行しますか？')) {
-                    return;
-                }
+                // 確認アラートを廃止し、直接実行
                 
                 // 進捗ポップアップを表示
                 showForceProgressPopup();
@@ -1559,9 +1551,7 @@ $('#cancel-edit').click(function() {
         }
         // 投稿作成ボタンクリック（進捗ポップアップ対応）
         function executeGenreSetting(genreId, genreName) {
-            if (!confirm('「' + genreName + '」の投稿を作成します。時間がかかる場合があります。続行しますか？')) {
-                return;
-            }
+            // 確認アラートを廃止し、直接実行
             
             // 進捗ポップアップを表示
             showCreateProgressPopup(genreName);
@@ -1656,106 +1646,6 @@ $('#cancel-edit').click(function() {
         // 個別再評価機能は使用しません（削除）
         </script>
         <script>
-        // 全リストの投稿可能数を再評価
-        function recalculateAllCandidates() {
-            if (!confirm('全ジャンルの候補数を再評価します。時間がかかる場合があります。続行しますか？')) {
-                                return;
-                            }
-            
-            // 進捗ポップアップを表示
-            showProgressPopup();
-            
-            var currentIndex = 0;
-            
-            function pollProgress() {
-                jQuery.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    dataType: 'json',
-                    timeout: 600000, // 10分に延長
-                    data: {
-                        action: 'recalculate_all_candidates_now',
-                        nonce: '<?php echo wp_create_nonce('genre_settings_nonce'); ?>',
-                        current_index: currentIndex
-                    },
-                    success: function(res) {
-                        if (res && res.success) {
-                            updateProgress(res.data.progress, res.data.processed, res.data.total);
-                            if (res.data.completed) {
-                                hideProgressPopup();
-                                location.reload();
-                            } else {
-                                currentIndex++;
-                                // 次のジャンルを処理
-                                setTimeout(pollProgress, 100);
-                            }
-                        } else {
-                            hideProgressPopup();
-                            alert('再評価に失敗しました: ' + (res && res.data ? res.data : '不明なエラー'));
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        hideProgressPopup();
-                        var errorMessage = '再評価通信エラー: ' + status;
-                        if (status === 'timeout') {
-                            errorMessage = '再評価がタイムアウトしました。時間がかかりすぎている可能性があります。';
-                        } else if (xhr.responseText) {
-                            try {
-                                var response = JSON.parse(xhr.responseText);
-                                if (response.data) {
-                                    errorMessage += '\n詳細: ' + response.data;
-                            }
-                        } catch (e) {
-                                errorMessage += '\nレスポンス: ' + xhr.responseText.substring(0, 200);
-                            }
-                        }
-                        alert(errorMessage);
-                    }
-                });
-            }
-            
-            pollProgress();
-        }
-        
-        function showProgressPopup() {
-            var popup = jQuery('<div id="progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
-                '<div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 400px;">' +
-                '<h3>候補数再評価中...</h3>' +
-                '<div style="margin: 20px 0;">' +
-                '<div id="progress-bar" style="width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden;">' +
-                '<div id="progress-fill" style="height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); width: 0%; transition: width 0.3s ease;"></div>' +
-                '</div>' +
-                '<div id="progress-text" style="margin-top: 10px; font-size: 14px; color: #666;">0% (0/0)</div>' +
-                '</div>' +
-                '<div id="progress-detail" style="font-size: 12px; color: #999; margin-top: 10px;">処理中...</div>' +
-                '<div style="margin-top: 20px;">' +
-                '<button type="button" onclick="cancelRecalculateProgress()" class="button" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">キャンセル</button>' +
-                '</div>' +
-                '</div>' +
-                '</div>');
-            jQuery('body').append(popup);
-        }
-        
-        function updateProgress(percent, processed, total) {
-            jQuery('#progress-fill').css('width', percent + '%');
-            jQuery('#progress-text').text(percent + '% (' + processed + '/' + total + ')');
-            jQuery('#progress-detail').text('ジャンル ' + processed + ' を処理中...');
-        }
-        
-        function hideProgressPopup() {
-            jQuery('#progress-popup').remove();
-        }
-        
-        function cancelRecalculateProgress() {
-            if (confirm('再評価をキャンセルしますか？')) {
-                hideProgressPopup();
-                // 再評価のポーリングを停止
-                if (window.recalculateInterval) {
-                    clearInterval(window.recalculateInterval);
-                    window.recalculateInterval = null;
-                }
-            }
-        }
         
         function showCreateProgressPopup(genreName) {
             var popup = jQuery('<div id="create-progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
@@ -1822,16 +1712,15 @@ $('#cancel-edit').click(function() {
         }
         
         function cancelCreateProgress() {
-            if (confirm('投稿作成をキャンセルしますか？')) {
-                hideCreateProgressPopup();
-                // ボタンを元に戻す
-                jQuery('button[id^="execute-btn-"]').prop('disabled', false).each(function() {
-                    var originalText = jQuery(this).data('original-text');
-                    if (originalText) {
-                        jQuery(this).text(originalText);
-                    }
-                });
-            }
+            // 確認アラートを廃止し、直接キャンセル実行
+            hideCreateProgressPopup();
+            // ボタンを元に戻す
+            jQuery('button[id^="execute-btn-"]').prop('disabled', false).each(function() {
+                var originalText = jQuery(this).data('original-text');
+                if (originalText) {
+                    jQuery(this).text(originalText);
+                }
+            });
         }
         function showForceProgressPopup() {
             var popup = jQuery('<div id="force-progress-popup" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">' +
@@ -2052,7 +1941,6 @@ $('#cancel-edit').click(function() {
         echo '<th>カテゴリー</th>';
         echo '<th>アイキャッチ</th>';
         echo '<th>自動投稿</th>';
-        echo '<th>投稿可能数</th>';
         echo '<th>公開設定</th>';
         echo '<th>操作</th>';
         echo '</tr>';
@@ -2117,67 +2005,6 @@ $('#cancel-edit').click(function() {
             
             echo '<td>' . $auto_posting_status . '</td>';
             
-            // 投稿可能数の表示（実際に候補を調査して算出）
-            $genre_id_for_count = isset($setting['id']) ? $setting['id'] : $id;
-
-            // 直近24時間の作成数から空きを算出（自動投稿の有無に関わらず計算）
-            $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
-            $existing_posts = $this->count_recent_posts_by_genre($genre_id_for_count);
-            $slots = max(0, $max_posts - $existing_posts);
-
-            // 候補件数の取得（キャッシュ5分）
-            $cache_key = 'news_crawler_available_count_' . $genre_id_for_count;
-            $available_candidates = get_transient($cache_key);
-            if ($available_candidates === false) {
-            // キャッシュがない場合は0を表示（再評価ボタンで更新）
-                        $available_candidates = 0;
-            }
-
-            // 1回の実行での上限（ジャンル設定の取得数上限も考慮）
-            $per_crawl_cap = ($setting['content_type'] === 'youtube')
-                ? (isset($setting['max_videos']) ? intval($setting['max_videos']) : 5)
-                : (isset($setting['max_articles']) ? intval($setting['max_articles']) : 10);
-
-            // グローバル制限を考慮した投稿可能数の計算
-            $global_recent_posts = $this->count_all_recent_posts();
-            $global_max_posts = $this->get_global_max_posts_per_execution();
-            $global_available = max(0, $global_max_posts - $global_recent_posts);
-            
-            // 強制実行時の実際の投稿可能数を計算
-            // 候補があるジャンルのみをカウント
-            $enabled_genres_with_candidates = $this->count_enabled_genres_with_candidates();
-            
-            // グローバル制限を実際の実行に合わせて調整（各ジャンル1件ずつ）
-            $realistic_global_limit = $enabled_genres_with_candidates; // 候補があるジャンル数が上限
-            $actual_possible_posts = min($realistic_global_limit, $global_available);
-            
-            // 個別ジャンルの制限も考慮
-            $individual_limit = min(1, $slots, $available_candidates, $per_crawl_cap);
-            
-            // 実際に「今」投稿できる最大件数
-            $possible_posts = min($individual_limit, $actual_possible_posts > 0 ? 1 : 0);
-            $possible_posts = max(0, intval($possible_posts));
-
-            // 制限要因を特定
-            $limit_factors = array();
-            if ($slots <= 0) {
-                $limit_factors[] = '24時間制限';
-            }
-            if ($available_candidates <= 0) {
-                $limit_factors[] = '候補なし';
-            }
-            if ($per_crawl_cap <= 0) {
-                $limit_factors[] = '取得上限';
-            }
-            if ($global_available <= 0) {
-                $limit_factors[] = 'グローバル制限';
-            }
-            
-            $limit_text = !empty($limit_factors) ? ' (' . implode(', ', $limit_factors) . ')' : '';
-            
-            $available_posts_display = esc_html($possible_posts) . '件';
-
-            echo '<td>' . $available_posts_display . '</td>';
             
             // 公開設定の表示
             $post_status = isset($setting['post_status']) ? $setting['post_status'] : 'draft';
@@ -2606,105 +2433,6 @@ $('#cancel-edit').click(function() {
         wp_send_json_success($status);
     }
 
-    /**
-     * 候補数の再評価（キャッシュ無視して即時計算し直す）
-     */
-    public function recalculate_candidates_now() {
-        check_ajax_referer('genre_settings_nonce', 'nonce');
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        $genre_id = sanitize_text_field($_POST['genre_id'] ?? '');
-        if (empty($genre_id)) {
-            wp_send_json_error('ジャンルIDが不正です');
-        }
-        $genre_settings = $this->get_genre_settings();
-        if (!isset($genre_settings[$genre_id])) {
-            wp_send_json_error('指定された設定が見つかりません');
-        }
-        $setting = $genre_settings[$genre_id];
-        // 候補件数キャッシュ削除
-        delete_transient('news_crawler_available_count_' . $genre_id);
-        // 即時計算
-        try {
-            $available = intval($this->test_news_source_availability($setting));
-        } catch (Exception $e) {
-            $available = 0;
-        }
-        set_transient('news_crawler_available_count_' . $genre_id, $available, 30 * MINUTE_IN_SECONDS);
-        wp_send_json_success(array('available' => $available));
-    }
-    /**
-     * 全ジャンルの候補数を再評価（キャッシュ無視）
-     */
-    public function recalculate_all_candidates_now() {
-        // 実行時間制限を延長（10分）
-        set_time_limit(600);
-        
-        // メモリ制限を増加（512MB）
-        ini_set('memory_limit', '512M');
-        
-        check_ajax_referer('genre_settings_nonce', 'nonce');
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $genre_settings = $this->get_genre_settings();
-        if (empty($genre_settings)) {
-            wp_send_json_success('ジャンル設定がありません');
-        }
-        
-        $total_genres = count($genre_settings);
-        $current_index = intval($_POST['current_index'] ?? 0);
-        
-        if ($current_index >= $total_genres) {
-            wp_send_json_success(array(
-                'progress' => 100,
-                'processed' => $total_genres,
-                'total' => $total_genres,
-                'completed' => true
-            ));
-        }
-        
-        // 現在のジャンルを処理
-        $genre_ids = array_keys($genre_settings);
-        $current_genre_id = $genre_ids[$current_index];
-        $setting = $genre_settings[$current_genre_id];
-        
-        error_log('NewsCrawler: 候補数再評価開始 - ジャンルID: ' . $current_genre_id . ' (' . ($current_index + 1) . '/' . $total_genres . ')');
-        
-        // 投稿作成後の保護期間中でない場合のみキャッシュを削除
-        $is_protected = get_transient('news_crawler_post_creation_protection_' . $current_genre_id);
-        if (!$is_protected) {
-            delete_transient('news_crawler_available_count_' . $current_genre_id);
-            error_log('NewsCrawler: 全ジャンル再評価でキャッシュをクリア - ジャンルID: ' . $current_genre_id);
-        } else {
-            error_log('NewsCrawler: 全ジャンル再評価でキャッシュを保護 - ジャンルID: ' . $current_genre_id . ' (保護中)');
-        }
-        try {
-            // タイムアウトを防ぐために個別のタイムアウト設定
-            $start_time = time();
-            $available = intval($this->test_news_source_availability($setting));
-            $end_time = time();
-            $processing_time = $end_time - $start_time;
-            
-            error_log('NewsCrawler: 候補数再評価完了 - ジャンルID: ' . $current_genre_id . ', 候補数: ' . $available . ', 処理時間: ' . $processing_time . '秒');
-        } catch (Exception $e) {
-            error_log('NewsCrawler: 候補数再評価エラー - ジャンルID: ' . $current_genre_id . ', エラー: ' . $e->getMessage());
-            $available = 0;
-        }
-        set_transient('news_crawler_available_count_' . $current_genre_id, $available, 30 * MINUTE_IN_SECONDS);
-        
-        $processed = $current_index + 1;
-        $progress = round(($processed / $total_genres) * 100);
-        
-        wp_send_json_success(array(
-            'progress' => $progress,
-            'processed' => $processed,
-            'total' => $total_genres,
-            'completed' => $processed >= $total_genres
-        ));
-    }
     
     /**
      * 投稿にアイキャッチを生成・設定
