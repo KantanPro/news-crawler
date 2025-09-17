@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.9-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.4.9)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.0)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,15 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.0** (2025-09-18): Enhanced Twitter API integration and improved error handling
+  - Changed Twitter API endpoint from v2 to v1.1 for more stable API access
+  - Modified post data format from JSON to URL-encoded format for improved compatibility
+  - Strengthened error handling and improved error message retrieval methods
+  - Removed unnecessary re-evaluation functionality and eliminated confirmation alerts for direct execution
+  - Removed post count display and cleaned up related code for better performance
+  - Added dynamic API endpoint configuration logic for license manager based on environment
+  - Enhanced environment compatibility for local and Docker container environments
 
 - **v2.4.9** (2025-09-17): Enhanced production environment HTTP 403 error avoidance and alternative API endpoint strengthening
   - Added license authentication skip functionality for production environment HTTP 403 error avoidance
