@@ -47,9 +47,8 @@ class NewsCrawlerUpdater {
         $this->plugin_basename = plugin_basename(NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php');
         $this->plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
         
-        // WordPress更新システムにフック
+        // WordPress更新システムにフック（2.3.91の安定した実装に基づく）
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_updates'));
-        add_filter('site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
         // コピー直後にGitHub由来のフォルダ名を正規のスラッグへ統一
@@ -81,7 +80,7 @@ class NewsCrawlerUpdater {
      * Check for updates
      */
     public function check_for_updates($transient) {
-        // 管理画面またはWP-Cron以外では更新チェックを行わない
+        // 管理画面またはWP-Cron以外では更新チェックを行わない（2.3.91の安定した実装）
         if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
             return $transient;
         }
@@ -91,9 +90,7 @@ class NewsCrawlerUpdater {
             $transient = new stdClass();
         }
         
-        // 以前のno_update状態に関わらず常に最新を評価（強制スキップは行わない）
-        
-        // get_plugin_data()を使ってローカルのプラグインバージョンを取得
+        // プラグインの基本情報を取得
         if (!function_exists('get_plugin_data')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
@@ -193,6 +190,13 @@ class NewsCrawlerUpdater {
         if (isset($_GET['force-check']) && $_GET['force-check'] == '1') {
             $this->clear_all_caches();
             wp_update_plugins();
+        }
+        
+        // 更新通知の表示を確実にするため、定期的にキャッシュをクリア
+        $last_clear = get_option('news_crawler_last_cache_clear', 0);
+        if (time() - $last_clear > 3600) { // 1時間ごと
+            $this->clear_all_caches();
+            update_option('news_crawler_last_cache_clear', time());
         }
     }
     
