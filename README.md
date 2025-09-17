@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.6-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.4.6)
+[![Version](https://img.shields.io/badge/version-2.4.7-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.4.7)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.4.7** (2025-09-17): Enhanced license management with fallback functionality and improved error handling
+  - Added form submission fallback functionality to license manager for improved reliability during API connection failures
+  - Improved license key normalization processing to ensure input data integrity
+  - Moved API endpoint initialization to constructor for optimized initialization process
+  - Implemented API override functionality for development environments to increase testing flexibility
+  - Added detailed response logging to enhance debugging capabilities
+  - Improved error handling for more stable license authentication
 
 - **v2.4.6** (2025-09-17): Fixed WordPress update notification display and improved update system stability
   - Fixed WordPress update notification display issues to improve user experience
