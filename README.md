@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.4)
+[![Version](https://img.shields.io/badge/version-2.5.5-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.5)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,15 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.5** (2025-09-18): Added OGP tag auto-generation and enhanced SEO optimization
+  - Added OGP tag output processing with automatic generation based on SEO settings
+  - Added processing to disable OGP tag output from popular SEO plugins to avoid conflicts
+  - Implemented automatic OGP meta tag generation for posts and pages to optimize SNS sharing
+  - Added Twitter Card meta tag output to optimize Twitter display
+  - Implemented automatic featured image retrieval and OGP image configuration
+  - Made OGP tag auto-generation controllable via SEO settings
+  - Implemented OGP description generation using automatic content summarization
 
 - **v2.5.4** (2025-09-18): Added YouTube API quota management and enhanced error handling
   - Added YouTube API quota overage check functionality for proper API limit management

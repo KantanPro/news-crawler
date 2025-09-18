@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 2.5.4
+Stable tag: 2.5.5
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -24,7 +24,18 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 
 * YouTube APIのクォータ制限対応
 
-**新機能（v2.5.4）:**
+**新機能（v2.5.5）:**
+* 2025年9月18日リリース
+* OGPタグ自動生成機能の追加とSEO最適化の強化
+  * OGPタグの出力処理を追加し、SEO設定に基づいて自動生成を行う機能を実装
+  * 人気のあるSEOプラグインのOGPタグ出力を無効化する処理を追加し、競合を回避
+  * 投稿ページと固定ページでOGPメタタグを自動生成し、SNSでのシェア最適化を実現
+  * Twitter Cardメタタグも同時に出力し、Twitterでの表示を最適化
+  * アイキャッチ画像の自動取得とOGP画像としての設定を実装
+  * SEO設定でOGPタグ自動生成の有効/無効を制御可能に
+  * コンテンツの自動要約機能を活用したOGP説明文の生成を実装
+
+**前バージョン（v2.5.4）:**
 * 2025年9月18日リリース
 * YouTube APIクォータ管理機能の追加とエラーハンドリングの強化
   * YouTube APIのクォータ超過チェック機能を追加し、API制限を適切に管理
