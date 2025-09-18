@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.3)
+[![Version](https://img.shields.io/badge/version-2.5.4-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.4)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.4** (2025-09-18): Added YouTube API quota management and enhanced error handling
+  - Added YouTube API quota overage check functionality for proper API limit management
+  - Improved log output and user notifications for quota overage to enable early problem detection
+  - Implemented 24-hour flag reset processing for automatic quota recovery
+  - Enhanced error handling to improve stability during API limitations
+  - Significantly improved reliability and continuity of YouTube video crawling functionality
+  - Enhanced user experience and minimized API limitation-related issues
 
 - **v2.5.3** (2025-09-18): Added API connection test functionality and unified license key normalization
   - Fixed license manager instance name and added API connection test functionality
