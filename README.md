@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.2-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.2)
+[![Version](https://img.shields.io/badge/version-2.5.3-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.3)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.3** (2025-09-18): Added API connection test functionality and unified license key normalization
+  - Fixed license manager instance name and added API connection test functionality
+  - Unified license key normalization processing across multiple files for consistency
+  - Implemented modal to display API connection test results for improved usability
+  - Enhanced license management diagnostic functionality for easier troubleshooting
+  - Improved code maintainability for easier future feature expansion
+  - Further enhanced license authentication reliability and stability
 
 - **v2.5.2** (2025-09-18): Enhanced request headers and optimized log output
   - Improved license manager request headers and set Content-Type to UTF-8
