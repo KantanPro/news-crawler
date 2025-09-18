@@ -17,7 +17,7 @@ echo "開発環境フラグ: " . ($is_dev ? '有効' : '無効') . "\n";
 echo "ホームURL: " . home_url() . "\n";
 
 // ライセンスマネージャーのインスタンスを取得
-$license_manager = News_Crawler_License_Manager::get_instance();
+$license_manager = NewsCrawler_License_Manager::get_instance();
 
 // リフレクションを使用してプライベートプロパティにアクセス
 $reflection = new ReflectionClass($license_manager);

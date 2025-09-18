@@ -4,7 +4,7 @@
  */
 
 // WordPressの読み込み
-require_once('/var/www/html/wp-config.php');
+require_once('../../../wp-config.php');
 
 echo "=== ライセンス認証結果の詳細デバッグ ===\n";
 
@@ -16,7 +16,7 @@ echo "現在のライセンスキー: " . $current_license . "\n";
 echo "開発環境フラグ: " . ($is_dev ? '有効' : '無効') . "\n";
 
 // ライセンスマネージャーのインスタンスを取得
-$license_manager = News_Crawler_License_Manager::get_instance();
+$license_manager = NewsCrawler_License_Manager::get_instance();
 
 // リフレクションを使用してプライベートメソッドにアクセス
 $reflection = new ReflectionClass($license_manager);

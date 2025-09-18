@@ -33,7 +33,7 @@ if (!empty($current_license)) {
     echo "本番環境のライセンスキーでテスト: " . $production_license . "\n";
     
     // ライセンスマネージャーのインスタンスを取得
-    $license_manager = News_Crawler_License_Manager::get_instance();
+    $license_manager = NewsCrawler_License_Manager::get_instance();
     
     // 現在のライセンスキーで認証を実行
     echo "\n--- 現在のライセンスキーでの認証 ---\n";

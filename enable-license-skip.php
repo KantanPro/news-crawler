@@ -15,7 +15,7 @@ $skip_check = get_option('news_crawler_license_skip_check');
 echo "ライセンス認証スキップ設定: " . ($skip_check ? '有効' : '無効') . "\n";
 
 // 現在のライセンス状態を確認
-$license_manager = News_Crawler_License_Manager::get_instance();
+$license_manager = NewsCrawler_License_Manager::get_instance();
 $current_license = get_option('news_crawler_license_key');
 echo "現在のライセンスキー: " . (empty($current_license) ? '未設定' : substr($current_license, 0, 8) . '...') . "\n";
 

@@ -227,6 +227,11 @@ class NewsCrawler_License_Settings {
                                 <?php submit_button( __( 'KLMデバッグ実行', 'news-crawler' ), 'secondary', 'debug_license', false, ['style' => 'margin: 0; background-color: #0073aa; border-color: #0073aa; color: white;'] ); ?>
                             </form>
                         <?php endif; ?>
+
+                        <!-- API接続テストボタン -->
+                        <button type="button" id="test-api-connection-btn" class="button button-secondary" style="margin: 0; background-color: #00a32a; border-color: #00a32a; color: white;">
+                            <?php echo esc_html__( 'API接続テスト', 'news-crawler' ); ?>
+                        </button>
                     </div>
 
                     <p class="description" style="padding-left: 8px; margin-top: 5px;">
@@ -424,10 +429,87 @@ class NewsCrawler_License_Settings {
                         </p>
                     </div>
 
+                    <!-- API接続テスト結果モーダル -->
+                    <div id="api-test-modal" style="display: none; position: fixed; z-index: 100000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+                        <div style="background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 800px; border-radius: 5px; max-height: 80%; overflow-y: auto;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h2 style="margin: 0;">API接続テスト結果</h2>
+                                <button type="button" id="close-api-test-modal" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+                            </div>
+                            <div id="api-test-results" style="font-family: monospace; font-size: 12px; line-height: 1.4;">
+                                <p>テストを実行中...</p>
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
             </div>
         </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // API接続テストボタンのクリックイベント
+            $('#test-api-connection-btn').on('click', function() {
+                $('#api-test-modal').show();
+                $('#api-test-results').html('<p>テストを実行中...</p>');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'news_crawler_test_api_connection',
+                        nonce: '<?php echo wp_create_nonce( 'news_crawler_license_nonce' ); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var results = response.data;
+                            var html = '<h3>1. GET リクエストテスト</h3>';
+                            html += '<p><strong>結果:</strong> ' + (results.get_test.success ? '成功' : '失敗') + '</p>';
+                            html += '<p><strong>メッセージ:</strong> ' + results.get_test.message + '</p>';
+                            html += '<p><strong>レスポンスコード:</strong> ' + results.get_test.response_code + '</p>';
+                            html += '<p><strong>Content-Type:</strong> ' + results.get_test.content_type + '</p>';
+                            html += '<p><strong>レスポンスボディ:</strong></p>';
+                            html += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto;">' + results.get_test.response_body + '</pre>';
+                            
+                            html += '<h3>2. POST リクエストテスト</h3>';
+                            html += '<p><strong>結果:</strong> ' + (results.post_test.success ? '成功' : '失敗') + '</p>';
+                            html += '<p><strong>メッセージ:</strong> ' + results.post_test.message + '</p>';
+                            html += '<p><strong>レスポンスコード:</strong> ' + results.post_test.response_code + '</p>';
+                            html += '<p><strong>レスポンスボディ:</strong></p>';
+                            html += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto;">' + results.post_test.response_body + '</pre>';
+                            
+                            html += '<h3>3. 環境情報</h3>';
+                            html += '<p><strong>WordPressバージョン:</strong> ' + results.environment.wordpress_version + '</p>';
+                            html += '<p><strong>PHPバージョン:</strong> ' + results.environment.php_version + '</p>';
+                            html += '<p><strong>サーバーソフトウェア:</strong> ' + results.environment.server_software + '</p>';
+                            html += '<p><strong>WP_DEBUG:</strong> ' + (results.environment.wp_debug ? 'true' : 'false') + '</p>';
+                            html += '<p><strong>サイトURL:</strong> ' + results.environment.site_url + '</p>';
+                            html += '<p><strong>APIエンドポイント:</strong></p>';
+                            html += '<ul>';
+                            for (var key in results.environment.api_endpoints) {
+                                html += '<li><strong>' + key + ':</strong> ' + results.environment.api_endpoints[key] + '</li>';
+                            }
+                            html += '</ul>';
+                            
+                            $('#api-test-results').html(html);
+                        } else {
+                            $('#api-test-results').html('<p style="color: red;">エラー: ' + response.data + '</p>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#api-test-results').html('<p style="color: red;">AJAXエラー: ' + error + '</p>');
+                    }
+                });
+            });
+            
+            // モーダルを閉じる
+            $('#close-api-test-modal, #api-test-modal').on('click', function(e) {
+                if (e.target === this) {
+                    $('#api-test-modal').hide();
+                }
+            });
+        });
+        </script>
         <?php
     }
 

@@ -20,7 +20,7 @@ if (!empty($current_license)) {
     echo "\n=== ライセンス認証テスト ===\n";
     
     // ライセンスマネージャーのインスタンスを取得
-    $license_manager = News_Crawler_License_Manager::get_instance();
+    $license_manager = NewsCrawler_License_Manager::get_instance();
     
     // ライセンス認証を実行
     $result = $license_manager->verify_license($current_license);
