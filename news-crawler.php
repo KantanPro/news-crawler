@@ -348,6 +348,77 @@ function news_crawler_init_components() {
 }
 add_action('init', 'news_crawler_init', 5);
 
+// OGPタグ出力処理（直接実装）
+add_action('wp_head', function() {
+    // 投稿ページでのみ実行
+    if (!is_single() && !is_page()) {
+        return;
+    }
+    
+    global $post;
+    if (!$post) {
+        return;
+    }
+    
+    // SEO設定でOGPタグ自動生成が有効かチェック
+    $seo_settings = get_option('news_crawler_seo_settings', array());
+    $auto_ogp_tags = isset($seo_settings['auto_ogp_tags']) ? $seo_settings['auto_ogp_tags'] : true;
+    
+    if (!$auto_ogp_tags) {
+        return;
+    }
+    
+    // 基本情報
+    $title = get_the_title($post->ID);
+    $description = wp_strip_all_tags(get_the_excerpt($post->ID));
+    if (empty($description)) {
+        $content = wp_strip_all_tags($post->post_content);
+        $content = str_replace(array("\n", "\r", "\t"), ' ', $content);
+        $content = preg_replace('/\s+/', ' ', $content);
+        if (mb_strlen($content) > 160) {
+            $content = mb_substr($content, 0, 157) . '...';
+        }
+        $description = $content;
+    }
+    $url = get_permalink($post->ID);
+    $site_name = get_bloginfo('name');
+    
+    // アイキャッチ画像
+    $image_url = '';
+    if (has_post_thumbnail($post->ID)) {
+        $image_id = get_post_thumbnail_id($post->ID);
+        $image_data = wp_get_attachment_image_src($image_id, 'full');
+        if ($image_data) {
+            $image_url = $image_data[0];
+        }
+    }
+    
+    // OGPメタタグを出力
+    echo "\n<!-- News Crawler OGP Meta Tags -->\n";
+    echo '<meta property="og:type" content="article" />' . "\n";
+    echo '<meta property="og:title" content="' . esc_attr($title) . '" />' . "\n";
+    echo '<meta property="og:description" content="' . esc_attr($description) . '" />' . "\n";
+    echo '<meta property="og:url" content="' . esc_url($url) . '" />' . "\n";
+    echo '<meta property="og:site_name" content="' . esc_attr($site_name) . '" />' . "\n";
+    
+    if ($image_url) {
+        echo '<meta property="og:image" content="' . esc_url($image_url) . '" />' . "\n";
+        echo '<meta property="og:image:width" content="1200" />' . "\n";
+        echo '<meta property="og:image:height" content="630" />' . "\n";
+        echo '<meta property="og:image:type" content="image/jpeg" />' . "\n";
+    }
+    
+    // Twitter Cardメタタグも出力
+    echo '<meta name="twitter:card" content="summary_large_image" />' . "\n";
+    echo '<meta name="twitter:title" content="' . esc_attr($title) . '" />' . "\n";
+    echo '<meta name="twitter:description" content="' . esc_attr($description) . '" />' . "\n";
+    
+    if ($image_url) {
+        echo '<meta name="twitter:image" content="' . esc_url($image_url) . '" />' . "\n";
+    }
+    echo "<!-- End News Crawler OGP Meta Tags -->\n\n";
+}, 1);
+
 // 自動投稿のcron設定を確実に実行するための追加フック
 add_action('init', 'news_crawler_ensure_cron_setup');
 add_action('wp_loaded', 'news_crawler_ensure_cron_setup');

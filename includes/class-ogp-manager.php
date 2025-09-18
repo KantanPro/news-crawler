@@ -47,19 +47,11 @@ class NewsCrawlerOGPManager {
         // テーマのOGPメタタグ出力を無効化（一般的なフック）
         remove_action('wp_head', 'wp_head_meta_tags');
         
-        // 出力バッファを使用して既存のOGPメタタグを削除
-        ob_start(array($this, 'filter_ogp_tags'));
-    }
-    
-    /**
-     * 出力バッファでOGPメタタグをフィルタリング
-     */
-    public function filter_ogp_tags($content) {
-        // OGPメタタグを削除
-        $content = preg_replace('/<meta\s+property="og:[^"]*"[^>]*>/i', '', $content);
-        $content = preg_replace('/<meta\s+name="twitter:[^"]*"[^>]*>/i', '', $content);
-        
-        return $content;
+        // 人気のあるSEOプラグインのOGPタグ出力を無効化
+        remove_action('wp_head', 'wpseo_opengraph');
+        remove_action('wp_head', 'wpseo_twitter');
+        remove_action('wp_head', 'rank_math_opengraph');
+        remove_action('wp_head', 'rank_math_twitter');
     }
     
     /**
@@ -80,11 +72,7 @@ class NewsCrawlerOGPManager {
         $seo_settings = get_option('news_crawler_seo_settings', array());
         $auto_ogp_tags = isset($seo_settings['auto_ogp_tags']) ? $seo_settings['auto_ogp_tags'] : true;
         
-        // デバッグログ
-        error_log('NewsCrawler OGP: Post ID = ' . $post->ID . ', auto_ogp_tags = ' . ($auto_ogp_tags ? 'true' : 'false'));
-        
         if (!$auto_ogp_tags) {
-            error_log('NewsCrawler OGP: OGPタグ自動生成が無効のため、OGPメタタグを出力しません');
             return;
         }
         
