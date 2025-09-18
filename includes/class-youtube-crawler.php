@@ -33,6 +33,20 @@ class NewsCrawlerYouTubeCrawler {
      * 日次クォータチェック
      */
     private function check_daily_quota() {
+        // まず、実際のAPIクォータ超過状態をチェック
+        $quota_exceeded = get_option('youtube_api_quota_exceeded', 0);
+        if ($quota_exceeded > 0) {
+            $remaining_hours = ceil((86400 - (time() - $quota_exceeded)) / 3600);
+            if ($remaining_hours > 0) {
+                error_log("YouTube API: 実際のAPIクォータが超過中です。残り時間: {$remaining_hours}時間");
+                return false;
+            } else {
+                // 24時間経過した場合はクォータ超過フラグをリセット
+                delete_option('youtube_api_quota_exceeded');
+                error_log("YouTube API: 24時間経過によりクォータ超過フラグをリセットしました");
+            }
+        }
+        
         $today = date('Y-m-d');
         $daily_requests = get_transient("youtube_api_daily_requests_{$today}");
         
@@ -477,9 +491,18 @@ class NewsCrawlerYouTubeCrawler {
         
         if ($quota_exceeded > 0) {
             $remaining_hours = ceil((86400 - (time() - $quota_exceeded)) / 3600);
-            echo '<br><span style="color: #d63638; font-weight: bold;">⚠️ クォータ超過中</span><br>';
-            echo '超過時刻: ' . date('Y-m-d H:i:s', $quota_exceeded) . '<br>';
-            echo '自動リセットまで: <strong>' . $remaining_hours . '時間</strong><br>';
+            if ($remaining_hours > 0) {
+                echo '<br><span style="color: #d63638; font-weight: bold;">🚫 実際のAPIクォータ超過中</span><br>';
+                echo '超過時刻: ' . date('Y-m-d H:i:s', $quota_exceeded) . '<br>';
+                echo '自動リセットまで: <strong>' . $remaining_hours . '時間</strong><br>';
+                echo '<em style="color: #666;">※ プラグインのカウンターが0でも、実際のYouTube APIクォータが超過している可能性があります</em><br>';
+            } else {
+                // 24時間経過した場合はクォータ超過フラグをリセット
+                delete_option('youtube_api_quota_exceeded');
+                $remaining_requests = $this->daily_request_limit - ($daily_requests ? $daily_requests : 0);
+                echo '残りリクエスト数: <strong>' . $remaining_requests . '件</strong><br>';
+                echo '<span style="color: #00a32a; font-weight: bold;">✅ クォータが自動リセットされました</span><br>';
+            }
         } else {
             $remaining_requests = $this->daily_request_limit - ($daily_requests ? $daily_requests : 0);
             echo '残りリクエスト数: <strong>' . $remaining_requests . '件</strong><br>';
@@ -1311,6 +1334,14 @@ class NewsCrawlerYouTubeCrawler {
         if (!isset($data['items'])) {
             $error_message = isset($data['error']['message']) ? $data['error']['message'] : '不明なエラー';
             $error_code = isset($data['error']['code']) ? $data['error']['code'] : '不明';
+            
+            // クォータ超過エラーの特別処理
+            if ($error_code == 403 && (strpos($error_message, 'quota') !== false || strpos($error_message, 'exceeded') !== false)) {
+                // クォータ超過時刻を記録
+                update_option('youtube_api_quota_exceeded', time());
+                error_log("YouTube API: クォータ超過を検出しました。時刻: " . date('Y-m-d H:i:s'));
+            }
+            
             throw new Exception('APIレスポンスにitemsが含まれていません。エラー: ' . $error_message . ' (コード: ' . $error_code . ')');
         }
         
