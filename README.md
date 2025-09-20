@@ -4,7 +4,7 @@
 [![WordPress Plugin Downloads](https://img.shields.io/wordpress/plugin/dt/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![WordPress Plugin Rating](https://img.shields.io/wordpress/plugin/rating/news-crawler?style=flat-square)](https://wordpress.org/plugins/news-crawler/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.5-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.5)
+[![Version](https://img.shields.io/badge/version-2.5.6-blue.svg?style=flat-square)](https://github.com/KantanPro/news-crawler/releases/tag/v2.5.6)
 
 Automatically fetch articles from specified news sources and add them as posts to your WordPress site. Includes YouTube video crawling functionality with AI-powered content generation.
 
@@ -168,6 +168,14 @@ Please report bugs and feature requests on our [GitHub Issues](https://github.co
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ### Recent Updates
+
+- **v2.5.6** (2025-09-20): Added auto-posting lock functionality and enhanced duplicate checking
+  - Added lock functionality to auto-posting process to prevent concurrent execution
+  - Enhanced YouTube video duplicate checking with title similarity calculation method
+  - Improved duplicate video detection accuracy for more precise duplicate determination
+  - Prevented data conflicts and inconsistencies from concurrent execution, significantly improving stability
+  - Title similarity calculation enables proper detection of duplicate videos with subtle differences
+  - Significantly improved reliability and consistency of auto-posting process
 
 - **v2.5.5** (2025-09-18): Added OGP tag auto-generation and enhanced SEO optimization
   - Added OGP tag output processing with automatic generation based on SEO settings
