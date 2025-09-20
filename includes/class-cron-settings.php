@@ -52,14 +52,7 @@ class NewsCrawlerCronSettings {
             'news-crawler-cron-settings'
         );
         
-        // シェルスクリプト名
-        add_settings_field(
-            'shell_script_name',
-            'シェルスクリプト名',
-            array($this, 'shell_script_name_callback'),
-            'news-crawler-cron-settings',
-            'cron_basic_settings'
-        );
+        // シェルスクリプト名は非表示フィールドとして処理
         
         // 分
         add_settings_field(
@@ -111,105 +104,20 @@ class NewsCrawlerCronSettings {
      * セクションコールバック
      */
     public function section_callback() {
-        echo '<p>サーバーのcronジョブ設定を行います。自動投稿を実現するために必要な設定項目を入力してください。</p>';
+        // セクション説明文は表示しない
     }
     
     /**
      * シェルスクリプト名のコールバック
      */
     public function shell_script_name_callback() {
+        // シェルスクリプト名フィールドは非表示
+        // デフォルト値で固定
         $options = get_option($this->option_name);
         $value = isset($options['shell_script_name']) ? $options['shell_script_name'] : 'news-crawler-cron.sh';
-        $script_path = NEWS_CRAWLER_PLUGIN_DIR . $value;
         
-        // プラグインディレクトリの書き込み権限をチェック
-        $plugin_writable = is_writable(NEWS_CRAWLER_PLUGIN_DIR);
-        $upload_dir = wp_upload_dir();
-        $upload_writable = is_writable($upload_dir['basedir']);
-        
-        // 複数のパスでファイル存在をチェック
-        $script_exists = $this->check_script_exists($value);
-        $actual_path = $this->get_actual_script_path($value);
-        
-        echo '<input type="text" id="shell_script_name" name="' . $this->option_name . '[shell_script_name]" value="' . esc_attr($value) . '" class="regular-text" required />';
-        echo '<p class="description"><strong>必須項目：</strong>cronジョブで実行するシェルスクリプトのファイル名を入力してください。</p>';
-        
-        if ($script_exists && $actual_path) {
-            echo '<p style="color: green;"><strong>✓ スクリプトが存在します：</strong> ' . esc_html($actual_path) . '</p>';
-            echo '<p><strong>実際のパス：</strong> <code>' . esc_html($actual_path) . '</code></p>';
-        } else {
-            echo '<p style="color: orange;"><strong>⚠ スクリプトが存在しません：</strong> ' . esc_html($script_path) . '</p>';
-            
-            if ($plugin_writable) {
-                echo '<button type="button" id="generate_script_btn" class="button button-secondary">シェルスクリプトを自動生成</button>';
-            } elseif ($upload_writable) {
-                echo '<button type="button" id="generate_script_btn" class="button button-secondary">シェルスクリプトを自動生成（アップロードディレクトリに保存）</button>';
-            } else {
-                echo '<p style="color: red;"><strong>❌ 書き込み権限がありません：</strong> プラグインディレクトリとアップロードディレクトリの両方に書き込み権限がありません。</p>';
-            }
-        }
-        
-        echo '<p><strong>絶対パス：</strong> <code>' . esc_html($script_path) . '</code></p>';
-        
-        if (!$plugin_writable && $upload_writable) {
-            $alternative_path = $upload_dir['basedir'] . '/' . $value;
-            echo '<p><strong>代替パス（アップロードディレクトリ）：</strong> <code>' . esc_html($alternative_path) . '</code></p>';
-        }
-        
-        // 権限情報を表示
-        echo '<div style="background: #f9f9f9; padding: 10px; margin: 10px 0; border-left: 4px solid #0073aa;">';
-        echo '<strong>権限情報：</strong><br>';
-        echo 'プラグインディレクトリ書き込み可能: ' . ($plugin_writable ? '✓' : '❌') . '<br>';
-        echo 'アップロードディレクトリ書き込み可能: ' . ($upload_writable ? '✓' : '❌');
-        echo '</div>';
-        
-        // デバッグ情報を表示
-        echo '<div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-left: 4px solid #ffc107;">';
-        echo '<strong>デバッグ情報：</strong><br>';
-        echo 'プラグインディレクトリ: ' . esc_html(NEWS_CRAWLER_PLUGIN_DIR) . '<br>';
-        echo 'プラグインディレクトリ存在: ' . (is_dir(NEWS_CRAWLER_PLUGIN_DIR) ? '✓' : '❌') . '<br>';
-        echo 'プラグインディレクトリ読み取り可能: ' . (is_readable(NEWS_CRAWLER_PLUGIN_DIR) ? '✓' : '❌') . '<br>';
-        echo 'プラグインディレクトリ書き込み可能: ' . ($plugin_writable ? '✓' : '❌') . '<br>';
-        echo 'ファイル存在チェック結果: ' . ($script_exists ? '✓' : '❌') . '<br>';
-        
-        // 詳細なファイル存在チェック
-        $plugin_file_path = NEWS_CRAWLER_PLUGIN_DIR . $value;
-        
-        echo '<br><strong>詳細ファイルチェック：</strong><br>';
-        echo 'プラグインファイルパス: ' . esc_html($plugin_file_path) . '<br>';
-        echo 'プラグインファイル存在: ' . (file_exists($plugin_file_path) ? '✓' : '❌') . '<br>';
-        echo 'プラグインファイル読み取り可能: ' . (is_readable($plugin_file_path) ? '✓' : '❌') . '<br>';
-        
-        // ディレクトリ内容を表示
-        echo '<br><strong>プラグインディレクトリ内容：</strong><br>';
-        if (is_readable(NEWS_CRAWLER_PLUGIN_DIR)) {
-            $files = scandir(NEWS_CRAWLER_PLUGIN_DIR);
-            if ($files !== false) {
-                foreach ($files as $file) {
-                    if ($file !== '.' && $file !== '..') {
-                        $file_path = NEWS_CRAWLER_PLUGIN_DIR . $file;
-                        $is_file = is_file($file_path);
-                        $is_dir = is_dir($file_path);
-                        $readable = is_readable($file_path);
-                        $writable = is_writable($file_path);
-                        echo '&nbsp;&nbsp;' . esc_html($file) . ' (';
-                        echo $is_file ? 'ファイル' : ($is_dir ? 'ディレクトリ' : '不明');
-                        echo ', 読み取り: ' . ($readable ? '✓' : '❌');
-                        echo ', 書き込み: ' . ($writable ? '✓' : '❌');
-                        echo ')<br>';
-                    }
-                }
-            } else {
-                echo 'ディレクトリの読み取りに失敗<br>';
-            }
-        } else {
-            echo 'ディレクトリが読み取り不可能<br>';
-        }
-        
-        if ($actual_path) {
-            echo '<br>実際のファイルパス: ' . esc_html($actual_path) . '<br>';
-        }
-        echo '</div>';
+        // 隠しフィールドとして値を保持
+        echo '<input type="hidden" name="' . $this->option_name . '[shell_script_name]" value="' . esc_attr($value) . '" />';
     }
     
     /**
@@ -463,12 +371,16 @@ class NewsCrawlerCronSettings {
             
             <div class="ktp-admin-content">
                 <div class="ktp-admin-card">
-                    <h2>サーバーCronジョブ設定</h2>
-                    <p>自動投稿を実現するために、サーバーのcronジョブ設定を行います。<strong>シェルスクリプト名を入力するだけで、cronジョブ設定が完了します。</strong></p>
                     
                     <form method="post" action="options.php">
                         <?php
                         settings_fields('news-crawler-cron-settings');
+                        
+                        // シェルスクリプト名の隠しフィールドを追加
+                        $options = get_option($this->option_name);
+                        $script_name = isset($options['shell_script_name']) ? $options['shell_script_name'] : 'news-crawler-cron.sh';
+                        echo '<input type="hidden" name="' . $this->option_name . '[shell_script_name]" value="' . esc_attr($script_name) . '" />';
+                        
                         do_settings_sections('news-crawler-cron-settings');
                         submit_button('設定を保存');
                         ?>
@@ -476,25 +388,6 @@ class NewsCrawlerCronSettings {
                 </div>
                 
                 <?php if (!empty($cron_command)): ?>
-                <div class="ktp-admin-card">
-                    <h2>現在のCron設定</h2>
-                    <p>以下のコマンドをサーバーのcrontabに設定してください：</p>
-                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace; word-break: break-all;">
-                        <?php echo esc_html($cron_command); ?>
-                    </div>
-                    
-                    <h3>現在のサーバーcron設定</h3>
-                    <p>現在のサーバーcron設定を確認するには、以下のコマンドを実行してください：</p>
-                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace;">
-                        crontab -l
-                    </div>
-                    
-                    <h3>設定の適用</h3>
-                    <p>上記のコマンドをサーバーのcrontabに追加するには、以下のコマンドを実行してください：</p>
-                    <div style="background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace;">
-                        (crontab -l; echo "<?php echo esc_html($cron_command); ?>") | crontab -
-                    </div>
-                </div>
                 
                 <div class="ktp-admin-card">
                     <h2>生成されたCronジョブ設定</h2>
