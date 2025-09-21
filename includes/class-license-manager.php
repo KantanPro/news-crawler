@@ -771,54 +771,60 @@ class NewsCrawler_License_Manager {
 
     /**
      * Check if AI summary functionality should be enabled
+     * AI summary is now free and doesn't require a license
      *
      * @since 2.1.5
      * @return bool True if AI summary should be enabled
      */
     public function is_ai_summary_enabled() {
-        // 開発環境では常に有効
-        if ( $this->is_development_environment() ) {
-            return true;
-        }
-        
-        // 本番環境ではライセンスキーが必要
-        return $this->is_license_valid();
+        // AI要約機能は常に有効（ライセンス不要）
+        return true;
     }
 
     /**
      * Check if advanced features should be enabled
+     * Advanced features are now free and don't require a license
      *
      * @since 2.1.5
      * @return bool True if advanced features should be enabled
      */
     public function is_advanced_features_enabled() {
-        return $this->is_license_valid();
+        // 高度な機能は常に有効（ライセンス不要）
+        return true;
     }
 
     /**
      * Check if basic features should be enabled
-     * Basic features require a valid license
+     * Basic features are now free and don't require a license
      *
      * @since 2.1.5
      * @return bool True if basic features should be enabled
      */
     public function is_basic_features_enabled() {
-        // 開発環境では常に有効
-        if ( $this->is_development_environment() ) {
-            return true;
-        }
-        
-        return $this->is_license_valid();
+        // 基本機能は常に有効（ライセンス不要）
+        return true;
     }
 
     /**
      * Check if news crawling functionality should be enabled
-     * News crawling requires a valid license
+     * News crawling is now free and doesn't require a license
      *
      * @since 2.1.5
      * @return bool True if news crawling should be enabled
      */
     public function is_news_crawling_enabled() {
+        // ニュースクローリング機能は常に有効（ライセンス不要）
+        return true;
+    }
+
+    /**
+     * Check if auto posting functionality should be enabled
+     * Auto posting requires a valid license
+     *
+     * @since 2.1.5
+     * @return bool True if auto posting should be enabled
+     */
+    public function is_auto_posting_enabled() {
         // 開発環境では常に有効
         if ( $this->is_development_environment() ) {
             return true;

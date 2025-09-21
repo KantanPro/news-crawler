@@ -370,22 +370,7 @@ class NewsCrawlerSettingsManager {
             return;
         }
         
-        // ライセンス状態をチェック
-        $license_manager = NewsCrawler_License_Manager::get_instance();
-        $license_key = get_option( 'news_crawler_license_key' );
-        $is_license_valid = $license_manager->is_license_valid();
-        $license_status = $license_manager->get_license_status();
-        
-        // デバッグログを追加
-        error_log( 'NewsCrawler Settings: license_key = ' . (empty($license_key) ? 'empty' : 'set') . ', is_license_valid = ' . ($is_license_valid ? 'true' : 'false') );
-        error_log( 'NewsCrawler Settings: license_status = ' . print_r($license_status, true) );
-        
-        // ライセンスキーがないか無効な場合はライセンス入力画面を表示
-        if (empty($license_key) || !$is_license_valid) {
-            error_log( 'NewsCrawler Settings: Displaying license input page' );
-            $this->display_license_input_page($license_status);
-            return;
-        }
+        // 設定管理はライセンス不要になったため、ライセンスチェックを削除
         
         // 有効なライセンスキーがある場合は投稿設定画面を表示
         error_log( 'NewsCrawler Settings: Displaying post settings page' );
@@ -557,6 +542,12 @@ class NewsCrawlerSettingsManager {
             </div>
             
             <div id="twitter-settings" class="tab-content<?php echo ($active_tab === 'twitter-settings' ? ' active' : ''); ?>">
+                <?php 
+                // 自動投稿機能のライセンス通知を表示
+                if (function_exists('news_crawler_auto_posting_license_notice')) {
+                    news_crawler_auto_posting_license_notice();
+                }
+                ?>
                 <form method="post" action="options.php">
                     <?php 
                     // X（Twitter）設定のフィールドを表示

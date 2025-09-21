@@ -740,23 +740,7 @@ class NewsCrawlerGenreSettings {
 
     
     public function basic_settings_page() {
-        // ライセンス状態をチェック
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            $license_key = get_option( 'news_crawler_license_key' );
-            $is_license_valid = $license_manager->is_license_valid();
-            $license_status = $license_manager->get_license_status();
-            
-            // デバッグログを追加
-            error_log( 'NewsCrawler Basic Settings: license_key = ' . (empty($license_key) ? 'empty' : 'set') . ', is_license_valid = ' . ($is_license_valid ? 'true' : 'false') );
-            
-            // ライセンスキーがないか無効な場合はライセンス入力画面を表示
-            if (empty($license_key) || !$is_license_valid) {
-                error_log( 'NewsCrawler Basic Settings: Displaying license input page' );
-                $this->display_license_input_page($license_status);
-                return;
-            }
-        }
+        // 基本設定はライセンス不要になったため、ライセンスチェックを削除
         
         // 設定管理クラスのインスタンスを作成してページを表示
         if (class_exists('NewsCrawlerSettingsManager')) {
@@ -772,23 +756,7 @@ class NewsCrawlerGenreSettings {
      * Cron設定ページの表示
      */
     public function cron_settings_page() {
-        // ライセンス状態をチェック
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            $license_key = get_option( 'news_crawler_license_key' );
-            $is_license_valid = $license_manager->is_license_valid();
-            $license_status = $license_manager->get_license_status();
-            
-            // デバッグログを追加
-            error_log( 'NewsCrawler Cron Settings: license_key = ' . (empty($license_key) ? 'empty' : 'set') . ', is_license_valid = ' . ($is_license_valid ? 'true' : 'false') );
-            
-            // ライセンスキーがないか無効な場合はライセンス入力画面を表示
-            if (empty($license_key) || !$is_license_valid) {
-                error_log( 'NewsCrawler Cron Settings: Displaying license input page' );
-                $this->display_license_input_page($license_status);
-                return;
-            }
-        }
+        // クロン設定はライセンス不要になったため、ライセンスチェックを削除
         
         // Cron設定クラスのインスタンスを作成してページを表示
         if (class_exists('NewsCrawlerCronSettings')) {
@@ -846,23 +814,7 @@ class NewsCrawlerGenreSettings {
             wp_die($error_message);
         }
         
-        // ライセンス状態をチェック
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            $license_key = get_option( 'news_crawler_license_key' );
-            $is_license_valid = $license_manager->is_license_valid();
-            $license_status = $license_manager->get_license_status();
-            
-            // デバッグログを追加
-            error_log( 'NewsCrawler Genre Settings: license_key = ' . (empty($license_key) ? 'empty' : 'set') . ', is_license_valid = ' . ($is_license_valid ? 'true' : 'false') );
-            
-            // ライセンスキーがないか無効な場合はライセンス入力画面を表示
-            if (empty($license_key) || !$is_license_valid) {
-                error_log( 'NewsCrawler Genre Settings: Displaying license input page' );
-                $this->display_license_input_page($license_status);
-                return;
-            }
-        }
+        // ジャンル設定はライセンス不要になったため、ライセンスチェックを削除
         
         $genre_settings = $this->get_genre_settings();
         ?>

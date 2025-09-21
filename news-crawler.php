@@ -224,19 +224,24 @@ function news_crawler_ajax_toggle_dev_license() {
     }
 }
 
-// ライセンス制限通知
-function news_crawler_license_restriction_notice() {
-    ?>
-    <div class="notice notice-error">
-        <p>
-            <strong><?php echo esc_html__('News Crawler', 'news-crawler'); ?>:</strong>
-            <?php echo esc_html__('有効なライセンスキーが必要です。プラグインの機能が制限されています。', 'news-crawler'); ?>
-            <a href="<?php echo admin_url('admin.php?page=news-crawler-license'); ?>" class="button button-small" style="margin-left: 10px;">
-                <?php echo esc_html__('ライセンスを設定', 'news-crawler'); ?>
-            </a>
-        </p>
-    </div>
-    <?php
+// 自動投稿機能のライセンス制限通知
+function news_crawler_auto_posting_license_notice() {
+    if (class_exists('NewsCrawler_License_Manager')) {
+        $license_manager = NewsCrawler_License_Manager::get_instance();
+        if (!$license_manager->is_auto_posting_enabled()) {
+            ?>
+            <div class="notice notice-warning">
+                <p>
+                    <strong><?php echo esc_html__('News Crawler', 'news-crawler'); ?>:</strong>
+                    <?php echo esc_html__('自動投稿機能を利用するにはライセンスキーが必要です。', 'news-crawler'); ?>
+                    <a href="<?php echo admin_url('admin.php?page=news-crawler-license'); ?>" class="button button-small" style="margin-left: 10px;">
+                        <?php echo esc_html__('ライセンスを設定', 'news-crawler'); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
+        }
+    }
 }
 
 // プラグインコンポーネントの初期化
@@ -245,12 +250,7 @@ function news_crawler_init_components() {
     if (class_exists('NewsCrawler_License_Manager')) {
         $license_manager = NewsCrawler_License_Manager::get_instance();
         
-        // ライセンスが無効な場合は通知を表示するが、メニューは表示する
-        if (!$license_manager->is_license_valid()) {
-            // ライセンス無効時の制限を適用
-            add_action('admin_notices', 'news_crawler_license_restriction_notice');
-            // returnを削除してメニュー登録を継続
-        }
+        // 自動投稿機能のみライセンスが必要なため、ライセンス制限通知は削除
     }
     
     // セキュリティマネージャーの初期化（軽量）
