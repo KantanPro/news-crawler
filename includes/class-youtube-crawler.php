@@ -1154,18 +1154,21 @@ class NewsCrawlerYouTubeCrawler {
         error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
         
         try {
-            // タイムアウト設定（30秒）
-            set_time_limit(30);
+            // タイムアウト設定（60秒に延長）
+            set_time_limit(60);
             
             $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
             
-            if ($result) {
+            if ($result && !is_array($result)) {
                 error_log('YouTubeCrawler: Featured image generation result: Success (ID: ' . $result . ')');
+                return $result;
+            } elseif (is_array($result) && isset($result['error'])) {
+                error_log('YouTubeCrawler: Featured image generation failed: ' . $result['error']);
+                return false;
             } else {
                 error_log('YouTubeCrawler: Featured image generation result: Failed - No result returned');
+                return false;
             }
-            
-            return $result;
             
         } catch (Exception $e) {
             error_log('YouTubeCrawler: Featured image generation error: ' . $e->getMessage());

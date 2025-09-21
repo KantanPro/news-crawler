@@ -119,7 +119,14 @@ class NewsCrawlerFeaturedImageGenerator {
     private function generate_template_image($post_id, $title, $keywords, $settings) {
         // GD拡張の確認
         if (!extension_loaded('gd')) {
-            return false;
+            error_log('NewsCrawlerFeaturedImageGenerator: GD extension not loaded');
+            return array('error' => 'GD拡張が利用できません。サーバー管理者にGD拡張の有効化を依頼してください。');
+        }
+        
+        // 必要なGD関数の確認
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagecolorallocate')) {
+            error_log('NewsCrawlerFeaturedImageGenerator: Required GD functions not available');
+            return array('error' => '必要なGD関数が利用できません。');
         }
         
         // 基本設定から値を取得
@@ -129,33 +136,70 @@ class NewsCrawlerFeaturedImageGenerator {
         $width = 1200;
         $height = 630;
         
-        // 画像を作成
-        $image = imagecreatetruecolor($width, $height);
-        
-        // 背景色設定（グラデーション）- デフォルト値を使用
-        $bg_color1 = '#4F46E5';
-        $bg_color2 = '#7C3AED';
-        
-        $this->create_gradient_background($image, $width, $height, $bg_color1, $bg_color2);
-        
-        // テキスト設定 - デフォルト値を使用
-        $text_color = '#FFFFFF';
-        $font_size = 48;
-        
-        // 日本語タイトルを生成（キーワード + ニュースまとめ + 日付）
-        $display_title = $this->create_japanese_title($title, $keywords);
-        
-        // 日本語テキストを画像に描画
-        $this->draw_japanese_text_on_image($image, $display_title, $font_size, $text_color, $width, $height);
-        
-        // キーワードタグを追加
-        if (!empty($keywords)) {
-            $this->draw_keywords_on_image($image, $keywords, $width, $height, $text_color);
+        try {
+            // 画像を作成
+            $image = imagecreatetruecolor($width, $height);
+            if (!$image) {
+                error_log('NewsCrawlerFeaturedImageGenerator: Failed to create image resource');
+                return array('error' => '画像リソースの作成に失敗しました。');
+            }
+            
+            // 背景色設定（グラデーション）- デフォルト値を使用
+            $bg_color1 = '#4F46E5';
+            $bg_color2 = '#7C3AED';
+            
+            $gradient_result = $this->create_gradient_background($image, $width, $height, $bg_color1, $bg_color2);
+            if (!$gradient_result) {
+                error_log('NewsCrawlerFeaturedImageGenerator: Failed to create gradient background');
+                imagedestroy($image);
+                return array('error' => 'グラデーション背景の作成に失敗しました。');
+            }
+            
+            // テキスト設定 - デフォルト値を使用
+            $text_color = '#FFFFFF';
+            $font_size = 48;
+            
+            // 日本語タイトルを生成（キーワード + ニュースまとめ + 日付）
+            $display_title = $this->create_japanese_title($title, $keywords);
+            error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
+            
+            // 日本語テキストを画像に描画
+            $text_result = $this->draw_japanese_text_on_image($image, $display_title, $font_size, $text_color, $width, $height);
+            if (!$text_result) {
+                error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw Japanese text');
+                imagedestroy($image);
+                return array('error' => '日本語テキストの描画に失敗しました。');
+            }
+            
+            // キーワードタグを追加
+            if (!empty($keywords)) {
+                $keywords_result = $this->draw_keywords_on_image($image, $keywords, $width, $height, $text_color);
+                if (!$keywords_result) {
+                    error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw keywords');
+                    // キーワードの描画失敗は致命的ではないので続行
+                }
+            }
+            
+            // 画像を保存
+            $result = $this->save_image_as_attachment($image, $post_id, $title);
+            
+            // メモリを解放
+            imagedestroy($image);
+            
+            if (!$result) {
+                error_log('NewsCrawlerFeaturedImageGenerator: Failed to save image as attachment');
+                return array('error' => '画像の保存に失敗しました。');
+            }
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            error_log('NewsCrawlerFeaturedImageGenerator: Exception in generate_template_image: ' . $e->getMessage());
+            if (isset($image) && is_resource($image)) {
+                imagedestroy($image);
+            }
+            return array('error' => '画像生成中にエラーが発生しました: ' . $e->getMessage());
         }
-        
-        // 画像を保存
-        $result = $this->save_image_as_attachment($image, $post_id, $title);
-        return $result;
     }
     
     /**
@@ -600,19 +644,20 @@ class NewsCrawlerFeaturedImageGenerator {
             if ($font_test_result && function_exists('imagettftext')) {
                 // 日本語TrueTypeフォントを使用して日本語を直接描画
                 error_log('Featured Image Generator: Using TTF font for Japanese text');
-                $this->draw_japanese_text_with_ttf($image, $text, $font_size, $color, $width, $height, $font_path);
-        } else {
-                // 日本語フォントが利用できない場合はエラーメッセージを描画
+                $result = $this->draw_japanese_text_with_ttf($image, $text, $font_size, $color, $width, $height, $font_path);
+                return $result;
+            } else {
+                // 日本語フォントが利用できない場合は英語で描画
                 error_log('Featured Image Generator: Font test failed or imagettftext not available');
-                $error_message = 'Japanese Font Required';
-                $this->draw_text_with_builtin($image, $error_message, $color, $width, $height);
-                error_log('Featured Image Generator: Japanese font not available. Please install Noto Sans JP font.');
+                $english_text = 'YouTube Video Summary';
+                $result = $this->draw_text_with_builtin($image, $english_text, $color, $width, $height);
+                return $result;
             }
         } else {
             error_log('Featured Image Generator: No font path found');
-            $error_message = 'Japanese Font Required';
-            $this->draw_text_with_builtin($image, $error_message, $color, $width, $height);
-            error_log('Featured Image Generator: Japanese font not available. Please install Noto Sans JP font.');
+            $english_text = 'YouTube Video Summary';
+            $result = $this->draw_text_with_builtin($image, $english_text, $color, $width, $height);
+            return $result;
         }
     }
     
@@ -1547,29 +1592,47 @@ class NewsCrawlerFeaturedImageGenerator {
      * 日本語タイトルを生成（ジャンル + キーワード + ニュースまとめ + 日付）
      */
     private function create_japanese_title($original_title, $keywords) {
-        // ジャンルを抽出（元のタイトルまたはキーワードから）
-        $genre = $this->extract_genre_from_title($original_title, $keywords);
-        
-        // キーワードから主要なものを選択
-        $main_keyword = '';
-        if (!empty($keywords)) {
-            // 最初のキーワードを使用、または複数のキーワードを組み合わせ
-            if (count($keywords) == 1) {
-                $main_keyword = $keywords[0];
-        } else {
-                // 複数のキーワードがある場合は最初の2つを使用
-                $main_keyword = implode('・', array_slice($keywords, 0, 2));
-            }
-        } else {
-            // キーワードがない場合は元のタイトルから推測
-            $main_keyword = $this->extract_keyword_from_title($original_title);
+        // YouTubeタイプかどうかを判定
+        $is_youtube = false;
+        if (strpos($original_title, 'YouTube') !== false || 
+            strpos($original_title, '動画') !== false ||
+            strpos($original_title, 'まとめ') !== false) {
+            $is_youtube = true;
         }
         
-        // 日付を取得（今日の日付）
-        $date = date_i18n('n月j日');
-        
-        // タイトル形式: {ジャンル}{キーワード}ニュースまとめ {日付}
-        $japanese_title = $genre . $main_keyword . 'ニュースまとめ ' . $date;
+        if ($is_youtube) {
+            // YouTubeタイプ用のタイトル生成
+            $main_keyword = '';
+            if (!empty($keywords)) {
+                if (count($keywords) == 1) {
+                    $main_keyword = $keywords[0];
+                } else {
+                    $main_keyword = implode('・', array_slice($keywords, 0, 2));
+                }
+            } else {
+                $main_keyword = '動画';
+            }
+            
+            $date = date_i18n('n月j日');
+            $japanese_title = $main_keyword . '動画まとめ ' . $date;
+        } else {
+            // 通常のニュースタイプ用のタイトル生成
+            $genre = $this->extract_genre_from_title($original_title, $keywords);
+            
+            $main_keyword = '';
+            if (!empty($keywords)) {
+                if (count($keywords) == 1) {
+                    $main_keyword = $keywords[0];
+                } else {
+                    $main_keyword = implode('・', array_slice($keywords, 0, 2));
+                }
+            } else {
+                $main_keyword = $this->extract_keyword_from_title($original_title);
+            }
+            
+            $date = date_i18n('n月j日');
+            $japanese_title = $genre . $main_keyword . 'ニュースまとめ ' . $date;
+        }
         
         return $japanese_title;
     }
