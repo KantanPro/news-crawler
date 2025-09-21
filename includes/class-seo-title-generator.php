@@ -279,11 +279,19 @@ class NewsCrawlerSEOTitleGenerator {
                 }
             }
         }
-        // ニュース投稿の場合、要約メタデータを優先的に使用
+        // ニュース投稿の場合、要約メタデータを最優先で使用
         elseif ($is_news_summary && $post_id) {
             $news_summary_source = get_post_meta($post_id, '_news_summary_source', true);
             if (!empty($news_summary_source)) {
                 $content = $news_summary_source;
+                error_log('NewsCrawlerSEOTitleGenerator: ニュース要約ソースを使用してSEOタイトル生成');
+            } else {
+                // ニュース要約ソースがない場合は、AI要約を探す
+                $ai_summary = get_post_meta($post_id, '_ai_summary', true);
+                if (!empty($ai_summary)) {
+                    $content = $ai_summary;
+                    error_log('NewsCrawlerSEOTitleGenerator: AI要約を使用してSEOタイトル生成');
+                }
             }
         }
         
@@ -338,10 +346,24 @@ class NewsCrawlerSEOTitleGenerator {
                 if (!empty($keywords)) {
                     $keyword_list = implode('、', $keywords);
                     
-                    // YouTube投稿の場合は特別なキーワード指示を使用
+                    // 投稿タイプに応じた特別なキーワード指示を使用
                     if ($post_id) {
+                        $is_news_summary = get_post_meta($post_id, '_news_summary', true);
                         $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-                        if ($is_youtube_summary) {
+                        
+                        if ($is_news_summary) {
+                            $keyword_instructions = "
+
+【重要】以下のキーワードを必ずタイトルに含めてください：
+ターゲットキーワード：{$keyword_list}
+
+ニュース記事のキーワード活用ルール：
+- 指定されたキーワードをニュースの要約内容と関連付けて使用してください
+- キーワードはニュースの内容と関連性がある場合のみ使用してください
+- ニュースの要約内容を最優先し、キーワードは自然に組み込んでください
+- タイトルの読みやすさと魅力的さを保ってください
+- 「ニュース」「まとめ」「要約」などのキーワードも適切に含めてください";
+                        } elseif ($is_youtube_summary) {
                             $keyword_instructions = "
 
 【重要】以下のキーワードを必ずタイトルに含めてください：
@@ -386,17 +408,40 @@ YouTube動画まとめ記事のキーワード活用ルール：
             $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
             
             if ($is_news_summary) {
-                $additional_context = "\n\n【記事の特徴】\n- ニュース記事の要約記事です\n- 複数のニュースソースから厳選された情報をまとめています\n- 最新の情報を分かりやすく整理しています";
+                $additional_context = "\n\n【記事の特徴】\n- ニュース記事の要約記事です\n- 複数のニュースソースから厳選された情報をまとめています\n- 最新の情報を分かりやすく整理しています\n- ニュースの要約内容を基にSEOタイトルを生成してください";
             } elseif ($is_youtube_summary) {
                 $video_count = get_post_meta($post_id, '_youtube_videos_count', true);
                 $additional_context = "\n\n【記事の特徴】\n- YouTube動画のまとめ記事です\n- " . ($video_count ? $video_count . "本" : "複数本") . "の動画を厳選して紹介しています\n- 動画の要点を分かりやすくまとめています\n- 動画の要約内容を基にSEOタイトルを生成してください";
             }
         }
 
-        // YouTube投稿の場合は特別なプロンプトを使用
+        // 投稿タイプに応じた特別なプロンプトを使用
         if ($post_id) {
+            $is_news_summary = get_post_meta($post_id, '_news_summary', true);
             $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-            if ($is_youtube_summary) {
+            
+            if ($is_news_summary) {
+                return "以下のニュース記事の要約内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
+
+記事のジャンル: {$genre_name}
+
+ニュースの要約内容:
+{$content}
+
+記事の要約:
+{$excerpt}{$additional_context}
+
+【ニュース記事のタイトル生成ルール】
+1. ニュースの要約内容を最優先で参考にしてください
+2. 30文字以内の簡潔で分かりやすいタイトル
+3. ニュースの内容を正確に表現し、検索されやすいキーワードを含める
+4. 読者の興味を引く魅力的な表現
+5. 日本語で自然な表現
+6. 「ニュース」「まとめ」「要約」などのキーワードを適切に含める
+7. ニュースの具体的な内容や話題を反映したタイトル
+
+タイトルのみを返してください。説明や装飾は不要です。";
+            } elseif ($is_youtube_summary) {
                 return "以下のYouTube動画まとめ記事の要約内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
 
 記事のジャンル: {$genre_name}
