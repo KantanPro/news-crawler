@@ -224,24 +224,10 @@ function news_crawler_ajax_toggle_dev_license() {
     }
 }
 
-// 自動投稿機能のライセンス制限通知
+// 自動投稿機能のライセンス制限通知（X投稿機能は開発段階のため除外）
 function news_crawler_auto_posting_license_notice() {
-    if (class_exists('NewsCrawler_License_Manager')) {
-        $license_manager = NewsCrawler_License_Manager::get_instance();
-        if (!$license_manager->is_auto_posting_enabled()) {
-            ?>
-            <div class="notice notice-warning">
-                <p>
-                    <strong><?php echo esc_html__('News Crawler', 'news-crawler'); ?>:</strong>
-                    <?php echo esc_html__('自動投稿機能を利用するにはライセンスキーが必要です。', 'news-crawler'); ?>
-                    <a href="<?php echo admin_url('admin.php?page=news-crawler-license'); ?>" class="button button-small" style="margin-left: 10px;">
-                        <?php echo esc_html__('ライセンスを設定', 'news-crawler'); ?>
-                    </a>
-                </p>
-            </div>
-            <?php
-        }
-    }
+    // X投稿機能は開発段階の機能のため、この通知は使用しない
+    // 自動投稿設定メニューでのみライセンスチェックを適用
 }
 
 // プラグインコンポーネントの初期化

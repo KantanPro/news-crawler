@@ -542,15 +542,9 @@ class NewsCrawlerSettingsManager {
             </div>
             
             <div id="twitter-settings" class="tab-content<?php echo ($active_tab === 'twitter-settings' ? ' active' : ''); ?>">
-                <?php 
-                // 自動投稿機能のライセンス通知を表示
-                if (function_exists('news_crawler_auto_posting_license_notice')) {
-                    news_crawler_auto_posting_license_notice();
-                }
-                ?>
                 <form method="post" action="options.php">
                     <?php 
-                    // X（Twitter）設定のフィールドを表示
+                    // X（Twitter）設定のフィールドを表示（開発段階の機能のためライセンス不要）
                     settings_fields('news_crawler_basic_settings');
                     do_settings_sections('news-crawler-settings-twitter');
                     ?>
@@ -1116,6 +1110,8 @@ class NewsCrawlerSettingsManager {
         $existing_options = get_option($this->option_name, array());
         $sanitized = is_array($existing_options) ? $existing_options : array();
         $input = is_array($input) ? $input : array();
+        
+        // X投稿設定は開発段階の機能のためライセンスチェック不要
 
         // APIキー
         if (array_key_exists('youtube_api_key', $input)) {

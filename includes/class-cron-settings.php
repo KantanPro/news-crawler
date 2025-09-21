@@ -126,8 +126,10 @@ class NewsCrawlerCronSettings {
     public function minute_callback() {
         $options = get_option($this->option_name);
         $value = isset($options['minute']) ? $options['minute'] : '0';
-        echo '<input type="text" id="minute" name="' . $this->option_name . '[minute]" value="' . esc_attr($value) . '" class="small-text" placeholder="0" />';
-        echo '<p class="description">実行する分を指定してください (0-59)。* を指定すると毎分実行されます。例：0, 30, *</p>';
+        echo '<div class="ktp-field-group">';
+        echo '<input type="text" id="minute" name="' . $this->option_name . '[minute]" value="' . esc_attr($value) . '" class="ktp-field-input" placeholder="0" />';
+        echo '<p class="ktp-field-description">実行する分を指定してください (0-59)。* を指定すると毎分実行されます。例：0, 30, *</p>';
+        echo '</div>';
     }
     
     /**
@@ -136,8 +138,10 @@ class NewsCrawlerCronSettings {
     public function hour_callback() {
         $options = get_option($this->option_name);
         $value = isset($options['hour']) ? $options['hour'] : '9';
-        echo '<input type="text" id="hour" name="' . $this->option_name . '[hour]" value="' . esc_attr($value) . '" class="small-text" placeholder="9" />';
-        echo '<p class="description">実行する時を指定してください (0-23)。* を指定すると毎時実行されます。例：9, 12, *</p>';
+        echo '<div class="ktp-field-group">';
+        echo '<input type="text" id="hour" name="' . $this->option_name . '[hour]" value="' . esc_attr($value) . '" class="ktp-field-input" placeholder="9" />';
+        echo '<p class="ktp-field-description">実行する時を指定してください (0-23)。* を指定すると毎時実行されます。例：9, 12, *</p>';
+        echo '</div>';
     }
     
     /**
@@ -146,8 +150,10 @@ class NewsCrawlerCronSettings {
     public function day_callback() {
         $options = get_option($this->option_name);
         $value = isset($options['day']) ? $options['day'] : '*';
-        echo '<input type="text" id="day" name="' . $this->option_name . '[day]" value="' . esc_attr($value) . '" class="small-text" placeholder="*" />';
-        echo '<p class="description">実行する日を指定してください (1-31)。* を指定すると毎日実行されます。例：1, 15, *</p>';
+        echo '<div class="ktp-field-group">';
+        echo '<input type="text" id="day" name="' . $this->option_name . '[day]" value="' . esc_attr($value) . '" class="ktp-field-input" placeholder="*" />';
+        echo '<p class="ktp-field-description">実行する日を指定してください (1-31)。* を指定すると毎日実行されます。例：1, 15, *</p>';
+        echo '</div>';
     }
     
     /**
@@ -156,8 +162,10 @@ class NewsCrawlerCronSettings {
     public function month_callback() {
         $options = get_option($this->option_name);
         $value = isset($options['month']) ? $options['month'] : '*';
-        echo '<input type="text" id="month" name="' . $this->option_name . '[month]" value="' . esc_attr($value) . '" class="small-text" placeholder="*" />';
-        echo '<p class="description">実行する月を指定してください (1-12)。* を指定すると毎月実行されます。例：1, 6, *</p>';
+        echo '<div class="ktp-field-group">';
+        echo '<input type="text" id="month" name="' . $this->option_name . '[month]" value="' . esc_attr($value) . '" class="ktp-field-input" placeholder="*" />';
+        echo '<p class="ktp-field-description">実行する月を指定してください (1-12)。* を指定すると毎月実行されます。例：1, 6, *</p>';
+        echo '</div>';
     }
     
     /**
@@ -166,8 +174,10 @@ class NewsCrawlerCronSettings {
     public function weekday_callback() {
         $options = get_option($this->option_name);
         $value = isset($options['weekday']) ? $options['weekday'] : '*';
-        echo '<input type="text" id="weekday" name="' . $this->option_name . '[weekday]" value="' . esc_attr($value) . '" class="small-text" placeholder="*" />';
-        echo '<p class="description">実行する曜日を指定してください (0-7, 0と7は日曜日)。* を指定すると毎日実行されます。例：0, 1-5, *</p>';
+        echo '<div class="ktp-field-group">';
+        echo '<input type="text" id="weekday" name="' . $this->option_name . '[weekday]" value="' . esc_attr($value) . '" class="ktp-field-input" placeholder="*" />';
+        echo '<p class="ktp-field-description">実行する曜日を指定してください (0-7, 0と7は日曜日)。* を指定すると毎日実行されます。例：0, 1-5, *</p>';
+        echo '</div>';
     }
     
     /**
@@ -361,94 +371,219 @@ class NewsCrawlerCronSettings {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定</h1>
+            <div class="ktp-page-header">
+                <h1 class="ktp-page-title">
+                    <span class="ktp-icon">⚙️</span>
+                    News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定
+                </h1>
+                <p class="ktp-page-description">サーバーのcronジョブを使用して自動投稿をスケジュール実行します</p>
+            </div>
             
             <?php if (isset($_GET['settings-updated'])): ?>
-                <div class="notice notice-success is-dismissible">
+                <div class="ktp-notice ktp-notice-success">
+                    <span class="ktp-notice-icon">✓</span>
                     <p>自動投稿設定を保存しました。</p>
                 </div>
             <?php endif; ?>
             
             <div class="ktp-admin-content">
-                <div class="ktp-admin-card">
-                    <h2>Cronジョブ設定</h2>
-                    <div style="background: #e7f3ff; padding: 15px; border-left: 4px solid #0073aa; margin-bottom: 20px;">
-                        <h3 style="margin-top: 0; color: #0073aa;">📋 自動投稿設定の機能説明</h3>
-                        <p style="margin-bottom: 10px;"><strong>この設定ページでは、News Crawlerの自動投稿機能をサーバーのcronジョブで実行するための設定を行います。</strong></p>
-                        <ul style="margin-bottom: 0;">
-                            <li><strong>実行タイミング設定：</strong>分、時、日、月、曜日を指定して自動投稿の実行スケジュールを設定できます</li>
-                            <li><strong>サーバーcronジョブ連携：</strong>設定したスケジュールに基づいてサーバーのcronジョブコマンドを生成します</li>
-                            <li><strong>確実な実行：</strong>WordPressの内部cronシステムとは独立して、サーバーレベルで確実に自動投稿を実行します</li>
-                            <li><strong>環境対応：</strong>Docker環境、wp-cli環境、PHP直接実行など、様々なサーバー環境に対応しています</li>
-                            <li><strong>ログ機能：</strong>実行状況を詳細にログに記録し、問題の特定と解決をサポートします</li>
-                        </ul>
-                        <p style="margin-top: 15px; margin-bottom: 0; font-weight: bold; color: #d63384;">
-                            ⚠️ 注意：この設定はサーバーのcronジョブが有効になっている環境でのみ動作します。設定後は必ずサーバーのcrontabに生成されたコマンドを追加してください。
-                        </p>
+                <!-- 機能説明カード -->
+                <div class="ktp-info-card">
+                    <div class="ktp-card-header">
+                        <h2 class="ktp-card-title">
+                            <span class="ktp-icon">📋</span>
+                            自動投稿設定の機能説明
+                        </h2>
                     </div>
+                    <div class="ktp-card-content">
+                        <p class="ktp-feature-description">この設定ページでは、News Crawlerの自動投稿機能をサーバーのcronジョブで実行するための設定を行います。</p>
+                        <div class="ktp-feature-grid">
+                            <div class="ktp-feature-item">
+                                <div class="ktp-feature-icon">⏰</div>
+                                <div class="ktp-feature-content">
+                                    <h4>実行タイミング設定</h4>
+                                    <p>分、時、日、月、曜日を指定して自動投稿の実行スケジュールを設定できます</p>
+                                </div>
+                            </div>
+                            <div class="ktp-feature-item">
+                                <div class="ktp-feature-icon">🔗</div>
+                                <div class="ktp-feature-content">
+                                    <h4>サーバーcronジョブ連携</h4>
+                                    <p>設定したスケジュールに基づいてサーバーのcronジョブコマンドを生成します</p>
+                                </div>
+                            </div>
+                            <div class="ktp-feature-item">
+                                <div class="ktp-feature-icon">✅</div>
+                                <div class="ktp-feature-content">
+                                    <h4>確実な実行</h4>
+                                    <p>WordPressの内部cronシステムとは独立して、サーバーレベルで確実に自動投稿を実行します</p>
+                                </div>
+                            </div>
+                            <div class="ktp-feature-item">
+                                <div class="ktp-feature-icon">🐳</div>
+                                <div class="ktp-feature-content">
+                                    <h4>環境対応</h4>
+                                    <p>Docker環境、wp-cli環境、PHP直接実行など、様々なサーバー環境に対応しています</p>
+                                </div>
+                            </div>
+                            <div class="ktp-feature-item">
+                                <div class="ktp-feature-icon">📊</div>
+                                <div class="ktp-feature-content">
+                                    <h4>ログ機能</h4>
+                                    <p>実行状況を詳細にログに記録し、問題の特定と解決をサポートします</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ktp-warning-box">
+                            <span class="ktp-warning-icon">⚠️</span>
+                            <p><strong>注意：</strong>この設定はサーバーのcronジョブが有効になっている環境でのみ動作します。設定後は必ずサーバーのcrontabに生成されたコマンドを追加してください。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 設定フォームカード -->
+                <div class="ktp-settings-card">
+                    <div class="ktp-card-header">
+                        <h2 class="ktp-card-title">
+                            <span class="ktp-icon">⚙️</span>
+                            Cronジョブ設定
+                        </h2>
+                    </div>
+                    <div class="ktp-card-content">
                     
-                    <form method="post" action="options.php">
-                        <?php
-                        settings_fields('news-crawler-cron-settings');
-                        
-                        // シェルスクリプト名の隠しフィールドを追加
-                        $options = get_option($this->option_name);
-                        $script_name = isset($options['shell_script_name']) ? $options['shell_script_name'] : 'news-crawler-cron.sh';
-                        echo '<input type="hidden" name="' . $this->option_name . '[shell_script_name]" value="' . esc_attr($script_name) . '" />';
-                        
-                        do_settings_sections('news-crawler-cron-settings');
-                        submit_button('設定を保存');
-                        ?>
-                    </form>
+                        <form method="post" action="options.php" class="ktp-settings-form">
+                            <?php
+                            settings_fields('news-crawler-cron-settings');
+                            
+                            // シェルスクリプト名の隠しフィールドを追加
+                            $options = get_option($this->option_name);
+                            $script_name = isset($options['shell_script_name']) ? $options['shell_script_name'] : 'news-crawler-cron.sh';
+                            echo '<input type="hidden" name="' . $this->option_name . '[shell_script_name]" value="' . esc_attr($script_name) . '" />';
+                            
+                            do_settings_sections('news-crawler-cron-settings');
+                            ?>
+                            <div class="ktp-form-actions">
+                                <button type="submit" class="ktp-button ktp-button-primary">
+                                    <span class="ktp-icon">💾</span>
+                                    設定を保存
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 
                 <?php if (!empty($cron_command)): ?>
                 
-                <div class="ktp-admin-card">
-                    <h2>生成されたCronジョブ設定</h2>
-                    <p>以下の設定をサーバーのcronジョブに追加してください：</p>
-                    <div style="background: #f1f1f1; padding: 15px; border-radius: 4px; font-family: monospace; word-break: break-all; border: 2px solid #0073aa;">
-                        <?php echo esc_html($cron_command); ?>
+                <!-- 生成されたCronコマンドカード -->
+                <div class="ktp-command-card">
+                    <div class="ktp-card-header">
+                        <h2 class="ktp-card-title">
+                            <span class="ktp-icon">📝</span>
+                            生成されたCronジョブ設定
+                        </h2>
                     </div>
-                    <p><strong>重要：</strong>指定したシェルスクリプト（<code><?php echo esc_html($options['shell_script_name'] ?? 'news-crawler-cron.sh'); ?></code>）がサーバー上に存在し、実行権限が設定されている必要があります。</p>
+                    <div class="ktp-card-content">
+                        <p class="ktp-instruction-text">以下の設定をサーバーのcronジョブに追加してください：</p>
+                        <div class="ktp-command-box">
+                            <div class="ktp-command-content">
+                                <code class="ktp-cron-command"><?php echo esc_html($cron_command); ?></code>
+                                <button class="ktp-copy-button" onclick="copyToClipboard('<?php echo esc_js($cron_command); ?>')">
+                                    <span class="ktp-icon">📋</span>
+                                    コピー
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ktp-important-note">
+                            <span class="ktp-icon">⚠️</span>
+                            <p><strong>重要：</strong>指定したシェルスクリプト（<code><?php echo esc_html($options['shell_script_name'] ?? 'news-crawler-cron.sh'); ?></code>）がサーバー上に存在し、実行権限が設定されている必要があります。</p>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="ktp-admin-card">
-                    <h2>設定方法（SSH不要）</h2>
-                    <p>SSHでログインできない場合でも、以下の方法でcronジョブを設定できます：</p>
-                    <ol>
-                        <li><strong>ホスティング会社の管理パネルを使用：</strong>
-                            <ul>
-                                <li>cPanel、Plesk、DirectAdminなどの管理パネルにログイン</li>
-                                <li>「Cronジョブ」または「スケジュールタスク」の項目を探す</li>
-                                <li>上記の設定を入力して保存</li>
-                            </ul>
-                        </li>
-                        <li><strong>WordPressプラグインを使用：</strong>
-                            <ul>
-                                <li>「WP Crontrol」などのcron管理プラグインをインストール</li>
-                                <li>プラグインの設定画面で上記の設定を追加</li>
-                            </ul>
-                        </li>
-                        <li><strong>サーバー管理会社に依頼：</strong>
-                            <ul>
-                                <li>上記の設定内容をサーバー管理会社に送信</li>
-                                <li>cronジョブの設定を依頼</li>
-                            </ul>
-                        </li>
-                    </ol>
-                </div>
-                
-                <div class="ktp-admin-card">
-                    <h2>設定手順（SSH使用可能な場合）</h2>
-                    <ol>
-                        <li>上記のCronジョブ設定コマンドをコピーします</li>
-                        <li>サーバーにSSHでログインします</li>
-                        <li><code>crontab -e</code>コマンドでcrontabを編集します</li>
-                        <li>コピーしたコマンドを追加します</li>
-                        <li>保存して終了します</li>
-                        <li><code>crontab -l</code>コマンドで設定が正しく追加されたか確認します</li>
-                    </ol>
+                <!-- 設定方法カード -->
+                <div class="ktp-methods-grid">
+                    <div class="ktp-method-card">
+                        <div class="ktp-card-header">
+                            <h3 class="ktp-card-title">
+                                <span class="ktp-icon">🖥️</span>
+                                管理パネル設定（SSH不要）
+                            </h3>
+                        </div>
+                        <div class="ktp-card-content">
+                            <p>SSHでログインできない場合でも、以下の方法でcronジョブを設定できます：</p>
+                            <div class="ktp-method-steps">
+                                <div class="ktp-step">
+                                    <div class="ktp-step-number">1</div>
+                                    <div class="ktp-step-content">
+                                        <h4>ホスティング会社の管理パネルを使用</h4>
+                                        <ul>
+                                            <li>cPanel、Plesk、DirectAdminなどの管理パネルにログイン</li>
+                                            <li>「Cronジョブ」または「スケジュールタスク」の項目を探す</li>
+                                            <li>上記の設定を入力して保存</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="ktp-step">
+                                    <div class="ktp-step-number">2</div>
+                                    <div class="ktp-step-content">
+                                        <h4>WordPressプラグインを使用</h4>
+                                        <ul>
+                                            <li>「WP Crontrol」などのcron管理プラグインをインストール</li>
+                                            <li>プラグインの設定画面で上記の設定を追加</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="ktp-step">
+                                    <div class="ktp-step-number">3</div>
+                                    <div class="ktp-step-content">
+                                        <h4>サーバー管理会社に依頼</h4>
+                                        <ul>
+                                            <li>上記の設定内容をサーバー管理会社に送信</li>
+                                            <li>cronジョブの設定を依頼</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ktp-method-card">
+                        <div class="ktp-card-header">
+                            <h3 class="ktp-card-title">
+                                <span class="ktp-icon">💻</span>
+                                SSH設定手順
+                            </h3>
+                        </div>
+                        <div class="ktp-card-content">
+                            <p>SSHでサーバーにアクセスできる場合の設定手順：</p>
+                            <div class="ktp-ssh-steps">
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">1</span>
+                                    <span>上記のCronジョブ設定コマンドをコピーします</span>
+                                </div>
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">2</span>
+                                    <span>サーバーにSSHでログインします</span>
+                                </div>
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">3</span>
+                                    <span><code>crontab -e</code>コマンドでcrontabを編集します</span>
+                                </div>
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">4</span>
+                                    <span>コピーしたコマンドを追加します</span>
+                                </div>
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">5</span>
+                                    <span>保存して終了します</span>
+                                </div>
+                                <div class="ktp-ssh-step">
+                                    <span class="ktp-step-icon">6</span>
+                                    <span><code>crontab -l</code>コマンドで設定が正しく追加されたか確認します</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <?php endif; ?>
             </div>
@@ -889,6 +1024,7 @@ echo \"---\" >> \"\$LOG_FILE\"
         }
         
         wp_enqueue_script('jquery');
+        wp_enqueue_style('news-crawler-auto-posting-admin', NEWS_CRAWLER_PLUGIN_URL . 'assets/css/auto-posting-admin.css', array(), NEWS_CRAWLER_VERSION);
         
         // インラインスクリプトとして追加
         $script = "
@@ -941,6 +1077,68 @@ echo \"---\" >> \"\$LOG_FILE\"
         ";
         
         wp_add_inline_script('jquery', $script);
+        
+        // コピー機能のJavaScriptを追加
+        $copy_script = "
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showCopyNotification('コマンドをクリップボードにコピーしました');
+                }).catch(function(err) {
+                    fallbackCopyTextToClipboard(text);
+                });
+            } else {
+                fallbackCopyTextToClipboard(text);
+            }
+        }
+        
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.position = 'fixed';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    showCopyNotification('コマンドをクリップボードにコピーしました');
+                } else {
+                    showCopyNotification('コピーに失敗しました', 'error');
+                }
+            } catch (err) {
+                showCopyNotification('コピーに失敗しました', 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
+        function showCopyNotification(message, type = 'success') {
+            var notification = document.createElement('div');
+            notification.className = 'ktp-copy-notification ktp-copy-notification-' + type;
+            notification.innerHTML = '<span class=\"ktp-icon\">' + (type === 'success' ? '✓' : '✗') + '</span><span>' + message + '</span>';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(function() {
+                notification.classList.add('ktp-copy-notification-show');
+            }, 100);
+            
+            setTimeout(function() {
+                notification.classList.remove('ktp-copy-notification-show');
+                setTimeout(function() {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 2000);
+        }
+        ";
+        
+        wp_add_inline_script('jquery', $copy_script);
     }
     
     /**

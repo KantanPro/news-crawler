@@ -108,14 +108,7 @@ class News_Crawler_X_Poster {
             return;
         }
         
-        // ライセンスチェック - 自動投稿機能にはライセンスが必要
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            if (!$license_manager->is_auto_posting_enabled()) {
-                error_log('X Poster: ライセンスが無効なため、自動投稿機能をスキップします');
-                return;
-            }
-        }
+        // X投稿機能は開発段階の機能のためライセンスチェック不要
         
         // 必要な認証情報が不足している場合は終了
         if (empty($settings['twitter_bearer_token']) || 

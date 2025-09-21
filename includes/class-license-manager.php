@@ -129,6 +129,11 @@ class NewsCrawler_License_Manager {
             return;
         }
         
+        // 自動投稿設定ページでは表示しない（独自の魅力的な表示を使用）
+        if ( isset( $_GET['page'] ) && $_GET['page'] === 'news-crawler-cron-settings' ) {
+            return;
+        }
+        
         $license_key = get_option( 'news_crawler_license_key' );
         $license_status = get_option( 'news_crawler_license_status' );
         
@@ -825,10 +830,10 @@ class NewsCrawler_License_Manager {
      * @return bool True if auto posting should be enabled
      */
     public function is_auto_posting_enabled() {
-        // 開発環境では常に有効
-        if ( $this->is_development_environment() ) {
-            return true;
-        }
+        // 開発環境でもライセンスチェックを適用（テスト用）
+        // if ( $this->is_development_environment() ) {
+        //     return true;
+        // }
         
         return $this->is_license_valid();
     }

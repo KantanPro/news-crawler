@@ -155,11 +155,11 @@ class NewsCrawlerGenreSettings {
             array($this, 'basic_settings_page')
         );
         
-        // 自動投稿設定サブメニュー
+        // 自動投稿設定サブメニュー（黄色で目立たせる）
         add_submenu_page(
             'news-crawler-main',
             'News Crawler ' . $this->get_plugin_version() . ' - 自動投稿設定',
-            '自動投稿設定',
+            '<span style="color: #ffb900; font-weight: bold;">🚀 自動投稿設定</span>',
             $menu_capability,
             'news-crawler-cron-settings',
             array($this, 'cron_settings_page')
@@ -753,12 +753,27 @@ class NewsCrawlerGenreSettings {
     
     
     /**
-     * Cron設定ページの表示
+     * Cron設定ページの表示（自動投稿設定）
      */
     public function cron_settings_page() {
-        // クロン設定はライセンス不要になったため、ライセンスチェックを削除
+        // 自動投稿機能にはライセンスが必要
+        if (class_exists('NewsCrawler_License_Manager')) {
+            $license_manager = NewsCrawler_License_Manager::get_instance();
+            if (!$license_manager->is_auto_posting_enabled()) {
+                ?>
+                <div class="wrap">
+                    <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定</h1>
+                    
+                    <div style="margin-top: 80px;">
+                        <?php echo $this->render_auto_posting_license_required(); ?>
+                    </div>
+                </div>
+                <?php
+                return;
+            }
+        }
         
-        // Cron設定クラスのインスタンスを作成してページを表示
+        // ライセンスが有効な場合は通常の設定画面を表示
         if (class_exists('NewsCrawlerCronSettings')) {
             $cron_settings = new NewsCrawlerCronSettings();
             
@@ -767,8 +782,300 @@ class NewsCrawlerGenreSettings {
             
             $cron_settings->admin_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - Cron設定</h1><p>Cron設定クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - 自動投稿設定</h1><p>自動投稿設定クラスが見つかりません。</p></div>';
         }
+    }
+    
+    /**
+     * 自動投稿機能のライセンス制限表示（KantanProスタイル）
+     */
+    private function render_auto_posting_license_required() {
+        // ダミーの自動投稿設定画面の画像URL（実際の画像がない場合はプレースホルダーを使用）
+        $dummy_image_url = 'data:image/svg+xml;base64,' . base64_encode('
+            <svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="#f8f9fa"/>
+                <rect x="20" y="20" width="760" height="360" fill="#fff" stroke="#e1e5e9" stroke-width="2" rx="8"/>
+                <rect x="40" y="60" width="720" height="40" fill="#e3f2fd" rx="4"/>
+                <rect x="40" y="120" width="200" height="20" fill="#e0e0e0" rx="2"/>
+                <rect x="40" y="150" width="300" height="20" fill="#e0e0e0" rx="2"/>
+                <rect x="40" y="180" width="250" height="20" fill="#e0e0e0" rx="2"/>
+                <rect x="40" y="220" width="400" height="80" fill="#f5f5f5" rx="4"/>
+                <rect x="40" y="320" width="150" height="40" fill="#2196f3" rx="4"/>
+                <rect x="210" y="320" width="100" height="40" fill="#4caf50" rx="4"/>
+                <text x="400" y="200" font-family="Arial, sans-serif" font-size="16" fill="#666" text-anchor="middle">自動投稿設定画面</text>
+            </svg>
+        ');
+        
+        return '<style>
+            .ktp-license-container {
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                min-height: 60vh;
+                padding: 5px 20px;
+                background: transparent;
+            }
+            
+            .ktp-license-card {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                margin: 0;
+                overflow: hidden;
+                border: 1px solid #e1e5e9;
+                max-width: 800px;
+                width: 100%;
+            }
+            
+            .ktp-license-header {
+                background: white;
+                color: #2c3e50;
+                padding: 24px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                border-bottom: 2px solid #e1e5e9;
+            }
+            
+            .ktp-license-icon {
+                font-size: 32px;
+                flex-shrink: 0;
+            }
+            
+            .ktp-license-title h2 {
+                font-size: 24px;
+                font-weight: 600;
+                margin: 0 0 4px 0;
+            }
+            
+            .ktp-license-title h3 {
+                font-size: 16px;
+                font-weight: 400;
+                margin: 0;
+                opacity: 0.9;
+            }
+            
+            .ktp-license-content {
+                padding: 24px;
+            }
+            
+            .ktp-license-description {
+                font-size: 16px;
+                color: #5a6c7d;
+                margin: 0 0 20px 0;
+                line-height: 1.6;
+                text-align: center;
+            }
+            
+            .ktp-license-description strong {
+                color: #ff6b35;
+                font-weight: 600;
+            }
+            
+            .ktp-license-features {
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 0 0 24px 0;
+            }
+            
+            .ktp-license-features h4 {
+                font-size: 18px;
+                font-weight: 600;
+                margin: 0 0 16px 0;
+                color: #2c3e50;
+            }
+            
+            .ktp-feature-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 12px;
+            }
+            
+            .ktp-feature-item {
+                background: white;
+                padding: 12px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                color: #5a6c7d;
+                border: 1px solid #e1e5e9;
+                transition: all 0.3s ease;
+            }
+            
+            .ktp-feature-item:hover {
+                background: #e3f2fd;
+                border-color: #0073aa;
+                transform: translateX(4px);
+            }
+            
+            .ktp-license-actions {
+                display: flex;
+                gap: 16px;
+                justify-content: center;
+                margin: 0 0 20px 0;
+                flex-wrap: wrap;
+            }
+            
+            .ktp-license-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 24px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 14px;
+                transition: all 0.3s ease;
+                min-width: 160px;
+                justify-content: center;
+            }
+            
+            .ktp-license-btn-primary {
+                background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+                color: white;
+                box-shadow: 0 2px 8px rgba(255,107,53,0.3);
+            }
+            
+            .ktp-license-btn-primary:hover {
+                background: linear-gradient(135deg, #f7931e 0%, #e8851a 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 16px rgba(255,107,53,0.4);
+                color: white;
+            }
+            
+            .ktp-license-btn-secondary {
+                background: white;
+                color: #0073aa;
+                border: 2px solid #0073aa;
+            }
+            
+            .ktp-license-btn-secondary:hover {
+                background: #0073aa;
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 16px rgba(0,115,170,0.3);
+            }
+            
+            .ktp-license-info {
+                text-align: center;
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+                border-radius: 6px;
+                padding: 12px 16px;
+            }
+            
+            .ktp-license-info p {
+                margin: 0;
+                font-size: 14px;
+                color: #856404;
+                line-height: 1.5;
+            }
+            
+            .ktp-license-info a {
+                color: #0073aa;
+                text-decoration: none;
+                font-weight: 600;
+            }
+            
+            .ktp-license-info a:hover {
+                text-decoration: underline;
+            }
+            
+            @media (max-width: 768px) {
+                .ktp-license-header {
+                    padding: 20px;
+                    flex-direction: column;
+                    text-align: center;
+                    gap: 12px;
+                }
+                
+                .ktp-license-content {
+                    padding: 20px;
+                }
+                
+                .ktp-feature-list {
+                    grid-template-columns: 1fr;
+                    gap: 8px;
+                }
+                
+                .ktp-license-actions {
+                    flex-direction: column;
+                    align-items: center;
+                }
+                
+                .ktp-license-btn {
+                    width: 100%;
+                    max-width: 280px;
+                }
+            }
+            
+            @media (max-width: 480px) {
+                .ktp-license-card {
+                    margin: 10px 0;
+                }
+                
+                .ktp-license-header {
+                    padding: 16px;
+                }
+                
+                .ktp-license-content {
+                    padding: 16px;
+                }
+                
+                .ktp-license-title h2 {
+                    font-size: 20px;
+                }
+                
+                .ktp-license-title h3 {
+                    font-size: 14px;
+                }
+                
+                .ktp-license-description {
+                    font-size: 14px;
+                }
+            }
+        </style>
+        
+        <div class="ktp-license-container">
+            <div class="ktp-license-card">
+                <div class="ktp-license-header">
+                    <div class="ktp-license-icon">🚀</div>
+                    <div class="ktp-license-title">
+                        <h2>自動投稿機能</h2>
+                        <h3>ライセンスが必要です</h3>
+                    </div>
+                </div>
+            
+            <div class="ktp-license-content">
+                <p class="ktp-license-description">
+                    ニュース記事の自動投稿・スケジューリング機能を利用するには、<br>
+                    <strong>有効なライセンスキー</strong>が必要です。
+                </p>
+                
+                <div class="ktp-license-features">
+                    <h4>✨ 自動投稿機能の特徴</h4>
+                    <div class="ktp-feature-list">
+                        <div class="ktp-feature-item">📅 スケジュール投稿で効率的なコンテンツ管理</div>
+                        <div class="ktp-feature-item">🔄 定期的なニュース記事の自動取得・投稿</div>
+                        <div class="ktp-feature-item">📊 投稿パフォーマンスの分析・最適化</div>
+                        <div class="ktp-feature-item">🎯 ターゲット設定による精度の高い投稿</div>
+                    </div>
+                </div>
+                
+                <div class="ktp-license-actions">
+                    <a href="https://www.kantanpro.com/klm-news-crawler" target="_blank" class="ktp-license-btn ktp-license-btn-primary">
+                        🛒 ライセンスを購入
+                    </a>
+                    <a href="' . esc_url(admin_url('admin.php?page=news-crawler-license')) . '" class="ktp-license-btn ktp-license-btn-secondary">
+                        ⚙️ ライセンス設定
+                    </a>
+                </div>
+                
+                <div class="ktp-license-info">
+                    <p>💡 ライセンス購入後は<a href="' . esc_url(admin_url('admin.php?page=news-crawler-license')) . '">ライセンス設定</a>でライセンスキーを入力してください</p>
+                </div>
+            </div>
+        </div>';
     }
     
     public function main_admin_page() {
