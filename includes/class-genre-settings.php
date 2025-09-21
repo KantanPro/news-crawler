@@ -155,11 +155,11 @@ class NewsCrawlerGenreSettings {
             array($this, 'basic_settings_page')
         );
         
-        // Cron設定サブメニュー
+        // 自動投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - Cron設定',
-            'Cron設定',
+            'News Crawler ' . $this->get_plugin_version() . ' - 自動投稿設定',
+            '自動投稿設定',
             $menu_capability,
             'news-crawler-cron-settings',
             array($this, 'cron_settings_page')

@@ -361,16 +361,31 @@ class NewsCrawlerCronSettings {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - Cron設定</h1>
+            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
-                    <p>Cron設定を保存しました。</p>
+                    <p>自動投稿設定を保存しました。</p>
                 </div>
             <?php endif; ?>
             
             <div class="ktp-admin-content">
                 <div class="ktp-admin-card">
+                    <h2>Cronジョブ設定</h2>
+                    <div style="background: #e7f3ff; padding: 15px; border-left: 4px solid #0073aa; margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #0073aa;">📋 自動投稿設定の機能説明</h3>
+                        <p style="margin-bottom: 10px;"><strong>この設定ページでは、News Crawlerの自動投稿機能をサーバーのcronジョブで実行するための設定を行います。</strong></p>
+                        <ul style="margin-bottom: 0;">
+                            <li><strong>実行タイミング設定：</strong>分、時、日、月、曜日を指定して自動投稿の実行スケジュールを設定できます</li>
+                            <li><strong>サーバーcronジョブ連携：</strong>設定したスケジュールに基づいてサーバーのcronジョブコマンドを生成します</li>
+                            <li><strong>確実な実行：</strong>WordPressの内部cronシステムとは独立して、サーバーレベルで確実に自動投稿を実行します</li>
+                            <li><strong>環境対応：</strong>Docker環境、wp-cli環境、PHP直接実行など、様々なサーバー環境に対応しています</li>
+                            <li><strong>ログ機能：</strong>実行状況を詳細にログに記録し、問題の特定と解決をサポートします</li>
+                        </ul>
+                        <p style="margin-top: 15px; margin-bottom: 0; font-weight: bold; color: #d63384;">
+                            ⚠️ 注意：この設定はサーバーのcronジョブが有効になっている環境でのみ動作します。設定後は必ずサーバーのcrontabに生成されたコマンドを追加してください。
+                        </p>
+                    </div>
                     
                     <form method="post" action="options.php">
                         <?php
