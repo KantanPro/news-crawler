@@ -2256,32 +2256,32 @@ class NewsCrawler {
      * アイキャッチ画像を生成
      */
     private function maybe_generate_featured_image($post_id, $title, $keywords) {
-        error_log('YouTubeCrawler: maybe_generate_featured_image called for post ' . $post_id);
-        error_log('YouTubeCrawler: Title: ' . $title);
-        error_log('YouTubeCrawler: Keywords: ' . implode(', ', $keywords));
+        error_log('NewsCrawler: maybe_generate_featured_image called for post ' . $post_id);
+        error_log('NewsCrawler: Title: ' . $title);
+        error_log('NewsCrawler: Keywords: ' . implode(', ', $keywords));
         
         // ジャンル設定からの実行かどうかを確認
         $genre_setting = get_transient('news_crawler_current_genre_setting');
         
-        error_log('YouTubeCrawler: Genre setting exists: ' . ($genre_setting ? 'Yes' : 'No'));
+        error_log('NewsCrawler: Genre setting exists: ' . ($genre_setting ? 'Yes' : 'No'));
         if ($genre_setting) {
-            error_log('YouTubeCrawler: Genre setting content: ' . print_r($genre_setting, true));
-            error_log('YouTubeCrawler: Auto featured image enabled: ' . (isset($genre_setting['auto_featured_image']) && $genre_setting['auto_featured_image'] ? 'Yes' : 'No'));
+            error_log('NewsCrawler: Genre setting content: ' . print_r($genre_setting, true));
+            error_log('NewsCrawler: Auto featured image enabled: ' . (isset($genre_setting['auto_featured_image']) && $genre_setting['auto_featured_image'] ? 'Yes' : 'No'));
             if (isset($genre_setting['featured_image_method'])) {
-                error_log('YouTubeCrawler: Featured image method: ' . $genre_setting['featured_image_method']);
+                error_log('NewsCrawler: Featured image method: ' . $genre_setting['featured_image_method']);
             }
         } else {
-            error_log('YouTubeCrawler: No genre setting found in transient storage');
+            error_log('NewsCrawler: No genre setting found in transient storage');
             // 基本設定からアイキャッチ生成設定を確認
             $basic_settings = get_option('news_crawler_basic_settings', array());
             
-            error_log('YouTubeCrawler: Checking basic settings for featured image generation');
-            error_log('YouTubeCrawler: Basic settings: ' . print_r($basic_settings, true));
+            error_log('NewsCrawler: Checking basic settings for featured image generation');
+            error_log('NewsCrawler: Basic settings: ' . print_r($basic_settings, true));
             
             // 基本設定でアイキャッチ生成が有効かチェック
             $auto_featured_enabled = isset($basic_settings['auto_featured_image']) && $basic_settings['auto_featured_image'];
             if (!$auto_featured_enabled) {
-                error_log('YouTubeCrawler: Featured image generation skipped - not enabled in basic settings');
+                error_log('NewsCrawler: Featured image generation skipped - not enabled in basic settings');
                 return false;
             }
             
@@ -2290,7 +2290,7 @@ class NewsCrawler {
                 'auto_featured_image' => true,
                 'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
             );
-            error_log('YouTubeCrawler: Using basic settings for featured image generation');
+            error_log('NewsCrawler: Using basic settings for featured image generation');
         }
         
         if (!isset($genre_setting['auto_featured_image']) || !$genre_setting['auto_featured_image']) {
@@ -2299,20 +2299,40 @@ class NewsCrawler {
         }
         
         if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
-            error_log('YouTubeCrawler: Featured image generator class not found');
+            error_log('NewsCrawler: Featured image generator class not found');
             return false;
         }
         
-        error_log('YouTubeCrawler: Creating featured image generator instance');
+        error_log('NewsCrawler: Creating featured image generator instance');
         $generator = new NewsCrawlerFeaturedImageGenerator();
         $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
         
-        error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
+        error_log('NewsCrawler: Generating featured image with method: ' . $method);
         
-        $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
-        error_log('YouTubeCrawler: Featured image generation result: ' . ($result ? 'Success (ID: ' . $result . ')' : 'Failed'));
-        
-        return $result;
+        try {
+            // タイムアウト設定（60秒に延長）
+            set_time_limit(60);
+            
+            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+            
+            if ($result && !is_array($result)) {
+                error_log('NewsCrawler: Featured image generation result: Success (ID: ' . $result . ')');
+                return $result;
+            } elseif (is_array($result) && isset($result['error'])) {
+                error_log('NewsCrawler: Featured image generation failed: ' . $result['error']);
+                return false;
+            } else {
+                error_log('NewsCrawler: Featured image generation result: Failed - No result returned');
+                return false;
+            }
+            
+        } catch (Exception $e) {
+            error_log('NewsCrawler: Featured image generation error: ' . $e->getMessage());
+            return false;
+        } catch (Error $e) {
+            error_log('NewsCrawler: Featured image generation fatal error: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
