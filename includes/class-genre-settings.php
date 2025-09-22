@@ -3254,6 +3254,8 @@ $('#cancel-edit').click(function() {
             $executed_count = 0;
             $skipped_count = 0;
         
+        // 実行対象のジャンルを事前にフィルタリング
+        $ready_genres = array();
         foreach ($genre_settings as $genre_id => $setting) {
             $display_id = $this->get_display_genre_id($genre_id);
             
@@ -3289,7 +3291,13 @@ $('#cancel-edit').click(function() {
                 continue;
             }
             
-            $log_message = 'Auto Posting Execution - Executing genre: ' . $setting['genre_name'];
+            // 実行対象に追加
+            $ready_genres[$genre_id] = $setting;
+        }
+        
+        // 実行対象のジャンルを順次実行（同時実行を防ぐ）
+        foreach ($ready_genres as $genre_id => $setting) {
+            $log_message = 'Auto Posting Execution - Executing genre: ' . $setting['genre_name'] . ' (Sequential execution)';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
@@ -3299,6 +3307,15 @@ $('#cancel-edit').click(function() {
             
             // 次回実行時刻を更新
             $this->update_next_execution_time($genre_id, $setting);
+            
+            // 各ジャンル実行後に適切な間隔を設ける（API制限対策）
+            if (count($ready_genres) > 1) {
+                $wait_time = 30; // 30秒待機
+                $log_message = 'Auto Posting Execution - Waiting ' . $wait_time . ' seconds before next genre execution...';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                sleep($wait_time);
+            }
         }
         
             error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);

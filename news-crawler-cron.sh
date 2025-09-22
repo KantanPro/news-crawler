@@ -50,7 +50,7 @@ ini_set('display_errors', 1);
 ini_set('default_socket_timeout', 10);
 ini_set('mysqli.default_socket_timeout', 10);
 ini_set('mysql.connect_timeout', 10);
-set_time_limit(110);
+set_time_limit(580);
 
 echo "[PHP] Docker環境での実行を開始\n";
 echo "[PHP] WordPressディレクトリ: " . getcwd() . "\n";
@@ -75,7 +75,7 @@ DOCKER_EOF
     docker cp "$TEMP_PHP_FILE" "$CONTAINER_NAME:/tmp/news-crawler-exec.php"
     
     if command -v timeout &> /dev/null; then
-        timeout 120s docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
+        timeout 600s docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
         PHP_STATUS=$?
     else
         docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
@@ -136,7 +136,7 @@ ini_set('display_errors', 1);
 ini_set('default_socket_timeout', 10);
 ini_set('mysqli.default_socket_timeout', 10);
 ini_set('mysql.connect_timeout', 10);
-set_time_limit(110);
+set_time_limit(580);
 
 echo "[PHP] 実行開始 - ディレクトリ: " . getcwd() . "\n";
 
@@ -213,7 +213,7 @@ EOF
 
     cd "$WP_PATH"
     if command -v timeout &> /dev/null; then
-        timeout 120s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
+        timeout 600s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
         PHP_STATUS=$?
     else
         "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1

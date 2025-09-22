@@ -52,3 +52,4 @@ if (class_exists('NewsCrawler_License_Manager')) {
 echo "\nテスト完了。自動投稿機能のみライセンスが必要な状態になりました。\n";
 echo "X投稿設定画面でライセンス通知が表示されることを確認してください。\n";
 ?>
+
