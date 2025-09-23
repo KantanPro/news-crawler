@@ -3221,13 +3221,15 @@ $('#cancel-edit').click(function() {
      * 自動投稿の実行処理（全体チェック用）
      */
     public function execute_auto_posting() {
-        // 同時実行防止のためのロック機能
+        // 同時実行防止のためのロック機能（強化版）
         $lock_key = 'news_crawler_auto_posting_lock';
-        $lock_duration = 300; // 5分間のロック
+        $lock_duration = 600; // 10分間のロック（実行時間を考慮して延長）
+        $lock_value = uniqid('news_crawler_', true); // ユニークなロック値
         
-        // 既に実行中かチェック
-        if (get_transient($lock_key)) {
-            error_log('Auto Posting Execution - Already running, skipping execution');
+        // 既に実行中かチェック（アトミックな操作）
+        $existing_lock = get_transient($lock_key);
+        if ($existing_lock !== false) {
+            error_log('Auto Posting Execution - Already running (lock value: ' . $existing_lock . '), skipping execution');
             return array(
                 'executed_count' => 0,
                 'skipped_count' => 0,
@@ -3236,8 +3238,19 @@ $('#cancel-edit').click(function() {
             );
         }
         
-        // ロックを設定
-        set_transient($lock_key, true, $lock_duration);
+        // ロックを設定（ユニークな値で設定）
+        $lock_set = set_transient($lock_key, $lock_value, $lock_duration);
+        if (!$lock_set) {
+            error_log('Auto Posting Execution - Failed to acquire lock, skipping execution');
+            return array(
+                'executed_count' => 0,
+                'skipped_count' => 0,
+                'total_genres' => 0,
+                'message' => 'ロックの取得に失敗しました'
+            );
+        }
+        
+        error_log('Auto Posting Execution - Lock acquired successfully (value: ' . $lock_value . ')');
         
         try {
             error_log('Auto Posting Execution - Starting...');
@@ -3245,7 +3258,18 @@ $('#cancel-edit').click(function() {
             // 実行対象のみ候補数キャッシュを軽量更新（UI/強制実行と整合させるため）
             $this->refresh_candidates_cache_for_due_genres();
             
+            // ジャンル設定を安全に取得（エラーハンドリング強化）
             $genre_settings = $this->get_genre_settings();
+            if (!is_array($genre_settings) || empty($genre_settings)) {
+                error_log('Auto Posting Execution - No genre settings found or invalid format');
+                return array(
+                    'executed_count' => 0,
+                    'skipped_count' => 0,
+                    'total_genres' => 0,
+                    'message' => 'ジャンル設定が見つかりません'
+                );
+            }
+            
             $current_time = current_time('timestamp');
             
             error_log('Auto Posting Execution - Found ' . count($genre_settings) . ' genre settings');
@@ -3283,21 +3307,32 @@ $('#cancel-edit').click(function() {
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
+            // 実行判定を修正（現在時刻より前または等しい場合は実行可能）
             if ($next_execution > $current_time) {
-                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet';
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ')';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
                 continue;
             }
             
+            // 実行可能であることをログに記録
+            $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' is ready for execution (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ')';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+            
             // 実行対象に追加
             $ready_genres[$genre_id] = $setting;
         }
         
-        // 実行対象のジャンルを順次実行（同時実行を防ぐ）
+        // 実行対象のジャンルを順次実行（時間差処理を改善）
+        $genre_count = count($ready_genres);
+        $current_genre_index = 0;
+        
         foreach ($ready_genres as $genre_id => $setting) {
-            $log_message = 'Auto Posting Execution - Executing genre: ' . $setting['genre_name'] . ' (Sequential execution)';
+            $current_genre_index++;
+            
+            $log_message = 'Auto Posting Execution - Executing genre: ' . $setting['genre_name'] . ' (' . $current_genre_index . '/' . $genre_count . ')';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
@@ -3308,17 +3343,24 @@ $('#cancel-edit').click(function() {
             // 次回実行時刻を更新
             $this->update_next_execution_time($genre_id, $setting);
             
-            // 各ジャンル実行後に適切な間隔を設ける（API制限対策）
-            if (count($ready_genres) > 1) {
-                $wait_time = 30; // 30秒待機
-                $log_message = 'Auto Posting Execution - Waiting ' . $wait_time . ' seconds before next genre execution...';
+            // 複数ジャンルがある場合の時間差処理（改善版）
+            if ($genre_count > 1 && $current_genre_index < $genre_count) {
+                // ジャンル数に応じて待機時間を調整（最小10秒、最大60秒）
+                $base_wait_time = 10;
+                $additional_wait = min(($genre_count - 1) * 5, 50); // ジャンル数に応じて最大50秒追加
+                $wait_time = $base_wait_time + $additional_wait;
+                
+                $log_message = 'Auto Posting Execution - Waiting ' . $wait_time . ' seconds before next genre execution... (Genre ' . $current_genre_index . '/' . $genre_count . ')';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 sleep($wait_time);
             }
         }
         
-            error_log('Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count);
+            // 詳細な実行結果をログに出力
+            $log_message = 'Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Total genres: ' . count($genre_settings);
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 実行結果を返す
             $result = array(
@@ -3328,7 +3370,9 @@ $('#cancel-edit').click(function() {
             );
             
             // 結果をログに出力（cronスクリプトで確認できるように）
-            error_log('Auto Posting Result: ' . json_encode($result));
+            $result_log = 'Auto Posting Result: ' . json_encode($result);
+            error_log($result_log);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $result_log . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             return $result;
             
@@ -3341,9 +3385,14 @@ $('#cancel-edit').click(function() {
                 'error' => $e->getMessage()
             );
         } finally {
-            // ロックを解除
-            delete_transient($lock_key);
-            error_log('Auto Posting Execution - Lock released');
+            // ロックを解除（ユニークな値で確認してから削除）
+            $current_lock = get_transient($lock_key);
+            if ($current_lock === $lock_value) {
+                delete_transient($lock_key);
+                error_log('Auto Posting Execution - Lock released successfully (value: ' . $lock_value . ')');
+            } else {
+                error_log('Auto Posting Execution - Lock value mismatch, cannot release lock safely');
+            }
         }
     }
 
@@ -3808,7 +3857,7 @@ $('#cancel-edit').click(function() {
     }
     
     /**
-     * 次回実行時刻を取得
+     * 次回実行時刻を取得（修正版）
      */
     private function get_next_execution_time($setting, $genre_id = null) {
         // genre_idが渡されていない場合は、settingから取得を試行
@@ -3825,14 +3874,21 @@ $('#cancel-edit').click(function() {
         $now = current_time('timestamp');
         $frequency = $setting['posting_frequency'] ?? 'daily';
         
+        // デバッグログを追加
+        error_log('Next Execution - Genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+        error_log('Next Execution - Frequency: ' . $frequency);
+        error_log('Next Execution - Current time: ' . date('Y-m-d H:i:s', $now));
+        
         // まず next_execution オプションがあればそれを優先
         $saved_next = intval(get_option('news_crawler_next_execution_' . $genre_id, 0));
         if ($saved_next > 0) {
+            error_log('Next Execution - Using saved next execution: ' . date('Y-m-d H:i:s', $saved_next));
             return $saved_next;
         }
         
         // 無い場合は last_execution から計算
         $last_execution = intval(get_option('news_crawler_last_execution_' . $genre_id, 0));
+        error_log('Next Execution - Last execution: ' . ($last_execution > 0 ? date('Y-m-d H:i:s', $last_execution) : 'Never'));
         
         // 初回実行（未設定）は即時
         if ($last_execution === 0) {
