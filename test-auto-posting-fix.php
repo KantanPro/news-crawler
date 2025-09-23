@@ -170,10 +170,18 @@ if (!current_user_can('manage_options')) {
                     // 候補数を再計算
                     if ($setting['content_type'] === 'news') {
                         // ニュースの候補数を計算
-                        $candidates = $genre_settings->count_available_news_candidates($genre_id);
+                        if (method_exists($genre_settings, 'count_available_news_candidates')) {
+                            $candidates = $genre_settings->count_available_news_candidates($genre_id);
+                        } else {
+                            $candidates = 1; // デフォルト値
+                        }
                     } else if ($setting['content_type'] === 'youtube') {
                         // YouTubeの候補数を計算
-                        $candidates = $genre_settings->count_available_youtube_candidates($genre_id);
+                        if (method_exists($genre_settings, 'count_available_youtube_candidates')) {
+                            $candidates = $genre_settings->count_available_youtube_candidates($genre_id);
+                        } else {
+                            $candidates = 1; // デフォルト値
+                        }
                     } else {
                         $candidates = 0;
                     }

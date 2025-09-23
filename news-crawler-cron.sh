@@ -27,26 +27,53 @@ PLUGIN_PATH="$SCRIPT_DIR/"
 # ログファイルのパス
 LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
 
-# 重複実行防止のためのロックファイル
+# 重複実行防止のためのロックファイル（強化版）
 LOCK_FILE="/tmp/news-crawler-cron.lock"
 LOCK_TIMEOUT=300  # 5分間のロック
+LOCK_RETRY_COUNT=0
+MAX_RETRY=3
 
-# ロックファイルの存在チェック
-if [ -f "$LOCK_FILE" ]; then
-    # ロックファイルの作成時刻をチェック
-    LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0)))
-    if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップします (ロックファイル: $LOCK_FILE, 経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
-        exit 0
-    else
-        # 古いロックファイルを削除
-        rm -f "$LOCK_FILE"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました" >> "$LOG_FILE"
+# ロックファイルの存在チェックと取得
+while [ $LOCK_RETRY_COUNT -lt $MAX_RETRY ]; do
+    if [ -f "$LOCK_FILE" ]; then
+        # ロックファイルの作成時刻をチェック
+        LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0)))
+        if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
+            # プロセスIDをチェックして、実際に実行中かどうか確認
+            LOCK_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+            if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップします (PID: $LOCK_PID, 経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
+                exit 0
+            else
+                # 古いロックファイルを削除
+                rm -f "$LOCK_FILE"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました (PID: $LOCK_PID)" >> "$LOG_FILE"
+            fi
+        else
+            # 古いロックファイルを削除
+            rm -f "$LOCK_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました (経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
+        fi
     fi
-fi
+    
+    # ロックファイルを作成（アトミック操作）
+    if (set -C; echo $$ > "$LOCK_FILE") 2>/dev/null; then
+        # ロック取得成功
+        break
+    else
+        # ロック取得失敗、少し待って再試行
+        LOCK_RETRY_COUNT=$((LOCK_RETRY_COUNT + 1))
+        if [ $LOCK_RETRY_COUNT -lt $MAX_RETRY ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ロック取得失敗、再試行中... ($LOCK_RETRY_COUNT/$MAX_RETRY)" >> "$LOG_FILE"
+            sleep 1
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ロック取得に失敗しました。最大試行回数に達しました。" >> "$LOG_FILE"
+            exit 1
+        fi
+    fi
+done
 
-# ロックファイルを作成
-echo $$ > "$LOCK_FILE"
+# ロックファイルのクリーンアップ用のtrapを設定
 trap 'rm -f "$LOCK_FILE"' EXIT
 
 # ログに実行開始を記録

@@ -3271,6 +3271,37 @@ $('#cancel-edit').click(function() {
                 continue;
             }
             
+            // 詳細な設定チェック
+            $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' settings check:';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+            
+            // キーワードチェック
+            if (empty($setting['keywords'])) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no keywords';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                $skipped_count++;
+                continue;
+            }
+            
+            // コンテンツタイプ別チェック
+            if ($setting['content_type'] === 'news' && empty($setting['news_sources'])) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no news sources';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                $skipped_count++;
+                continue;
+            }
+            
+            if ($setting['content_type'] === 'youtube' && empty($setting['youtube_channels'])) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no YouTube channels';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                $skipped_count++;
+                continue;
+            }
+            
             $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
@@ -3304,6 +3335,40 @@ $('#cancel-edit').click(function() {
         $current_genre_index = 0;
         
         error_log('Auto Posting Execution - Ready genres count: ' . $genre_count);
+        
+        // 候補数キャッシュが存在しない場合は初期化
+        foreach ($ready_genres as $genre_id => $setting) {
+            $cache_key = 'news_crawler_available_count_' . $genre_id;
+            $available_candidates = get_transient($cache_key);
+            
+            if ($available_candidates === false) {
+                error_log('Auto Posting Execution - Initializing candidate cache for genre: ' . $setting['genre_name']);
+                
+                // 候補数を計算してキャッシュに保存
+                if ($setting['content_type'] === 'news') {
+                    if (method_exists($this, 'count_available_news_candidates')) {
+                        $candidates = $this->count_available_news_candidates($genre_id);
+                    } else {
+                        // 代替実装：基本的な候補数として1を設定
+                        $candidates = 1;
+                        error_log('Auto Posting Execution - count_available_news_candidates method not found, using default value: 1');
+                    }
+                } else if ($setting['content_type'] === 'youtube') {
+                    if (method_exists($this, 'count_available_youtube_candidates')) {
+                        $candidates = $this->count_available_youtube_candidates($genre_id);
+                    } else {
+                        // 代替実装：基本的な候補数として1を設定
+                        $candidates = 1;
+                        error_log('Auto Posting Execution - count_available_youtube_candidates method not found, using default value: 1');
+                    }
+                } else {
+                    $candidates = 0;
+                }
+                
+                set_transient($cache_key, $candidates, 3600); // 1時間キャッシュ
+                error_log('Auto Posting Execution - Cached ' . $candidates . ' candidates for genre: ' . $setting['genre_name']);
+            }
+        }
         
         foreach ($ready_genres as $genre_id => $setting) {
             $current_genre_index++;
