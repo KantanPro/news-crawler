@@ -3418,7 +3418,7 @@ $('#cancel-edit').click(function() {
                 } catch (Exception $e) {
                     $available = 0;
                 }
-                set_transient('news_crawler_available_count_' . $setting['id'], $available, 5 * MINUTE_IN_SECONDS);
+                set_transient('news_crawler_available_count_' . $genre_id, $available, 5 * MINUTE_IN_SECONDS);
             }
         } catch (Exception $e) {
             // 静かに失敗（自動投稿自体には影響させない）
