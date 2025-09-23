@@ -31,6 +31,16 @@ class NewsCrawlerUpdater {
     private $plugin_slug = 'news-crawler';
     
     /**
+     * Repository owner
+     */
+    private $repo_owner = 'KantanPro';
+    
+    /**
+     * Repository name
+     */
+    private $repo_name = 'news-crawler';
+    
+    /**
      * Plugin basename
      */
     private $plugin_basename;
@@ -49,6 +59,7 @@ class NewsCrawlerUpdater {
         
         // WordPress更新システムにフック（2.3.91の安定した実装に基づく）
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_updates'));
+        add_filter('site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
         // コピー直後にGitHub由来のフォルダ名を正規のスラッグへ統一
@@ -58,6 +69,9 @@ class NewsCrawlerUpdater {
         
         // 管理画面での更新通知（WordPress標準のみ使用）
         add_action('admin_init', array($this, 'force_update_check'));
+        
+        // デバッグ用のAJAXハンドラー
+        add_action('wp_ajax_news_crawler_debug_updates', array($this, 'ajax_debug_updates'));
         
         // 更新チェックのスケジュール
         if (!wp_next_scheduled('news_crawler_update_check')) {
@@ -80,7 +94,7 @@ class NewsCrawlerUpdater {
      * Check for updates
      */
     public function check_for_updates($transient) {
-        // 管理画面またはWP-Cron以外では更新チェックを行わない（2.3.91の安定した実装）
+        // 管理画面またはWP-Cron以外では更新チェックを行わない
         if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
             return $transient;
         }
@@ -198,6 +212,29 @@ class NewsCrawlerUpdater {
             $this->clear_all_caches();
             update_option('news_crawler_last_cache_clear', time());
         }
+        
+        // 管理画面での更新チェックを強化
+        if (is_admin() && !wp_doing_ajax()) {
+            // プラグイン一覧ページで更新チェックを実行
+            $screen = get_current_screen();
+            if ($screen && $screen->id === 'plugins') {
+                $this->ensure_update_check();
+            }
+        }
+    }
+    
+    /**
+     * 更新チェックを確実に実行
+     */
+    private function ensure_update_check() {
+        // 最後の更新チェックから一定時間経過している場合のみ実行
+        $last_check = get_option('news_crawler_last_update_check', 0);
+        if (time() - $last_check > 300) { // 5分間隔
+            // キャッシュをクリアして更新チェックを実行
+            $this->clear_all_caches();
+            wp_update_plugins();
+            update_option('news_crawler_last_update_check', time());
+        }
     }
     
     /**
@@ -244,10 +281,13 @@ class NewsCrawlerUpdater {
         // オプションのトークン対応（レート制限回避）
         if (defined('NEWS_CRAWLER_GITHUB_TOKEN') && NEWS_CRAWLER_GITHUB_TOKEN) {
             $headers['Authorization'] = 'Bearer ' . NEWS_CRAWLER_GITHUB_TOKEN;
+        } elseif (defined('KP_GITHUB_TOKEN') && KP_GITHUB_TOKEN) {
+            $headers['Authorization'] = 'Bearer ' . KP_GITHUB_TOKEN;
         }
         
         // /releases/latest で取得を試行
-        $response = wp_remote_get($this->github_api_url, array(
+        $latest_url = 'https://api.github.com/repos/' . $this->repo_owner . '/' . $this->repo_name . '/releases/latest';
+        $response = wp_remote_get($latest_url, array(
             'timeout' => 15,
             'headers' => $headers,
         ));
@@ -259,7 +299,7 @@ class NewsCrawlerUpdater {
         
         // latestが取れない、または下書き/プレリリースの場合は /releases から安定版を探索
         if (!$data || !isset($data['tag_name']) || !empty($data['draft']) || !empty($data['prerelease'])) {
-            $releases_url = 'https://api.github.com/repos/KantanPro/news-crawler/releases';
+            $releases_url = 'https://api.github.com/repos/' . $this->repo_owner . '/' . $this->repo_name . '/releases';
             $resp2 = wp_remote_get($releases_url, array(
                 'timeout' => 15,
                 'headers' => $headers,
@@ -400,6 +440,12 @@ class NewsCrawlerUpdater {
         if (strpos($url, 'github.com') !== false) {
             $args['timeout'] = 60;
             $args['headers']['User-Agent'] = 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url');
+            // 認証トークンの追加
+            if (defined('NEWS_CRAWLER_GITHUB_TOKEN') && NEWS_CRAWLER_GITHUB_TOKEN) {
+                $args['headers']['Authorization'] = 'Bearer ' . NEWS_CRAWLER_GITHUB_TOKEN;
+            } elseif (defined('KP_GITHUB_TOKEN') && KP_GITHUB_TOKEN) {
+                $args['headers']['Authorization'] = 'Bearer ' . KP_GITHUB_TOKEN;
+            }
         }
         return $args;
     }
@@ -578,7 +624,8 @@ class NewsCrawlerUpdater {
         $debug_info['wp_transient_checked'] = isset($transient->checked[$this->plugin_basename]) ? $transient->checked[$this->plugin_basename] : null;
         
         // GitHub APIテスト
-        $response = wp_remote_get($this->github_api_url, array(
+        $test_url = 'https://api.github.com/repos/' . $this->repo_owner . '/' . $this->repo_name . '/releases/latest';
+        $response = wp_remote_get($test_url, array(
             'timeout' => 10,
             'headers' => array(
                 'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
@@ -711,6 +758,22 @@ class NewsCrawlerUpdater {
         } else {
             delete_transient('news_crawler_admin_reload');
         }
+    }
+    
+    /**
+     * AJAX debug updates
+     */
+    public function ajax_debug_updates() {
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません。');
+        }
+        
+        // デバッグ情報を取得
+        $debug_info = $this->debug_update_system();
+        
+        // JSON形式でレスポンス
+        wp_send_json_success($debug_info);
     }
     
     /**
