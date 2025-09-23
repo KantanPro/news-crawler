@@ -4160,9 +4160,10 @@ class NewsCrawler {
                             $extracted_content = json_decode('"' . $extracted_content . '"');
                         }
 
-                    if (!empty($extracted_content)) {
-                        $additional_content = $this->clean_article_content($extracted_content);
-                        break;
+                        if (!empty($extracted_content)) {
+                            $additional_content = $this->clean_article_content($extracted_content);
+                            break;
+                        }
                     }
                 }
             }
