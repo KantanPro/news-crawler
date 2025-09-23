@@ -3302,6 +3302,18 @@ $('#cancel-edit').click(function() {
                 continue;
             }
             
+            // 投稿制限チェック
+            if (isset($setting['daily_post_limit']) && $setting['daily_post_limit'] > 0) {
+                $today_posts = $this->count_today_posts($genre_id);
+                if ($today_posts >= $setting['daily_post_limit']) {
+                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has reached daily post limit (' . $today_posts . '/' . $setting['daily_post_limit'] . ')';
+                    error_log($log_message);
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    $skipped_count++;
+                    continue;
+                }
+            }
+            
             $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
@@ -4431,6 +4443,36 @@ $('#cancel-edit').click(function() {
             'skipped_count' => $skipped_count,
             'posts_created' => $posts_created
         );
+    }
+    
+    /**
+     * 今日の投稿数をカウント
+     */
+    private function count_today_posts($genre_id) {
+        global $wpdb;
+        
+        $today = date('Y-m-d');
+        $post_type = 'post';
+        
+        $count = $wpdb->get_var($wpdb->prepare("
+            SELECT COUNT(*) 
+            FROM {$wpdb->posts} 
+            WHERE post_type = %s 
+            AND post_status = 'publish' 
+            AND DATE(post_date) = %s
+            AND ID IN (
+                SELECT object_id 
+                FROM {$wpdb->term_relationships} 
+                WHERE term_taxonomy_id IN (
+                    SELECT term_taxonomy_id 
+                    FROM {$wpdb->term_taxonomy} 
+                    WHERE term_id = %d 
+                    AND taxonomy = 'category'
+                )
+            )
+        ", $post_type, $today, $genre_id));
+        
+        return intval($count);
     }
     
     /**

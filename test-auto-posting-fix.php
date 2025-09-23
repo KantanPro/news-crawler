@@ -186,11 +186,18 @@ if (!current_user_can('manage_options')) {
                         $candidates = 0;
                     }
                     
+                    // 今日の投稿数も表示
+                    $today_posts = 0;
+                    if (method_exists($genre_settings, 'count_today_posts')) {
+                        $today_posts = $genre_settings->count_today_posts($genre_id);
+                    }
+                    
                     // キャッシュを更新
                     $cache_key = 'news_crawler_available_count_' . $genre_id;
                     set_transient($cache_key, $candidates, 3600); // 1時間キャッシュ
                     
                     echo "<p>候補数: " . $candidates . " (キャッシュ更新済み)</p>";
+                    echo "<p>今日の投稿数: " . $today_posts . "</p>";
                 }
             }
         }
