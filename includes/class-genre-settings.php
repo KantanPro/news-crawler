@@ -3303,6 +3303,8 @@ $('#cancel-edit').click(function() {
         $genre_count = count($ready_genres);
         $current_genre_index = 0;
         
+        error_log('Auto Posting Execution - Ready genres count: ' . $genre_count);
+        
         foreach ($ready_genres as $genre_id => $setting) {
             $current_genre_index++;
             

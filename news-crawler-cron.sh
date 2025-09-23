@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-16 13:19:42 (デバッグ機能強化版)
+# 修正版 - 2025-09-23 18:00:00 (重複実行防止機能追加)
 
 set -euo pipefail
 
@@ -26,6 +26,28 @@ PLUGIN_PATH="$SCRIPT_DIR/"
 
 # ログファイルのパス
 LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
+
+# 重複実行防止のためのロックファイル
+LOCK_FILE="/tmp/news-crawler-cron.lock"
+LOCK_TIMEOUT=300  # 5分間のロック
+
+# ロックファイルの存在チェック
+if [ -f "$LOCK_FILE" ]; then
+    # ロックファイルの作成時刻をチェック
+    LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0)))
+    if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップします (ロックファイル: $LOCK_FILE, 経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
+        exit 0
+    else
+        # 古いロックファイルを削除
+        rm -f "$LOCK_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました" >> "$LOG_FILE"
+    fi
+fi
+
+# ロックファイルを作成
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
 
 # ログに実行開始を記録
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始" >> "$LOG_FILE"

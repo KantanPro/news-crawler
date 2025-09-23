@@ -120,6 +120,10 @@ if (!current_user_can('manage_options')) {
         <?php
         if (isset($_POST['test_execution'])) {
             echo "<h3>強制実行結果:</h3>";
+            
+            // ロックをクリアしてから実行
+            delete_transient('news_crawler_auto_posting_lock');
+            
             $result = $genre_settings->force_auto_posting();
             echo "<pre>";
             print_r($result);
@@ -129,11 +133,58 @@ if (!current_user_can('manage_options')) {
                 echo "<p class='success'>✅ 投稿が正常に実行されました</p>";
             } else {
                 echo "<p class='warning'>⚠️ 投稿が実行されませんでした</p>";
+                
+                // 詳細なデバッグ情報を表示
+                echo "<h4>デバッグ情報:</h4>";
+                $settings = $genre_settings->get_genre_settings();
+                foreach ($settings as $genre_id => $setting) {
+                    if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                        echo "<h5>ジャンル: " . esc_html($setting['genre_name']) . "</h5>";
+                        
+                        // pre_execution_checkの結果を確認
+                        $check_result = $genre_settings->pre_execution_check($setting, $genre_id, true);
+                        echo "<p>実行チェック結果: " . ($check_result['can_execute'] ? '✅ 実行可能' : '❌ 実行不可 - ' . $check_result['reason']) . "</p>";
+                        
+                        // 候補数を確認
+                        $cache_key = 'news_crawler_available_count_' . $genre_id;
+                        $available_candidates = get_transient($cache_key);
+                        echo "<p>候補数: " . ($available_candidates === false ? 'キャッシュなし' : $available_candidates) . "</p>";
+                    }
+                }
             }
         } else {
             echo '<form method="post">';
             echo '<input type="submit" name="test_execution" value="強制実行テスト" class="button">';
+            echo '<input type="submit" name="update_candidates" value="候補数を更新" class="button">';
             echo '</form>';
+        }
+        
+        if (isset($_POST['update_candidates'])) {
+            echo "<h3>候補数更新結果:</h3>";
+            
+            $settings = $genre_settings->get_genre_settings();
+            foreach ($settings as $genre_id => $setting) {
+                if (isset($setting['auto_posting']) && $setting['auto_posting']) {
+                    echo "<h4>ジャンル: " . esc_html($setting['genre_name']) . "</h4>";
+                    
+                    // 候補数を再計算
+                    if ($setting['content_type'] === 'news') {
+                        // ニュースの候補数を計算
+                        $candidates = $genre_settings->count_available_news_candidates($genre_id);
+                    } else if ($setting['content_type'] === 'youtube') {
+                        // YouTubeの候補数を計算
+                        $candidates = $genre_settings->count_available_youtube_candidates($genre_id);
+                    } else {
+                        $candidates = 0;
+                    }
+                    
+                    // キャッシュを更新
+                    $cache_key = 'news_crawler_available_count_' . $genre_id;
+                    set_transient($cache_key, $candidates, 3600); // 1時間キャッシュ
+                    
+                    echo "<p>候補数: " . $candidates . " (キャッシュ更新済み)</p>";
+                }
+            }
         }
         ?>
     </div>
