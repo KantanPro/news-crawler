@@ -2753,9 +2753,11 @@ class NewsCrawler {
         
         foreach ($title_patterns as $pattern) {
             if (preg_match($pattern, $body, $matches)) {
-                $title = trim(strip_tags($matches[1]));
-                if (!empty($title)) {
-                    return $title;
+                if (isset($matches[1])) {
+                    $title = trim(strip_tags($matches[1]));
+                    if (!empty($title)) {
+                        return $title;
+                    }
                 }
             }
         }
@@ -2866,9 +2868,11 @@ class NewsCrawler {
         
         foreach ($description_patterns as $pattern) {
             if (preg_match($pattern, $body, $matches)) {
-                $description = trim($matches[1]);
-                if (!empty($description)) {
-                    return $description;
+                if (isset($matches[1])) {
+                    $description = trim($matches[1]);
+                    if (!empty($description)) {
+                        return $description;
+                    }
                 }
             }
         }
@@ -2890,9 +2894,11 @@ class NewsCrawler {
         
         foreach ($date_patterns as $pattern) {
             if (preg_match($pattern, $body, $matches)) {
-                $date = strtotime($matches[1]);
-                if ($date !== false) {
-                    return date('Y-m-d H:i:s', $date);
+                if (isset($matches[1])) {
+                    $date = strtotime($matches[1]);
+                    if ($date !== false) {
+                        return date('Y-m-d H:i:s', $date);
+                    }
                 }
             }
         }
@@ -2913,9 +2919,11 @@ class NewsCrawler {
         
         foreach ($author_patterns as $pattern) {
             if (preg_match($pattern, $body, $matches)) {
-                $author = trim(strip_tags($matches[1]));
-                if (!empty($author)) {
-                    return $author;
+                if (isset($matches[1])) {
+                    $author = trim(strip_tags($matches[1]));
+                    if (!empty($author)) {
+                        return $author;
+                    }
                 }
             }
         }
@@ -3061,7 +3069,11 @@ class NewsCrawler {
         
         // タイトルを取得
         if (preg_match('/<title[^>]*>(.*?)<\/title>/i', $body, $matches)) {
-            $title = trim(strip_tags($matches[1]));
+            if (isset($matches[1])) {
+                $title = trim(strip_tags($matches[1]));
+            } else {
+                $title = 'タイトルなし';
+            }
         } else {
             $title = 'タイトルなし';
         }
@@ -3069,12 +3081,18 @@ class NewsCrawler {
         // 本文を取得（最初の段落から）
         $content = '';
         if (preg_match('/<p[^>]*>(.*?)<\/p>/i', $body, $matches)) {
-            $content = trim(strip_tags($matches[1]));
+            if (isset($matches[1])) {
+                $content = trim(strip_tags($matches[1]));
+            }
         }
         
         // メタディスクリプションを取得
         if (preg_match('/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']/i', $body, $matches)) {
-            $description = trim($matches[1]);
+            if (isset($matches[1])) {
+                $description = trim($matches[1]);
+            } else {
+                $description = $content;
+            }
         } else {
             $description = $content;
         }
@@ -4010,9 +4028,12 @@ class NewsCrawler {
 
         foreach ($content_patterns as $pattern) {
             if (preg_match($pattern, $html, $matches)) {
-                $extracted = $matches[1];
-                if (!empty($extracted) && mb_strlen(strip_tags($extracted)) > 100) {
-                    return $extracted;
+                // $matches配列にインデックス1が存在するかチェック
+                if (isset($matches[1])) {
+                    $extracted = $matches[1];
+                    if (!empty($extracted) && mb_strlen(strip_tags($extracted)) > 100) {
+                        return $extracted;
+                    }
                 }
             }
         }
@@ -4131,12 +4152,13 @@ class NewsCrawler {
 
             foreach ($content_patterns as $pattern) {
                 if (preg_match($pattern, $body, $matches)) {
-                    $extracted_content = $matches[1];
+                    if (isset($matches[1])) {
+                        $extracted_content = $matches[1];
 
-                    // JSON-LDの場合はデコード
-                    if (strpos($pattern, 'articleBody') !== false) {
-                        $extracted_content = json_decode('"' . $extracted_content . '"');
-                    }
+                        // JSON-LDの場合はデコード
+                        if (strpos($pattern, 'articleBody') !== false) {
+                            $extracted_content = json_decode('"' . $extracted_content . '"');
+                        }
 
                     if (!empty($extracted_content)) {
                         $additional_content = $this->clean_article_content($extracted_content);
