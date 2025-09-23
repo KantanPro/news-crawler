@@ -407,26 +407,13 @@ add_action('wp_head', function() {
 
 // 自動投稿のcron設定を確実に実行するための追加フック
 add_action('init', 'news_crawler_ensure_cron_setup');
-add_action('wp_loaded', 'news_crawler_ensure_cron_setup');
+// サーバーCronを使用するため、WordPress Cronの自動設定は無効化
+// add_action('wp_loaded', 'news_crawler_ensure_cron_setup');
 
 function news_crawler_ensure_cron_setup() {
-    // 管理画面またはWP-Cron以外では実行しない（フロント側での毎リクエスト実行を回避）
-    if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
-        return;
-    }
-    // 自動投稿のcronが設定されているかチェック
-    $next_cron = wp_next_scheduled('news_crawler_auto_posting_cron');
-    
-    // cronが設定されていない場合は設定を実行
-    if (!$next_cron) {
-        if (class_exists('NewsCrawlerGenreSettings')) {
-            $genre_settings = NewsCrawlerGenreSettings::get_instance();
-            if (method_exists($genre_settings, 'setup_auto_posting_cron')) {
-                $genre_settings->setup_auto_posting_cron();
-                error_log('NewsCrawler: 自動投稿のcron設定を実行しました');
-            }
-        }
-    }
+    // サーバーCronを使用するため、この関数は無効化
+    error_log('NewsCrawler: WordPress Cron auto-setup is disabled, using server cron instead');
+    return;
 }
 
 // News Crawler用の処理のための投稿ステータス変更フック

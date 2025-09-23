@@ -3144,37 +3144,27 @@ $('#cancel-edit').click(function() {
     
     /**
      * 自動投稿のスケジュール設定
+     * サーバーCronを使用するため、WordPress Cronは無効化
      */
     public function setup_auto_posting_cron() {
+        // サーバーCronを使用するため、WordPress Cronは無効化
         // 既存のスケジュールをクリア
         wp_clear_scheduled_hook('news_crawler_auto_posting_cron');
         
-        // ジャンル設定を取得
+        error_log('Auto Posting Cron - WordPress Cron is disabled, using server cron instead');
+        
+        // ジャンル設定を取得してログ出力のみ
         $genre_settings = $this->get_genre_settings();
+        $enabled_count = 0;
         
         foreach ($genre_settings as $genre_id => $setting) {
-            // 自動投稿が有効な場合のみスケジュール（開始実行日時は不要）
             if (isset($setting['auto_posting']) && $setting['auto_posting']) {
-                $this->schedule_genre_auto_posting($genre_id, $setting);
+                $enabled_count++;
+                error_log('Auto Posting Cron - Genre ' . $setting['genre_name'] . ' is enabled for server cron');
             }
         }
         
-        // 全体的なチェック用のcronも設定（1時間ごと）
-        $current_time = current_time('timestamp');
-        $start_time = $current_time + (60 * 60); // 現在時刻から1時間後
-        
-        // デバッグ情報を記録
-        error_log('Auto Posting Cron - Current time: ' . date('Y-m-d H:i:s', $current_time));
-        error_log('Auto Posting Cron - Scheduled start time: ' . date('Y-m-d H:i:s', $start_time));
-        
-        // スケジュールを設定
-        $scheduled = wp_schedule_event($start_time, 'hourly', 'news_crawler_auto_posting_cron');
-        
-        if ($scheduled) {
-            error_log('Auto Posting Cron - Successfully scheduled at: ' . date('Y-m-d H:i:s', $start_time));
-        } else {
-            error_log('Auto Posting Cron - Failed to schedule');
-        }
+        error_log('Auto Posting Cron - Total enabled genres: ' . $enabled_count);
     }
     
     /**
@@ -3190,40 +3180,24 @@ $('#cancel-edit').click(function() {
     }
     
     /**
-     * 個別ジャンルの自動投稿スケジュール設定（cronジョブ設定に基づく）
+     * 個別ジャンルの自動投稿スケジュール設定（サーバーCron使用のため無効化）
      */
     private function schedule_genre_auto_posting($genre_id, $setting) {
+        // サーバーCronを使用するため、WordPress Cronは無効化
         $hook_name = 'news_crawler_genre_auto_posting_' . $genre_id;
         
         // 既存のスケジュールをクリア
         wp_clear_scheduled_hook($hook_name);
         
-        // cronジョブ設定に基づいて実行時刻を決定
-        // サーバーのcronジョブが実行される時刻に合わせて設定
-        $current_time = current_time('timestamp');
-        
-        // 次回のcronジョブ実行時刻を計算（1時間後から開始）
-        $next_execution = $current_time + (60 * 60);
-        
-        // UTCタイムスタンプに変換してcronに登録
-        $utc_timestamp = get_gmt_from_date(date('Y-m-d H:i:s', $next_execution), 'U');
-        
-        // 単発イベントとしてスケジュール
-        $scheduled = wp_schedule_single_event($utc_timestamp, $hook_name, array($genre_id));
-        
-        if ($scheduled) {
-            error_log('Genre Auto Posting - Successfully scheduled for genre ' . $setting['genre_name'] . ' at: ' . date('Y-m-d H:i:s', $next_execution) . ' (Local) / ' . date('Y-m-d H:i:s', $utc_timestamp) . ' (UTC)');
-        } else {
-            error_log('Genre Auto Posting - Failed to schedule for genre ' . $setting['genre_name']);
-        }
+        error_log('Genre Auto Posting - WordPress Cron disabled for genre ' . $setting['genre_name'] . ', using server cron instead');
     }
     /**
      * 自動投稿の実行処理（全体チェック用）
      */
     public function execute_auto_posting() {
-        // 同時実行防止のためのロック機能（強化版）
+        // 同時実行防止のためのロック機能（改善版）
         $lock_key = 'news_crawler_auto_posting_lock';
-        $lock_duration = 600; // 10分間のロック（実行時間を考慮して延長）
+        $lock_duration = 300; // 5分間のロック（短縮）
         $lock_value = uniqid('news_crawler_', true); // ユニークなロック値
         
         // 既に実行中かチェック（アトミックな操作）
