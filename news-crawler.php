@@ -46,7 +46,6 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-debug-manager.php';
 
 
 // アップデータクラスを初期化（WordPress標準更新システム）
@@ -74,9 +73,6 @@ function news_crawler_init() {
 add_action('wp_ajax_news_crawler_toggle_dev_license', 'news_crawler_ajax_toggle_dev_license');
 add_action('wp_ajax_nopriv_news_crawler_toggle_dev_license', 'news_crawler_ajax_toggle_dev_license');
 
-// テスト用のAJAXハンドラー
-add_action('wp_ajax_news_crawler_test_ajax', 'news_crawler_test_ajax');
-add_action('wp_ajax_nopriv_news_crawler_test_ajax', 'news_crawler_test_ajax');
 
 // キャッシュクリアのAJAX処理
 add_action('wp_ajax_news_crawler_clear_cache', 'news_crawler_clear_cache_ajax');
@@ -138,36 +134,6 @@ function news_crawler_direct_toggle_handler() {
     }
 }
 
-function news_crawler_simple_test() {
-    error_log('NewsCrawler: Simple test AJAX handler called');
-    error_log('NewsCrawler: POST data = ' . print_r($_POST, true));
-    error_log('NewsCrawler: GET data = ' . print_r($_GET, true));
-    
-    // セキュリティチェックをバイパス（テスト用）
-    if (!isset($_POST['action']) || $_POST['action'] !== 'news_crawler_simple_test') {
-        error_log('NewsCrawler: Invalid action in simple test AJAX');
-        wp_die('Invalid action');
-    }
-    
-    echo json_encode(array('success' => true, 'message' => 'Simple test working'));
-    wp_die();
-}
-
-function news_crawler_test_ajax() {
-    error_log('NewsCrawler: Test AJAX handler called');
-    error_log('NewsCrawler: POST data = ' . print_r($_POST, true));
-    error_log('NewsCrawler: GET data = ' . print_r($_GET, true));
-    error_log('NewsCrawler: REQUEST_METHOD = ' . $_SERVER['REQUEST_METHOD']);
-    error_log('NewsCrawler: REQUEST_URI = ' . $_SERVER['REQUEST_URI']);
-    
-    // 基本的なセキュリティチェック
-    if (!isset($_POST['action']) || $_POST['action'] !== 'news_crawler_test_ajax') {
-        error_log('NewsCrawler: Invalid action in test AJAX');
-        wp_die('Invalid action');
-    }
-    
-    wp_send_json_success(array('message' => 'Test AJAX handler is working'));
-}
 
 function news_crawler_clear_cache_ajax() {
     // セキュリティチェック
@@ -726,9 +692,7 @@ class NewsCrawler {
         // add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('wp_ajax_news_crawler_manual_run', array($this, 'manual_run'));
-        add_action('wp_ajax_news_crawler_test_fetch', array($this, 'test_fetch'));
         add_action('wp_ajax_news_crawler_manual_run_news', array($this, 'manual_run_news'));
-        add_action('wp_ajax_news_crawler_test_news_fetch', array($this, 'test_news_fetch'));
     }
     
     public function init() {
@@ -1023,9 +987,6 @@ class NewsCrawler {
             <h2>ニュースクロール機能</h2>
             <p>設定したニュースソースからキーワードにマッチした記事を取得して、要約と共に投稿を作成します。</p>
             
-            <h3>ニュースソースのテスト</h3>
-            <button type="button" id="news-test-fetch" class="button button-secondary">ニュースソースをテスト</button>
-            <div id="news-test-fetch-result" style="margin-top: 10px; white-space: pre-wrap; background: #f7f7f7; padding: 15px; border: 1px solid #ccc; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
             
             <h3>ニュース投稿を作成</h3>
             <button type="button" id="news-manual-run" class="button button-primary">ニュース投稿を作成</button>
@@ -1102,36 +1063,6 @@ class NewsCrawler {
             
             <script>
             jQuery(document).ready(function($) {
-                // ニュースソースのテスト
-                $('#news-test-fetch').click(function() {
-                    var button = $(this);
-                    var resultDiv = $('#news-test-fetch-result');
-                    button.prop('disabled', true).text('テスト中...');
-                    resultDiv.html('ニュースソースのテストを開始します...');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        dataType: 'json',
-                        data: {
-                            action: 'news_crawler_test_news_fetch',
-                            nonce: '<?php echo wp_create_nonce('news_crawler_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                resultDiv.html('<div class="notice notice-success"><p><strong>ニュースソーステスト結果:</strong><br>' + response.data.replace(/\n/g, '<br>') + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="notice notice-error"><p><strong>ニュースソーステストエラー:</strong><br>' + response.data + '</p></div>');
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            resultDiv.html('<div class="notice notice-error"><p><strong>エラーが発生しました:</strong><br>' + error + '</p></div>');
-                        },
-                        complete: function() {
-                            button.prop('disabled', false).text('ニュースソースをテスト');
-                        }
-                    });
-                });
                 
                 // ニュース投稿の作成
                 $('#news-manual-run').click(function() {
@@ -1513,73 +1444,6 @@ class NewsCrawler {
         return $result;
     }
     
-    public function test_fetch() {
-        check_ajax_referer('youtube_crawler_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $options = get_option($this->option_name, array());
-        $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
-        
-        if (empty($channels)) {
-            wp_send_json_success('YouTubeチャンネルが設定されていません。');
-        }
-        
-        if (empty($this->api_key)) {
-            wp_send_json_error('YouTube APIキーが設定されていません。');
-        }
-        
-        $test_result = array();
-        foreach ($channels as $channel) {
-            $videos = $this->fetch_channel_videos($channel, 3);
-            if ($videos && is_array($videos)) {
-                $test_result[] = $channel . ': 取得成功 (' . count($videos) . '件の動画)';
-            } else {
-                $test_result[] = $channel . ': 取得失敗';
-            }
-        }
-        
-        wp_send_json_success(implode('<br>', $test_result));
-    }
-    
-    /**
-     * ニュースソースのテスト実行
-     */
-    public function test_news_fetch() {
-        check_ajax_referer('news_crawler_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('権限がありません');
-        }
-        
-        $options = get_option($this->option_name, array());
-        $news_sources = isset($options['news_sources']) && !empty($options['news_sources']) ? $options['news_sources'] : array();
-        
-        if (empty($news_sources)) {
-            wp_send_json_success('ニュースソースが設定されていません。');
-        }
-        
-        $test_result = array();
-        foreach ($news_sources as $source) {
-            try {
-                $articles = $this->fetch_news_articles($source, 3);
-                if ($articles && is_array($articles)) {
-                    $test_result[] = $source . ': 取得成功 (' . count($articles) . '件の記事)';
-                    foreach (array_slice($articles, 0, 2) as $article) {
-                        $test_result[] = '  - ' . $article['title'];
-                    }
-                } else {
-                    $test_result[] = $source . ': 取得失敗';
-                }
-            } catch (Exception $e) {
-                $test_result[] = $source . ': エラー - ' . $e->getMessage();
-            }
-        }
-        
-        wp_send_json_success(implode('<br>', $test_result));
-    }
     
     /**
      * ニュースクロールの手動実行
