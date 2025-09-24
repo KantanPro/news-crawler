@@ -1124,6 +1124,14 @@ if (class_exists('NewsCrawlerGenreSettings')) {
         \$end_time = microtime(true);
         \$execution_time = round(\$end_time - \$start_time, 2);
         \$log('[PHP] 自動投稿完了: ' . json_encode(\$result) . ' (実行時間: ' . \$execution_time . '秒)');
+        
+        // スキップ理由の詳細分析
+        if (isset(\$result['executed_count']) && \$result['executed_count'] == 0) {
+            \$log('[PHP] 警告: 実行されたジャンルが0個です');
+            \$log('[PHP] スキップされたジャンル数: ' . (\$result['skipped_count'] ?? '不明'));
+            \$log('[PHP] 総ジャンル数: ' . (\$result['total_genres'] ?? '不明'));
+            \$log('[PHP] メッセージ: ' . (\$result['message'] ?? '不明'));
+        }
     } catch (Exception \$e) {
         \$log('[PHP] 実行エラー: ' . \$e->getMessage());
     } catch (Error \$e) {
@@ -1307,6 +1315,7 @@ WPTEST
     
     if [ \"\$PHP_STATUS\" -eq 0 ]; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 正常に完了しました (実行時間: \$execution_time秒)\" >> \"\$LOG_FILE\"
     else
         cleanup_and_exit 1 \"PHP直接実行でエラー (exit=\$PHP_STATUS)\"
     fi

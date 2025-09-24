@@ -25,10 +25,10 @@ class NewsCrawlerOGPManager {
         // 投稿公開時にアイキャッチ画像を強制設定
         add_action('publish_post', array($this, 'force_set_featured_image'), 10, 1);
         
-        // 管理画面にメニューを追加
-        if (is_admin()) {
-            add_action('admin_menu', array($this, 'add_admin_menu'));
-        }
+        // 管理画面にメニューを追加（統合されたため無効化）
+        // if (is_admin()) {
+        //     add_action('admin_menu', array($this, 'add_admin_menu'));
+        // }
     }
     
     /**

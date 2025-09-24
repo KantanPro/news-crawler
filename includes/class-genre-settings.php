@@ -155,14 +155,14 @@ class NewsCrawlerGenreSettings {
             array($this, 'basic_settings_page')
         );
         
-        // 自動投稿設定サブメニュー（黄色で目立たせる）
+        // OGP画像設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - 自動投稿設定',
-            '<span style="color: #ffb900; font-weight: bold;">🚀 自動投稿設定</span>',
+            'News Crawler ' . $this->get_plugin_version() . ' - OGP画像設定',
+            'OGP画像設定',
             $menu_capability,
-            'news-crawler-cron-settings',
-            array($this, 'cron_settings_page')
+            'news-crawler-ogp-images',
+            array($this, 'ogp_settings_page')
         );
         
         // ライセンス設定サブメニュー
@@ -173,6 +173,16 @@ class NewsCrawlerGenreSettings {
             $menu_capability,
             'news-crawler-license',
             array($this, 'license_settings_page')
+        );
+        
+        // 自動投稿設定サブメニュー（黄色で目立たせる）
+        add_submenu_page(
+            'news-crawler-main',
+            'News Crawler ' . $this->get_plugin_version() . ' - 自動投稿設定',
+            '<span style="color: #ffb900; font-weight: bold;">🚀 自動投稿設定</span>',
+            $menu_capability,
+            'news-crawler-cron-settings',
+            array($this, 'cron_settings_page')
         );
         
     }
@@ -5384,5 +5394,137 @@ $('#cancel-edit').click(function() {
             </div>
         </div>
         <?php
+    }
+    
+    /**
+     * OGP画像設定ページ
+     */
+    public function ogp_settings_page() {
+        if (isset($_POST['action']) && $_POST['action'] === 'set_all_featured_images') {
+            $this->set_all_generated_images_as_featured();
+            echo '<div class="notice notice-success"><p>すべてのNews Crawler生成画像をアイキャッチ画像として設定しました。</p></div>';
+        }
+        
+        ?>
+        <div class="wrap">
+            <h1>News Crawler OGP画像設定</h1>
+            
+            <div class="card">
+                <h2>アイキャッチ画像の自動設定</h2>
+                <p>News Crawlerで生成された画像をアイキャッチ画像として設定します。</p>
+                
+                <form method="post">
+                    <input type="hidden" name="action" value="set_all_featured_images">
+                    <?php wp_nonce_field('news_crawler_ogp_images', 'ogp_images_nonce'); ?>
+                    <p>
+                        <input type="submit" class="button button-primary" value="すべての生成画像をアイキャッチ画像として設定" 
+                               onclick="return confirm('すべてのNews Crawler生成画像をアイキャッチ画像として設定しますか？');">
+                    </p>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2>現在の状況</h2>
+                <?php $this->display_image_status(); ?>
+            </div>
+        </div>
+        <?php
+    }
+    
+    /**
+     * すべての生成画像をアイキャッチ画像として設定
+     */
+    private function set_all_generated_images_as_featured() {
+        global $wpdb;
+        
+        // News Crawler生成画像のメタデータを持つ投稿を取得
+        $posts = $wpdb->get_results("
+            SELECT p.ID, pm.meta_value as generated_image_id
+            FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            WHERE p.post_type = 'post'
+            AND p.post_status = 'publish'
+            AND pm.meta_key = '_news_crawler_generated_image_id'
+            AND pm.meta_value != ''
+        ");
+        
+        $count = 0;
+        foreach ($posts as $post) {
+            if ($this->set_generated_image_as_featured($post->ID)) {
+                $count++;
+            }
+        }
+        
+        error_log('NewsCrawler OGP: ' . $count . '件の投稿でアイキャッチ画像を設定しました');
+    }
+    
+    /**
+     * 生成画像をアイキャッチ画像として設定
+     */
+    private function set_generated_image_as_featured($post_id) {
+        $generated_image_id = get_post_meta($post_id, '_news_crawler_generated_image_id', true);
+        
+        if (!$generated_image_id) {
+            return false;
+        }
+        
+        // 既存のアイキャッチ画像を削除してから設定
+        delete_post_thumbnail($post_id);
+        $result = set_post_thumbnail($post_id, $generated_image_id);
+        
+        if ($result) {
+            error_log('NewsCrawler OGP: アイキャッチ画像を設定 - Post ID: ' . $post_id . ', Image ID: ' . $generated_image_id);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * 画像の状況を表示
+     */
+    private function display_image_status() {
+        global $wpdb;
+        
+        // 統計情報を取得
+        $total_posts = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'post' AND post_status = 'publish'");
+        $posts_with_featured = $wpdb->get_var("
+            SELECT COUNT(*) FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            WHERE p.post_type = 'post' AND p.post_status = 'publish'
+            AND pm.meta_key = '_thumbnail_id'
+        ");
+        $posts_with_generated = $wpdb->get_var("
+            SELECT COUNT(*) FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            WHERE p.post_type = 'post' AND p.post_status = 'publish'
+            AND pm.meta_key = '_news_crawler_generated_image_id'
+            AND pm.meta_value != ''
+        ");
+        
+        echo '<p><strong>総投稿数:</strong> ' . $total_posts . '</p>';
+        echo '<p><strong>アイキャッチ画像設定済み:</strong> ' . $posts_with_featured . '</p>';
+        echo '<p><strong>News Crawler生成画像あり:</strong> ' . $posts_with_generated . '</p>';
+        
+        // 生成画像があるがアイキャッチ画像が設定されていない投稿
+        $posts_without_featured = $wpdb->get_results("
+            SELECT p.ID, p.post_title, pm.meta_value as generated_image_id
+            FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+            LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_thumbnail_id'
+            WHERE p.post_type = 'post' AND p.post_status = 'publish'
+            AND pm.meta_key = '_news_crawler_generated_image_id'
+            AND pm.meta_value != ''
+            AND pm2.meta_value IS NULL
+            LIMIT 10
+        ");
+        
+        if (!empty($posts_without_featured)) {
+            echo '<h3>アイキャッチ画像が設定されていない投稿（生成画像あり）</h3>';
+            echo '<ul>';
+            foreach ($posts_without_featured as $post) {
+                echo '<li><a href="' . get_edit_post_link($post->ID) . '">' . esc_html($post->post_title) . '</a></li>';
+            }
+            echo '</ul>';
+        }
     }
 }
