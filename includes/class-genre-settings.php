@@ -3314,6 +3314,17 @@ $('#cancel-edit').click(function() {
                 }
             }
             
+            // 候補数チェック
+            $cache_key = 'news_crawler_available_count_' . $genre_id;
+            $available_candidates = get_transient($cache_key);
+            if ($available_candidates === false || $available_candidates <= 0) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no available candidates (cached: ' . ($available_candidates === false ? 'false' : $available_candidates) . ')';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                $skipped_count++;
+                continue;
+            }
+            
             $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);

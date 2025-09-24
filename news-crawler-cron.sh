@@ -31,8 +31,8 @@ LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
 LOCK_FILE="/tmp/news-crawler-cron.lock"
 LOCK_TIMEOUT=300  # 5分間のロック
 LOCK_RETRY_COUNT=0
-MAX_RETRY=5
-LOCK_RETRY_DELAY=2
+MAX_RETRY=10
+LOCK_RETRY_DELAY=3
 
 # 既存のロックファイルをチェックしてクリーンアップ
 if [ -f "$LOCK_FILE" ]; then
