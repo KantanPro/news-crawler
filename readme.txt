@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 2.8.8
+Stable tag: 2.8.9
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -23,6 +23,13 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * ジャンル別設定管理
 
 * YouTube APIのクォータ制限対応
+
+**新機能（v2.8.9）:**
+* 2025年9月25日リリース
+* 自動投稿の強制実行機能を追加し、スケジュール管理を改善
+  * 自動投稿の実行時に、次回実行時刻が24時間以上先の場合に強制実行する機能を追加
+  * 実行対象がスキップされるのを防ぎ、次回実行時刻を現在時刻にリセットする処理を実装
+  * プラグインの自動実行の信頼性と柔軟性を大幅に向上
 
 **新機能（v2.8.8）:**
 * 2025年9月25日リリース
