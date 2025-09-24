@@ -1022,10 +1022,13 @@ else
     # 一時的なPHPファイルを作成して実行（wp-load.phpを使用）
     TEMP_PHP_FILE=\"/tmp/news-crawler-cron-\$(date +%s).php\"
     
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 一時PHPファイル作成開始: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+    
     # エラーハンドリングを強化
     set -e
     trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; cleanup_and_exit 1 \"スクリプト実行中にエラーが発生しました\";' ERR
     
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル内容を生成中...\" >> \"\$LOG_FILE\"
     cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
 error_reporting(E_ALL);
@@ -1107,6 +1110,8 @@ if (class_exists('NewsCrawlerGenreSettings')) {
 echo \"[PHP] スクリプト実行完了\\n\";
 ?>
 EOF
+
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル生成完了\" >> \"\$LOG_FILE\"
 
     # WordPressディレクトリに移動してPHPファイルを実行
     cd \"\$WP_PATH\"
