@@ -1024,23 +1024,43 @@ else
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 一時PHPファイル作成開始: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
     
-    # エラーハンドリングを強化
-    set -e
+    # エラーハンドリングを強化（set -eを一時的に無効化）
+    set +e
     trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; cleanup_and_exit 1 \"スクリプト実行中にエラーが発生しました\";' ERR
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル内容を生成中...\" >> \"\$LOG_FILE\"
+    
+    # 一時ファイルの作成を段階的に実行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ1: 一時ファイルの作成を開始\" >> \"\$LOG_FILE\"
+    
+    # まず空のファイルを作成
+    touch \"\$TEMP_PHP_FILE\" 2>>\"\$LOG_FILE\"
+    if [ \$? -ne 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: 一時ファイルの作成に失敗\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"一時ファイルの作成に失敗しました\"
+    fi
+    
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ2: 一時ファイルの作成完了\" >> \"\$LOG_FILE\"
+    
+    # ファイルに内容を書き込み
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ3: PHPファイル内容を書き込み中...\" >> \"\$LOG_FILE\"
     cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
+// 基本的なエラーレポート設定
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-ini_set('default_socket_timeout', 10);
-ini_set('mysqli.default_socket_timeout', 10);
-ini_set('mysql.connect_timeout', 10);
-set_time_limit(110);
+ini_set('log_errors', 1);
+set_time_limit(60);
 
-echo \"[PHP] 実行開始 - ディレクトリ: \" . getcwd() . \"\\n\";
+echo \"[PHP] 実行開始 - 時刻: \" . date('Y-m-d H:i:s') . \"\\n\";
+echo \"[PHP] 現在のディレクトリ: \" . getcwd() . \"\\n\";
+echo \"[PHP] スクリプトファイル: \" . __FILE__ . \"\\n\";
 
-// WordPressパスの動的検出（新しいパスを優先）
+// 段階的な実行
+echo \"[PHP] ステップ1: 基本設定完了\\n\";
+
+// WordPressパスの検索
+echo \"[PHP] ステップ2: WordPressパス検索開始\\n\";
 \$wp_paths = array(
     '/virtual/kantan/public_html/wp-load.php',
     '/var/www/html/wp-load.php',
@@ -1049,94 +1069,124 @@ echo \"[PHP] 実行開始 - ディレクトリ: \" . getcwd() . \"\\n\";
 
 \$wp_load_path = null;
 foreach (\$wp_paths as \$path) {
+    echo \"[PHP] パス確認: \" . \$path . \"\\n\";
     if (file_exists(\$path)) {
         \$wp_load_path = \$path;
         echo \"[PHP] wp-load.phpを発見: \" . \$path . \"\\n\";
         break;
+    } else {
+        echo \"[PHP] 存在しない: \" . \$path . \"\\n\";
     }
 }
 
 if (!\$wp_load_path) {
     echo \"[PHP] エラー: wp-load.phpが見つかりません\\n\";
-    echo \"[PHP] 検索したパス:\\n\";
-    foreach (\$wp_paths as \$path) {
-        echo \"[PHP] - \" . \$path . \" (存在しない)\\n\";
-    }
     exit(1);
 }
 
-echo \"[PHP] wp-load.php読み込み開始: \" . \$wp_load_path . \"\\n\";
-require_once(\$wp_load_path);
-echo \"[PHP] WordPress読み込み完了\\n\";
-
-echo \"[PHP] WordPress関数確認中\\n\";
-if (function_exists('get_option')) {
-    echo \"[PHP] get_option関数: 利用可能\\n\";
-    \$site_url = get_option('siteurl');
-    echo \"[PHP] サイトURL: \" . \$site_url . \"\\n\";
-} else {
-    echo \"[PHP] エラー: get_option関数が利用できません\\n\";
+echo \"[PHP] ステップ3: WordPress読み込み開始\\n\";
+try {
+    require_once(\$wp_load_path);
+    echo \"[PHP] WordPress読み込み成功\\n\";
+} catch (Exception \$e) {
+    echo \"[PHP] WordPress読み込みエラー: \" . \$e->getMessage() . \"\\n\";
+    exit(1);
 }
 
-echo \"[PHP] NewsCrawlerGenreSettingsクラスをチェック中\\n\";
+echo \"[PHP] ステップ4: WordPress関数確認\\n\";
+if (function_exists('get_option')) {
+    echo \"[PHP] get_option関数: 利用可能\\n\";
+} else {
+    echo \"[PHP] エラー: get_option関数が利用できません\\n\";
+    exit(1);
+}
+
+echo \"[PHP] ステップ5: NewsCrawlerGenreSettingsクラス確認\\n\";
 if (class_exists('NewsCrawlerGenreSettings')) {
-    echo \"[PHP] クラスが見つかりました。インスタンスを取得中\\n\";
+    echo \"[PHP] クラス発見\\n\";
     try {
         \$genre_settings = NewsCrawlerGenreSettings::get_instance();
         echo \"[PHP] インスタンス取得成功\\n\";
-        echo \"[PHP] 自動投稿を実行中\\n\";
+        echo \"[PHP] 自動投稿実行開始\\n\";
         \$result = \$genre_settings->execute_auto_posting();
-        echo \"[PHP] 自動投稿実行結果: \" . var_export(\$result, true) . \"\\n\";
-        echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
+        echo \"[PHP] 自動投稿完了: \" . json_encode(\$result) . \"\\n\";
     } catch (Exception \$e) {
-        echo \"[PHP] エラー: \" . \$e->getMessage() . \"\\n\";
-        echo \"[PHP] スタックトレース: \" . \$e->getTraceAsString() . \"\\n\";
+        echo \"[PHP] 実行エラー: \" . \$e->getMessage() . \"\\n\";
     }
 } else {
-    echo \"[PHP] News CrawlerGenreSettingsクラスが見つかりません\\n\";
-    echo \"[PHP] 利用可能なクラス一覧:\\n\";
-    \$declared_classes = get_declared_classes();
-    \$crawler_classes = array_filter(\$declared_classes, function(\$class) {
-        return strpos(\$class, 'NewsCrawler') !== false || strpos(\$class, 'Genre') !== false;
-    });
-    if (!empty(\$crawler_classes)) {
-        foreach (\$crawler_classes as \$class) {
-            echo \"[PHP] - \" . \$class . \"\\n\";
-        }
-    } else {
-        echo \"[PHP] News Crawler関連のクラスが見つかりません\\n\";
-    }
+    echo \"[PHP] NewsCrawlerGenreSettingsクラスが見つかりません\\n\";
 }
+
 echo \"[PHP] スクリプト実行完了\\n\";
 ?>
 EOF
 
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル生成完了\" >> \"\$LOG_FILE\"
-
-    # WordPressディレクトリに移動してPHPファイルを実行
-    cd \"\$WP_PATH\"
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressディレクトリに移動: \$WP_PATH\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ4: PHPファイル生成完了\" >> \"\$LOG_FILE\"
     
-    # PHPファイルの存在確認
+    # ファイルの存在とサイズを確認
     if [ ! -f \"\$TEMP_PHP_FILE\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPファイルが存在しません: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
         cleanup_and_exit 1 \"PHPファイルが存在しません: \$TEMP_PHP_FILE\"
     fi
     
+    FILE_SIZE=\$(stat -c%s \"\$TEMP_PHP_FILE\" 2>/dev/null || stat -f%z \"\$TEMP_PHP_FILE\" 2>/dev/null || echo 0)
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ5: PHPファイルサイズ確認: \$FILE_SIZE bytes\" >> \"\$LOG_FILE\"
+    
+    if [ \"\$FILE_SIZE\" -eq 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPファイルが空です\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"PHPファイルが空です\"
+    fi
+
+    # WordPressディレクトリに移動してPHPファイルを実行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ6: WordPressディレクトリに移動開始: \$WP_PATH\" >> \"\$LOG_FILE\"
+    cd \"\$WP_PATH\"
+    if [ \$? -ne 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: WordPressディレクトリへの移動に失敗\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"WordPressディレクトリへの移動に失敗しました\"
+    fi
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ7: WordPressディレクトリに移動完了: \$(pwd)\" >> \"\$LOG_FILE\"
+    
+    # PHPファイルの存在確認（移動後）
+    if [ ! -f \"\$TEMP_PHP_FILE\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: 移動後にPHPファイルが見つかりません: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"移動後にPHPファイルが見つかりません\"
+    fi
+    
     # PHPファイルを実行（タイムアウト付き、詳細ログ付き）
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル実行開始: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ8: PHPファイル実行開始: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 現在のディレクトリ: \$(pwd)\" >> \"\$LOG_FILE\"
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイルの存在確認: \$(ls -la \"\$TEMP_PHP_FILE\" 2>/dev/null || echo 'ファイルが見つかりません')\" >> \"\$LOG_FILE\"
+    
+    # PHP実行前の最終確認
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ9: PHP実行前の最終確認\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンド: \$PHP_CMD\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 実行ファイル: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 作業ディレクトリ: \$(pwd)\" >> \"\$LOG_FILE\"
+    
+    # PHPコマンドの存在確認
+    if [ ! -x \"\$PHP_CMD\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPコマンドが実行できません: \$PHP_CMD\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"PHPコマンドが実行できません\"
+    fi
+    
+    # 一時ファイルの読み取り権限確認
+    if [ ! -r \"\$TEMP_PHP_FILE\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPファイルが読み取れません: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"PHPファイルが読み取れません\"
+    fi
+    
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ10: PHP実行開始\" >> \"\$LOG_FILE\"
     
     if command -v timeout &> /dev/null; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] タイムアウト付きでPHPを実行中...\" >> \"\$LOG_FILE\"
         timeout 60s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ11: PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     else
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPを実行中...\" >> \"\$LOG_FILE\"
         \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ11: PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     fi
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
