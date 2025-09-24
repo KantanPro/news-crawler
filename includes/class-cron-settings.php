@@ -1117,15 +1117,21 @@ EOF
         cleanup_and_exit 1 \"PHPファイルが存在しません: \$TEMP_PHP_FILE\"
     fi
     
-    # PHPファイルを実行（タイムアウト付き）
+    # PHPファイルを実行（タイムアウト付き、詳細ログ付き）
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル実行開始: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 現在のディレクトリ: \$(pwd)\" >> \"\$LOG_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイルの存在確認: \$(ls -la \"\$TEMP_PHP_FILE\" 2>/dev/null || echo 'ファイルが見つかりません')\" >> \"\$LOG_FILE\"
+    
     if command -v timeout &> /dev/null; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] タイムアウト付きでPHPを実行中...\" >> \"\$LOG_FILE\"
-        timeout 120s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+        timeout 60s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     else
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPを実行中...\" >> \"\$LOG_FILE\"
         \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     fi
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
