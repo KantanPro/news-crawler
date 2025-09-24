@@ -1125,12 +1125,20 @@ if (class_exists('NewsCrawlerGenreSettings')) {
         \$execution_time = round(\$end_time - \$start_time, 2);
         \$log('[PHP] 自動投稿完了: ' . json_encode(\$result) . ' (実行時間: ' . \$execution_time . '秒)');
         
-        // スキップ理由の詳細分析
-        if (isset(\$result['executed_count']) && \$result['executed_count'] == 0) {
-            \$log('[PHP] 警告: 実行されたジャンルが0個です');
-            \$log('[PHP] スキップされたジャンル数: ' . (\$result['skipped_count'] ?? '不明'));
-            \$log('[PHP] 総ジャンル数: ' . (\$result['total_genres'] ?? '不明'));
-            \$log('[PHP] メッセージ: ' . (\$result['message'] ?? '不明'));
+        // 実行結果の詳細分析
+        \$log('[PHP] 実行結果詳細:');
+        \$log('[PHP] - 実行されたジャンル数: ' . (\$result['executed_count'] ?? '不明'));
+        \$log('[PHP] - スキップされたジャンル数: ' . (\$result['skipped_count'] ?? '不明'));
+        \$log('[PHP] - 総ジャンル数: ' . (\$result['total_genres'] ?? '不明'));
+        \$log('[PHP] - 作成された投稿数: ' . (\$result['posts_created'] ?? '不明'));
+        \$log('[PHP] - メッセージ: ' . (\$result['message'] ?? '不明'));
+        
+        // 投稿が作成されなかった場合の警告
+        if (isset(\$result['posts_created']) && \$result['posts_created'] == 0) {
+            \$log('[PHP] 警告: 投稿が作成されませんでした');
+            if (isset(\$result['executed_count']) && \$result['executed_count'] > 0) {
+                \$log('[PHP] 注意: ジャンルは実行されたが、投稿は作成されませんでした');
+            }
         }
     } catch (Exception \$e) {
         \$log('[PHP] 実行エラー: ' . \$e->getMessage());

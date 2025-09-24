@@ -3279,6 +3279,7 @@ $('#cancel-edit').click(function() {
             
             $executed_count = 0;
             $skipped_count = 0;
+            $posts_created = 0;
         
         // 実行対象のジャンルを事前にフィルタリング
         $ready_genres = array();
@@ -3456,7 +3457,8 @@ $('#cancel-edit').click(function() {
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 自動投稿を実行
-            $this->execute_auto_posting_for_genre($setting, false, $genre_id);
+            $genre_posts_created = $this->execute_auto_posting_for_genre($setting, false, $genre_id);
+            $posts_created += $genre_posts_created;
             $executed_count++;
             
             // 次回実行時刻を更新
@@ -3477,7 +3479,7 @@ $('#cancel-edit').click(function() {
         }
         
             // 詳細な実行結果をログに出力
-            $log_message = 'Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Total genres: ' . count($genre_settings);
+            $log_message = 'Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Total genres: ' . count($genre_settings) . ', Posts created: ' . $posts_created;
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
@@ -3485,7 +3487,8 @@ $('#cancel-edit').click(function() {
             $result = array(
                 'executed_count' => $executed_count,
                 'skipped_count' => $skipped_count,
-                'total_genres' => count($genre_settings)
+                'total_genres' => count($genre_settings),
+                'posts_created' => $posts_created
             );
             
             // 結果をログに出力（cronスクリプトで確認できるように）
