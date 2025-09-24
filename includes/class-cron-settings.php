@@ -811,21 +811,32 @@ LOG_FILE=\"\$SCRIPT_DIR/news-crawler-cron.log\"
 LOCK_FILE=\"\$SCRIPT_DIR/news-crawler-cron.lock\"
 LOCK_TIMEOUT=600  # 10分間のロック
 
-# ロックファイルの存在チェック
-if [ -f \"\$LOCK_FILE\" ]; then
-    # ロックファイルの作成時刻をチェック
-    LOCK_AGE=\$(find \"\$LOCK_FILE\" -mmin +\$((LOCK_TIMEOUT/60)) 2>/dev/null)
-    if [ -n \"\$LOCK_AGE\" ]; then
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除: \$LOCK_FILE\" >> \"\$LOG_FILE\"
-        rm -f \"\$LOCK_FILE\"
+# ロックファイルの存在チェックと作成（アトミック操作）
+if ! (set -C; echo \"\$\$\" > \"\$LOCK_FILE\") 2>/dev/null; then
+    # ロックファイルが既に存在する場合
+    if [ -f \"\$LOCK_FILE\" ]; then
+        # ロックファイルの作成時刻をチェック（より確実な方法）
+        LOCK_TIME=\$(stat -c %Y \"\$LOCK_FILE\" 2>/dev/null || stat -f %m \"\$LOCK_FILE\" 2>/dev/null || echo 0)
+        CURRENT_TIME=\$(date +%s)
+        LOCK_AGE=\$((CURRENT_TIME - LOCK_TIME))
+        
+        if [ \$LOCK_AGE -gt \$LOCK_TIMEOUT ]; then
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除 (age: \$LOCK_AGE秒): \$LOCK_FILE\" >> \"\$LOG_FILE\"
+            rm -f \"\$LOCK_FILE\"
+            # 再試行
+            if ! (set -C; echo \"\$\$\" > \"\$LOCK_FILE\") 2>/dev/null; then
+                echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗: \$LOCK_FILE\" >> \"\$LOG_FILE\"
+                exit 1
+            fi
+        else
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップ (age: \$LOCK_AGE秒): \$LOCK_FILE\" >> \"\$LOG_FILE\"
+            exit 0
+        fi
     else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップ: \$LOCK_FILE\" >> \"\$LOG_FILE\"
-        exit 0
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗: \$LOCK_FILE\" >> \"\$LOG_FILE\"
+        exit 1
     fi
 fi
-
-# ロックファイルを作成
-echo \"\$\$\" > \"\$LOCK_FILE\"
 
 # ログに実行開始を記録
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始 (PID: \$\$)\" >> \"\$LOG_FILE\"
@@ -1263,13 +1274,11 @@ echo \"---\" >> \"\$LOG_FILE\"
      * 既存のNews Crawler関連のcronジョブを削除
      */
     private function remove_news_crawler_cron_jobs() {
-        // Docker環境ではcrontabコマンドが利用できないため、ログに記録のみ
-        error_log('News Crawler: 既存のcronジョブを削除する必要があります（手動で実行してください）');
-        
-        // 現在のcronジョブを取得（ホスト側で実行）
+        // 現在のcronジョブを取得
         $current_cron = shell_exec('crontab -l 2>/dev/null');
         
         if ($current_cron === null) {
+            error_log('News Crawler: crontabコマンドが利用できません');
             return;
         }
         
@@ -1305,20 +1314,26 @@ echo \"---\" >> \"\$LOG_FILE\"
      * News Crawlerのcronジョブを追加
      */
     private function add_news_crawler_cron_job($cron_command) {
-        // Docker環境ではcrontabコマンドが利用できないため、ログに記録のみ
-        error_log('News Crawler: 以下のcronジョブを手動で追加してください: ' . $cron_command);
-        
-        // 現在のcronジョブを取得（ホスト側で実行）
+        // 重複チェック
         $current_cron = shell_exec('crontab -l 2>/dev/null');
+        if ($current_cron && strpos($current_cron, 'news-crawler-cron.sh') !== false) {
+            error_log('News Crawler: 既にcronジョブが登録されています。重複を避けるため追加をスキップします。');
+            return;
+        }
         
-        // 新しいcronジョブを追加
+        // 現在のcronジョブに新しいジョブを追加
         $new_cron = $current_cron . "\n" . $cron_command . "\n";
-        
-        // 一時ファイルに保存してcrontabに設定
         $temp_file = tempnam(sys_get_temp_dir(), 'cron_');
         file_put_contents($temp_file, $new_cron);
-        shell_exec("crontab $temp_file");
+        
+        $result = shell_exec("crontab $temp_file 2>&1");
         unlink($temp_file);
+        
+        if ($result === null) {
+            error_log('News Crawler: Cronジョブを追加しました: ' . $cron_command);
+        } else {
+            error_log('News Crawler: Cronジョブの追加に失敗しました: ' . $result);
+        }
     }
     
     /**
