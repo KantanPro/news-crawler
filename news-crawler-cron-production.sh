@@ -1,25 +1,14 @@
 #!/bin/bash
-# News Crawler Cron Script
-# 修正版 - 2025-09-24 10:45:00 (重複実行防止機能強化)
+# News Crawler Cron Script - 本番環境用修正版
+# 重複実行防止機能を強化したバージョン
 
 set -euo pipefail
 
 # スクリプトのディレクトリを取得
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# WordPressのパスを動的に取得（プラグインディレクトリから逆算）
-WP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")/"
-
-# WordPressのパスが正しいかチェック（wp-config.phpの存在確認）
-if [ ! -f "$WP_PATH/wp-config.php" ]; then
-    # 代替パスを試行（新しいパスを優先）
-    for alt_path in "/virtual/kantan/public_html/" "/var/www/html/" "$(dirname "$SCRIPT_DIR")/../../"; do
-        if [ -f "$alt_path/wp-config.php" ]; then
-            WP_PATH="$alt_path"
-            break
-        fi
-    done
-fi
+# 本番環境のWordPressパス
+WP_PATH="/virtual/kantan/public_html/"
 
 # プラグインパスを設定
 PLUGIN_PATH="$SCRIPT_DIR/"
@@ -27,12 +16,17 @@ PLUGIN_PATH="$SCRIPT_DIR/"
 # ログファイルのパス
 LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
 
-# 重複実行防止のためのロックファイル（超強化版）
+# 重複実行防止のためのロックファイル（強化版）
 LOCK_FILE="/tmp/news-crawler-cron.lock"
-LOCK_TIMEOUT=300  # 5分間のロック
+LOCK_TIMEOUT=600  # 10分間のロック（延長）
 LOCK_RETRY_COUNT=0
-MAX_RETRY=10
-LOCK_RETRY_DELAY=3
+MAX_RETRY=3
+LOCK_RETRY_DELAY=10
+
+# ログ関数
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
 
 # 既存のロックファイルをチェックしてクリーンアップ
 if [ -f "$LOCK_FILE" ]; then
@@ -42,17 +36,17 @@ if [ -f "$LOCK_FILE" ]; then
     if [ $LOCK_AGE -lt $LOCK_TIMEOUT ]; then
         # プロセスIDをチェックして、実際に実行中かどうか確認
         if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップします (PID: $LOCK_PID, 経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
+            log_message "既に実行中のためスキップします (PID: $LOCK_PID, 経過時間: ${LOCK_AGE}秒)"
             exit 0
         else
             # 古いロックファイルを削除
             rm -f "$LOCK_FILE"
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました (PID: $LOCK_PID)" >> "$LOG_FILE"
+            log_message "古いロックファイルを削除しました (PID: $LOCK_PID)"
         fi
     else
         # 古いロックファイルを削除
         rm -f "$LOCK_FILE"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除しました (経過時間: ${LOCK_AGE}秒)" >> "$LOG_FILE"
+        log_message "古いロックファイルを削除しました (経過時間: ${LOCK_AGE}秒)"
     fi
 fi
 
@@ -61,29 +55,29 @@ while [ $LOCK_RETRY_COUNT -lt $MAX_RETRY ]; do
     # ロックファイルを作成（アトミック操作）
     if (set -C; echo $$ > "$LOCK_FILE") 2>/dev/null; then
         # ロック取得成功
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ロック取得成功 (PID: $$)" >> "$LOG_FILE"
+        log_message "ロック取得成功 (PID: $$)"
         break
     else
         # ロック取得失敗、少し待って再試行
         LOCK_RETRY_COUNT=$((LOCK_RETRY_COUNT + 1))
         if [ $LOCK_RETRY_COUNT -lt $MAX_RETRY ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ロック取得失敗、再試行中... ($LOCK_RETRY_COUNT/$MAX_RETRY)" >> "$LOG_FILE"
+            log_message "ロック取得失敗、再試行中... ($LOCK_RETRY_COUNT/$MAX_RETRY)"
             sleep $LOCK_RETRY_DELAY
         else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ロック取得に失敗しました。最大試行回数に達しました。" >> "$LOG_FILE"
+            log_message "ロック取得に失敗しました。最大試行回数に達しました。"
             exit 1
         fi
     fi
 done
 
 # ロックファイルのクリーンアップ用のtrapを設定
-trap 'rm -f "$LOCK_FILE"; echo "[$(date "+%Y-%m-%d %H:%M:%S")] ロックファイルを削除しました" >> "$LOG_FILE"' EXIT
+trap 'rm -f "$LOCK_FILE"; log_message "ロックファイルを削除しました"' EXIT
 
 # ログに実行開始を記録
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始" >> "$LOG_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: $SCRIPT_DIR" >> "$LOG_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: $WP_PATH" >> "$LOG_FILE"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$LOG_FILE"
+log_message "News Crawler Cron 実行開始"
+log_message "スクリプトディレクトリ: $SCRIPT_DIR"
+log_message "WordPressパス: $WP_PATH"
+log_message "プラグインパス: $PLUGIN_PATH"
 
 # PHPコマンドを検索
 PHP_CMD=""
@@ -95,17 +89,17 @@ for cmd in "/usr/local/bin/php" "/usr/bin/php" "php"; do
 done
 
 if [ -z "$PHP_CMD" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPコマンドが見つかりません" >> "$LOG_FILE"
+    log_message "エラー: PHPコマンドが見つかりません"
     exit 1
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD" >> "$LOG_FILE"
+log_message "使用するPHPコマンド: $PHP_CMD"
 
 # PHP直接実行でNews Crawlerを実行
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
+log_message "PHP直接実行でNews Crawlerを実行中..."
 
 # 一時ディレクトリを作成
-TEMP_DIR="/export/tmp"
+TEMP_DIR="/tmp/news-crawler-temp"
 mkdir -p "$TEMP_DIR"
 
 # PHPスクリプトを実行
@@ -156,18 +150,18 @@ if (class_exists('NewsCrawlerGenreSettings')) {
 
 echo '[PHP] スクリプト実行完了' . PHP_EOL;
 " 2>&1 | while IFS= read -r line; do
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $line" >> "$LOG_FILE"
+    log_message "$line"
 done
 
 # PHP実行結果をチェック
 PHP_EXIT_CODE=${PIPESTATUS[0]}
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: $PHP_EXIT_CODE" >> "$LOG_FILE"
+log_message "PHP exit status: $PHP_EXIT_CODE"
 
 if [ $PHP_EXIT_CODE -eq 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました" >> "$LOG_FILE"
+    log_message "PHP直接実行でNews Crawlerを実行しました"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHP実行に失敗しました (終了コード: $PHP_EXIT_CODE)" >> "$LOG_FILE"
+    log_message "エラー: PHP実行に失敗しました (終了コード: $PHP_EXIT_CODE)"
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行終了" >> "$LOG_FILE"
+log_message "News Crawler Cron 実行終了"
 echo "---" >> "$LOG_FILE"

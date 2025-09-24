@@ -88474,3 +88474,140 @@ Content-type: text/html; charset=UTF-8
 ---
 [2025-09-23 09:31:42] News Crawler Cron 実行終了
 ---
+[2025-09-24 11:22:07] ロック取得成功 (PID: 46223)
+[2025-09-24 11:22:07] News Crawler Cron 実行開始
+[2025-09-24 11:22:07] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-24 11:22:07] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-24 11:22:07] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-24 11:22:07] 使用するPHPコマンド: /usr/local/bin/php
+[2025-09-24 11:22:07] PHP直接実行でNews Crawlerを実行中...
+[2025-09-24 11:22:07] ロックファイルを削除しました
+[2025-09-24 11:22:13] ロック取得成功 (PID: 46286)
+[2025-09-24 11:22:13] News Crawler Cron 実行開始
+[2025-09-24 11:22:13] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-24 11:22:14] WordPressパス: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-24 11:22:14] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-24 11:22:14] 使用するPHPコマンド: /usr/local/bin/php
+[2025-09-24 11:22:14] PHP直接実行でNews Crawlerを実行中...
+[2025-09-24 11:22:14] [PHP] 実行開始 - ディレクトリ: /private/tmp/news-crawler-temp
+[2025-09-24 11:22:14] [PHP] wp-load.phpを発見: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-load.php
+[2025-09-24 11:22:14] [PHP] wp-load.php読み込み開始: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-load.php
+[2025-09-24 11:22:14] <!DOCTYPE html>
+[2025-09-24 11:22:14] <html dir='ltr'>
+[2025-09-24 11:22:14] <head>
+[2025-09-24 11:22:14] 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+[2025-09-24 11:22:14] 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+[2025-09-24 11:22:14] 			<title>データベースエラー</title>
+[2025-09-24 11:22:14] 	<style type="text/css">
+[2025-09-24 11:22:14] 		html {
+[2025-09-24 11:22:14] 			background: #f1f1f1;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		body {
+[2025-09-24 11:22:14] 			background: #fff;
+[2025-09-24 11:22:14] 			border: 1px solid #ccd0d4;
+[2025-09-24 11:22:14] 			color: #444;
+[2025-09-24 11:22:14] 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+[2025-09-24 11:22:14] 			margin: 2em auto;
+[2025-09-24 11:22:14] 			padding: 1em 2em;
+[2025-09-24 11:22:14] 			max-width: 700px;
+[2025-09-24 11:22:14] 			-webkit-box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+[2025-09-24 11:22:14] 			box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		h1 {
+[2025-09-24 11:22:14] 			border-bottom: 1px solid #dadada;
+[2025-09-24 11:22:14] 			clear: both;
+[2025-09-24 11:22:14] 			color: #666;
+[2025-09-24 11:22:14] 			font-size: 24px;
+[2025-09-24 11:22:14] 			margin: 30px 0 0 0;
+[2025-09-24 11:22:14] 			padding: 0;
+[2025-09-24 11:22:14] 			padding-bottom: 7px;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		#error-page {
+[2025-09-24 11:22:14] 			margin-top: 50px;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		#error-page p,
+[2025-09-24 11:22:14] 		#error-page .wp-die-message {
+[2025-09-24 11:22:14] 			font-size: 14px;
+[2025-09-24 11:22:14] 			line-height: 1.5;
+[2025-09-24 11:22:14] 			margin: 25px 0 20px;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		#error-page code {
+[2025-09-24 11:22:14] 			font-family: Consolas, Monaco, monospace;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		ul li {
+[2025-09-24 11:22:14] 			margin-bottom: 10px;
+[2025-09-24 11:22:14] 			font-size: 14px ;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		a {
+[2025-09-24 11:22:14] 			color: #2271b1;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		a:hover,
+[2025-09-24 11:22:14] 		a:active {
+[2025-09-24 11:22:14] 			color: #135e96;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		a:focus {
+[2025-09-24 11:22:14] 			color: #043959;
+[2025-09-24 11:22:14] 			box-shadow: 0 0 0 2px #2271b1;
+[2025-09-24 11:22:14] 			outline: 2px solid transparent;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 		.button {
+[2025-09-24 11:22:14] 			background: #f3f5f6;
+[2025-09-24 11:22:14] 			border: 1px solid #016087;
+[2025-09-24 11:22:14] 			color: #016087;
+[2025-09-24 11:22:14] 			display: inline-block;
+[2025-09-24 11:22:14] 			text-decoration: none;
+[2025-09-24 11:22:14] 			font-size: 13px;
+[2025-09-24 11:22:14] 			line-height: 2;
+[2025-09-24 11:22:14] 			height: 28px;
+[2025-09-24 11:22:14] 			margin: 0;
+[2025-09-24 11:22:14] 			padding: 0 10px 1px;
+[2025-09-24 11:22:14] 			cursor: pointer;
+[2025-09-24 11:22:14] 			-webkit-border-radius: 3px;
+[2025-09-24 11:22:14] 			-webkit-appearance: none;
+[2025-09-24 11:22:14] 			border-radius: 3px;
+[2025-09-24 11:22:14] 			white-space: nowrap;
+[2025-09-24 11:22:14] 			-webkit-box-sizing: border-box;
+[2025-09-24 11:22:14] 			-moz-box-sizing:    border-box;
+[2025-09-24 11:22:14] 			box-sizing:         border-box;
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 			vertical-align: top;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 		.button.button-large {
+[2025-09-24 11:22:14] 			line-height: 2.30769231;
+[2025-09-24 11:22:14] 			min-height: 32px;
+[2025-09-24 11:22:14] 			padding: 0 12px;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 		.button:hover,
+[2025-09-24 11:22:14] 		.button:focus {
+[2025-09-24 11:22:14] 			background: #f1f1f1;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 		.button:focus {
+[2025-09-24 11:22:14] 			background: #f3f5f6;
+[2025-09-24 11:22:14] 			border-color: #007cba;
+[2025-09-24 11:22:14] 			-webkit-box-shadow: 0 0 0 1px #007cba;
+[2025-09-24 11:22:14] 			box-shadow: 0 0 0 1px #007cba;
+[2025-09-24 11:22:14] 			color: #016087;
+[2025-09-24 11:22:14] 			outline: 2px solid transparent;
+[2025-09-24 11:22:14] 			outline-offset: 0;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 		.button:active {
+[2025-09-24 11:22:14] 			background: #f3f5f6;
+[2025-09-24 11:22:14] 			border-color: #7e8993;
+[2025-09-24 11:22:14] 			-webkit-box-shadow: none;
+[2025-09-24 11:22:14] 			box-shadow: none;
+[2025-09-24 11:22:14] 		}
+[2025-09-24 11:22:14] 
+[2025-09-24 11:22:14] 			</style>
+[2025-09-24 11:22:14] </head>
+[2025-09-24 11:22:14] <body id="error-page">
+[2025-09-24 11:22:14] 	<div class="wp-die-message"><h1>データベース接続確立エラー</h1></div></body>
+[2025-09-24 11:22:14] </html>
+[2025-09-24 11:22:14] PHP exit status: 0
+[2025-09-24 11:22:14] PHP直接実行でNews Crawlerを実行しました
+[2025-09-24 11:22:14] News Crawler Cron 実行終了
+---
+[2025-09-24 11:22:14] ロックファイルを削除しました
