@@ -3382,8 +3382,24 @@ $('#cancel-edit').click(function() {
                 $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ') - SKIPPING';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
-                $skipped_count++;
-                continue;
+                
+                // 緊急モード：次回実行時刻が24時間以上先の場合は強制実行
+                $time_diff = $next_execution - $current_time;
+                if ($time_diff > 86400) { // 24時間 = 86400秒
+                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution is more than 24 hours away, forcing execution';
+                    error_log($log_message);
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    
+                    // 次回実行時刻を現在時刻にリセット
+                    $this->update_next_execution_time($genre_id, $setting);
+                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution time reset to current time';
+                    error_log($log_message);
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    // スキップせずに実行対象に追加
+                } else {
+                    $skipped_count++;
+                    continue;
+                }
             }
             
             // 実行可能であることをログに記録
