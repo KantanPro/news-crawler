@@ -3195,36 +3195,54 @@ $('#cancel-edit').click(function() {
      * 自動投稿の実行処理（全体チェック用）
      */
     public function execute_auto_posting() {
-        // 同時実行防止のためのロック機能（改善版）
+        // 同時実行防止のためのロック機能（競合状態を防ぐ改善版）
         $lock_key = 'news_crawler_auto_posting_lock';
-        $lock_duration = 300; // 5分間のロック（短縮）
-        $lock_value = uniqid('news_crawler_', true); // ユニークなロック値
+        $lock_duration = 600; // 10分間のロック（延長）
+        $lock_value = uniqid('news_crawler_', true) . '_' . time(); // よりユニークなロック値
         
-        // 既に実行中かチェック（アトミックな操作）
-        $existing_lock = get_transient($lock_key);
-        if ($existing_lock !== false) {
-            error_log('Auto Posting Execution - Already running (lock value: ' . $existing_lock . '), skipping execution');
+        // アトミックなロック取得（競合状態を防ぐ）
+        $lock_acquired = false;
+        $max_attempts = 3;
+        $attempt = 0;
+        
+        while ($attempt < $max_attempts && !$lock_acquired) {
+            $attempt++;
+            
+            // 既存のロックをチェック
+            $existing_lock = get_transient($lock_key);
+            if ($existing_lock !== false) {
+                error_log('Auto Posting Execution - Attempt ' . $attempt . ': Already running (lock value: ' . $existing_lock . '), waiting...');
+                sleep(1); // 1秒待機
+                continue;
+            }
+            
+            // ロックを設定（アトミック操作）
+            $lock_set = set_transient($lock_key, $lock_value, $lock_duration);
+            if ($lock_set) {
+                // 設定後に再度チェック（二重チェック）
+                $verify_lock = get_transient($lock_key);
+                if ($verify_lock === $lock_value) {
+                    $lock_acquired = true;
+                    error_log('Auto Posting Execution - Lock acquired successfully (value: ' . $lock_value . ', attempt: ' . $attempt . ')');
+                } else {
+                    error_log('Auto Posting Execution - Lock verification failed, retrying...');
+                    sleep(1);
+                }
+            } else {
+                error_log('Auto Posting Execution - Failed to set lock, retrying...');
+                sleep(1);
+            }
+        }
+        
+        if (!$lock_acquired) {
+            error_log('Auto Posting Execution - Failed to acquire lock after ' . $max_attempts . ' attempts, skipping execution');
             return array(
                 'executed_count' => 0,
                 'skipped_count' => 0,
                 'total_genres' => 0,
-                'message' => '既に実行中のためスキップしました'
+                'message' => 'ロックの取得に失敗しました（' . $max_attempts . '回試行後）'
             );
         }
-        
-        // ロックを設定（ユニークな値で設定）
-        $lock_set = set_transient($lock_key, $lock_value, $lock_duration);
-        if (!$lock_set) {
-            error_log('Auto Posting Execution - Failed to acquire lock, skipping execution');
-            return array(
-                'executed_count' => 0,
-                'skipped_count' => 0,
-                'total_genres' => 0,
-                'message' => 'ロックの取得に失敗しました'
-            );
-        }
-        
-        error_log('Auto Posting Execution - Lock acquired successfully (value: ' . $lock_value . ')');
         
         try {
             error_log('Auto Posting Execution - Starting...');
@@ -3350,7 +3368,7 @@ $('#cancel-edit').click(function() {
             
             // 実行判定を修正（現在時刻より前または等しい場合は実行可能）
             if ($next_execution > $current_time) {
-                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ')';
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ') - SKIPPING';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
@@ -3371,6 +3389,19 @@ $('#cancel-edit').click(function() {
         $current_genre_index = 0;
         
         error_log('Auto Posting Execution - Ready genres count: ' . $genre_count);
+        error_log('Auto Posting Execution - Total genres processed: ' . count($genre_settings));
+        error_log('Auto Posting Execution - Skipped count: ' . $skipped_count);
+        
+        // スキップされた理由の詳細ログ
+        if ($skipped_count > 0) {
+            error_log('Auto Posting Execution - All genres were skipped. This may indicate:');
+            error_log('Auto Posting Execution - 1. Auto posting disabled for all genres');
+            error_log('Auto Posting Execution - 2. No keywords configured for any genre');
+            error_log('Auto Posting Execution - 3. No news sources or YouTube channels configured');
+            error_log('Auto Posting Execution - 4. Daily post limits reached for all genres');
+            error_log('Auto Posting Execution - 5. Next execution time not reached for any genre');
+            error_log('Auto Posting Execution - 6. No available candidates for any genre');
+        }
         
         // 候補数キャッシュが存在しない場合は初期化
         foreach ($ready_genres as $genre_id => $setting) {
@@ -3471,6 +3502,13 @@ $('#cancel-edit').click(function() {
             } else {
                 error_log('Auto Posting Execution - Lock value mismatch, cannot release lock safely');
             }
+            
+            // 最終結果の詳細ログ
+            error_log('Auto Posting Execution - Final Results:');
+            error_log('Auto Posting Execution - Executed count: ' . $executed_count);
+            error_log('Auto Posting Execution - Skipped count: ' . $skipped_count);
+            error_log('Auto Posting Execution - Total genres: ' . count($genre_settings));
+            error_log('Auto Posting Execution - Ready genres: ' . count($ready_genres));
         }
     }
 

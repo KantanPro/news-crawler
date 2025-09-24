@@ -807,8 +807,28 @@ PLUGIN_PATH=\"\$SCRIPT_DIR/\"
 # ログファイルのパス
 LOG_FILE=\"\$SCRIPT_DIR/news-crawler-cron.log\"
 
+# 同時実行防止のためのロックファイル
+LOCK_FILE=\"\$SCRIPT_DIR/news-crawler-cron.lock\"
+LOCK_TIMEOUT=600  # 10分間のロック
+
+# ロックファイルの存在チェック
+if [ -f \"\$LOCK_FILE\" ]; then
+    # ロックファイルの作成時刻をチェック
+    LOCK_AGE=\$(find \"\$LOCK_FILE\" -mmin +\$((LOCK_TIMEOUT/60)) 2>/dev/null)
+    if [ -n \"\$LOCK_AGE\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除: \$LOCK_FILE\" >> \"\$LOG_FILE\"
+        rm -f \"\$LOCK_FILE\"
+    else
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップ: \$LOCK_FILE\" >> \"\$LOG_FILE\"
+        exit 0
+    fi
+fi
+
+# ロックファイルを作成
+echo \"\$\$\" > \"\$LOCK_FILE\"
+
 # ログに実行開始を記録
-echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始\" >> \"\$LOG_FILE\"
+echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始 (PID: \$\$)\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: \$SCRIPT_DIR\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: \$WP_PATH\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: \$PLUGIN_PATH\" >> \"\$LOG_FILE\"
@@ -909,6 +929,11 @@ else
 
     # 一時的なPHPファイルを作成して実行（wp-load.phpを使用）
     TEMP_PHP_FILE=\"/tmp/news-crawler-cron-\$(date +%s).php\"
+    
+    # エラーハンドリングを強化
+    set -e
+    trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; exit 1' ERR
+    
     cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
 error_reporting(E_ALL);
@@ -991,16 +1016,32 @@ echo \"[PHP] スクリプト実行完了\\n\";
 ?>
 EOF
 
+    # WordPressディレクトリに移動してPHPファイルを実行
     cd \"\$WP_PATH\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressディレクトリに移動: \$WP_PATH\" >> \"\$LOG_FILE\"
+    
+    # PHPファイルの存在確認
+    if [ ! -f \"\$TEMP_PHP_FILE\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPファイルが存在しません: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
+        exit 1
+    fi
+    
+    # PHPファイルを実行（タイムアウト付き）
     if command -v timeout &> /dev/null; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] タイムアウト付きでPHPを実行中...\" >> \"\$LOG_FILE\"
         timeout 120s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
     else
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPを実行中...\" >> \"\$LOG_FILE\"
         \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
     fi
+    
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
+    
+    # 一時ファイルを削除
     rm -f \"\$TEMP_PHP_FILE\"
+    
     if [ \"\$PHP_STATUS\" -eq 0 ]; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
     else
@@ -1008,8 +1049,11 @@ EOF
     fi
 fi
 
+# ロックファイルを削除
+rm -f \"\$LOCK_FILE\"
+
 # ログに実行終了を記録
-echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行終了\" >> \"\$LOG_FILE\"
+echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行終了 (PID: \$\$)\" >> \"\$LOG_FILE\"
 echo \"---\" >> \"\$LOG_FILE\"
 ";
     }
