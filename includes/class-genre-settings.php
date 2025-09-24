@@ -3202,7 +3202,7 @@ $('#cancel-edit').click(function() {
         
         // アトミックなロック取得（競合状態を防ぐ）
         $lock_acquired = false;
-        $max_attempts = 3;
+        $max_attempts = 5; // 試行回数を増加
         $attempt = 0;
         
         while ($attempt < $max_attempts && !$lock_acquired) {
@@ -3212,7 +3212,7 @@ $('#cancel-edit').click(function() {
             $existing_lock = get_transient($lock_key);
             if ($existing_lock !== false) {
                 error_log('Auto Posting Execution - Attempt ' . $attempt . ': Already running (lock value: ' . $existing_lock . '), waiting...');
-                sleep(1); // 1秒待機
+                usleep(500000); // 0.5秒待機（短縮）
                 continue;
             }
             
