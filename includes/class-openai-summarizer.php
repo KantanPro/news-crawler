@@ -38,11 +38,38 @@ class NewsCrawlerOpenAISummarizer {
      */
     private function log_initial_settings() {
         $basic_settings = get_option('news_crawler_basic_settings', array());
-        $masked_settings = $basic_settings;
-        if (isset($masked_settings['openai_api_key'])) {
-            $masked_settings['openai_api_key'] = '***masked***';
-        }
+        $masked_settings = $this->mask_sensitive_data($basic_settings);
         error_log('NewsCrawlerOpenAISummarizer: 初期設定 - ' . print_r($masked_settings, true));
+    }
+    
+    /**
+     * 機密データをマスクする
+     */
+    private function mask_sensitive_data($data) {
+        if (!is_array($data)) {
+            return $data;
+        }
+        
+        $sensitive_keys = [
+            'openai_api_key',
+            'youtube_api_key',
+            'unsplash_access_key',
+            'twitter_bearer_token',
+            'twitter_api_key',
+            'twitter_api_secret',
+            'twitter_access_token',
+            'twitter_access_token_secret',
+            'license_key'
+        ];
+        
+        $masked_data = $data;
+        foreach ($sensitive_keys as $key) {
+            if (isset($masked_data[$key]) && !empty($masked_data[$key])) {
+                $masked_data[$key] = '***masked***';
+            }
+        }
+        
+        return $masked_data;
     }
 
     /**

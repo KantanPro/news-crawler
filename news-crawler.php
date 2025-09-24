@@ -46,6 +46,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 
 
 // アップデータクラスを初期化（WordPress標準更新システム）
@@ -3038,7 +3039,7 @@ class NewsCrawler {
         error_log('NewsCrawler: API接続テスト開始');
         error_log('NewsCrawler: basic_settings存在: ' . (empty($basic_settings) ? 'false' : 'true'));
         error_log('NewsCrawler: APIキー長: ' . strlen($api_key));
-        error_log('NewsCrawler: APIキー先頭: ' . substr($api_key, 0, 10) . '...');
+        error_log('NewsCrawler: APIキー先頭: ' . (strlen($api_key) > 0 ? substr($api_key, 0, 4) . '***' : '未設定'));
 
         if (empty($api_key)) {
             // 代替の設定からもAPIキーを取得してみる

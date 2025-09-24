@@ -397,9 +397,9 @@ class NewsCrawler_License_Manager {
         // RFC 3986 形式でエンコード（スペースは%20、パイプは%7C など）
         $body_string = http_build_query( $payload, '', '&', PHP_QUERY_RFC3986 );
 
-        // 送信前ログ
+        // 送信前ログ（機密情報をマスク）
         error_log( 'NewsCrawler License: Outbound Request -> method=POST, url=' . $this->api_endpoints['verify'] . ', content_type=application/x-www-form-urlencoded; charset=UTF-8' );
-        error_log( 'NewsCrawler License: Outbound Payload (encoded) -> ' . $body_string );
+        error_log( 'NewsCrawler License: Outbound Payload (encoded) -> ' . $this->mask_license_key_in_payload($body_string) );
         error_log( 'NewsCrawler License: site_url(final)=' . $site_url );
         error_log( 'NewsCrawler License: API URL -> ' . $this->api_endpoints['verify'] );
         error_log( 'NewsCrawler License: Request Headers -> ' . json_encode( array(
@@ -1751,6 +1751,17 @@ class NewsCrawler_License_Manager {
         );
 
         wp_send_json_success( $results );
+    }
+    
+    /**
+     * ペイロード内のライセンスキーをマスクする
+     *
+     * @param string $payload
+     * @return string
+     */
+    private function mask_license_key_in_payload( $payload ) {
+        // license_key=の部分をマスク
+        return preg_replace( '/license_key=([^&]+)/', 'license_key=***masked***', $payload );
     }
 }
 

@@ -2543,9 +2543,9 @@ $('#cancel-edit').click(function() {
             }
             
             // デバッグログにレスポンス内容を記録
-            error_log('NewsCrawler: 実行結果レスポンス準備完了');
-            error_log('NewsCrawler: 最終結果長: ' . strlen($final_result));
-            error_log('NewsCrawler: 最終結果内容: ' . substr($final_result, 0, 500));
+            NewsCrawler_Secure_Logger::debug('実行結果レスポンス準備完了');
+            NewsCrawler_Secure_Logger::debug('最終結果長: ' . strlen($final_result));
+            NewsCrawler_Secure_Logger::debug('最終結果内容: ' . substr($final_result, 0, 500));
             
             // 出力バッファをクリアしてからJSONレスポンスを送信
             ob_end_clean();
@@ -2554,13 +2554,13 @@ $('#cancel-edit').click(function() {
             delete_transient('news_crawler_single_run_guard');
             
             // レスポンス送信前にログ出力
-            error_log('NewsCrawler: wp_send_json_success実行前 - posts_created: ' . $posts_created);
-            error_log('NewsCrawler: final_result preview: ' . substr($final_result, 0, 200));
+            NewsCrawler_Secure_Logger::debug('wp_send_json_success実行前 - posts_created: ' . $posts_created);
+            NewsCrawler_Secure_Logger::debug('final_result preview: ' . substr($final_result, 0, 200));
             wp_send_json_success(array(
                 'message' => $final_result,
                 'posts_created' => $posts_created
             ));
-            error_log('NewsCrawler: wp_send_json_success実行後');
+            NewsCrawler_Secure_Logger::debug('wp_send_json_success実行後');
             
         } catch (Exception $e) {
             // ガード解除
@@ -5211,29 +5211,29 @@ $('#cancel-edit').click(function() {
     private function get_debug_log_content() {
         try {
             $debug_log_path = WP_CONTENT_DIR . '/debug.log';
-            error_log('Get Debug Log - Path: ' . $debug_log_path);
+            NewsCrawler_Secure_Logger::debug('Get Debug Log - Path: ' . $debug_log_path);
             
             if (!file_exists($debug_log_path)) {
-                error_log('Get Debug Log - File not found');
+                NewsCrawler_Secure_Logger::debug('Get Debug Log - File not found');
                 return "デバッグログファイルが見つかりません。\n";
             }
             
             if (!is_readable($debug_log_path)) {
-                error_log('Get Debug Log - File not readable');
+                NewsCrawler_Secure_Logger::debug('Get Debug Log - File not readable');
                 return "デバッグログファイルが読み取りできません。\n";
             }
             
             $lines = file($debug_log_path, FILE_IGNORE_NEW_LINES);
             if ($lines === false) {
-                error_log('Get Debug Log - Failed to read file');
+                NewsCrawler_Secure_Logger::debug('Get Debug Log - Failed to read file');
                 return "デバッグログの読み込みに失敗しました。\n";
             }
             
-            error_log('Get Debug Log - Total lines: ' . count($lines));
+            NewsCrawler_Secure_Logger::debug('Get Debug Log - Total lines: ' . count($lines));
             
             // 最新の50行を取得
             $recent_lines = array_slice($lines, -50);
-            error_log('Get Debug Log - Recent lines: ' . count($recent_lines));
+            NewsCrawler_Secure_Logger::debug('Get Debug Log - Recent lines: ' . count($recent_lines));
             
             // News Crawler関連のログのみをフィルタリング
             $filtered_lines = array_filter($recent_lines, function($line) {
@@ -5242,7 +5242,7 @@ $('#cancel-edit').click(function() {
                        stripos($line, 'execute_auto_posting') !== false;
             });
             
-            error_log('Get Debug Log - Filtered lines: ' . count($filtered_lines));
+            NewsCrawler_Secure_Logger::debug('Get Debug Log - Filtered lines: ' . count($filtered_lines));
             
             if (empty($filtered_lines)) {
                 return "News Crawler関連のデバッグログは見つかりませんでした。\n";
