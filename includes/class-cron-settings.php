@@ -780,7 +780,7 @@ class NewsCrawlerCronSettings {
         
         return "#!/bin/bash
 # News Crawler Cron Script
-# 修正版 - " . date('Y-m-d H:i:s') . " (デバッグ機能強化版)
+# 修正版 - " . date('Y-m-d H:i:s') . " (同時実行防止強化版)
 
 set -euo pipefail
 
@@ -807,35 +807,75 @@ PLUGIN_PATH=\"\$SCRIPT_DIR/\"
 # ログファイルのパス
 LOG_FILE=\"\$SCRIPT_DIR/news-crawler-cron.log\"
 
-# 同時実行防止のためのロックファイル
+# 同時実行防止のためのロックファイル（強化版）
 LOCK_FILE=\"\$SCRIPT_DIR/news-crawler-cron.lock\"
-LOCK_TIMEOUT=600  # 10分間のロック
+LOCK_TIMEOUT=300  # 5分間のロック（短縮）
+MAX_RETRIES=3     # 最大再試行回数
+RETRY_DELAY=2     # 再試行間隔（秒）
 
 # ロックファイルの存在チェックと作成（アトミック操作）
-if ! (set -C; echo \"\$\$\" > \"\$LOCK_FILE\") 2>/dev/null; then
-    # ロックファイルが既に存在する場合
-    if [ -f \"\$LOCK_FILE\" ]; then
-        # ロックファイルの作成時刻をチェック（より確実な方法）
-        LOCK_TIME=\$(stat -c %Y \"\$LOCK_FILE\" 2>/dev/null || stat -f %m \"\$LOCK_FILE\" 2>/dev/null || echo 0)
-        CURRENT_TIME=\$(date +%s)
-        LOCK_AGE=\$((CURRENT_TIME - LOCK_TIME))
-        
-        if [ \$LOCK_AGE -gt \$LOCK_TIMEOUT ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除 (age: \$LOCK_AGE秒): \$LOCK_FILE\" >> \"\$LOG_FILE\"
-            rm -f \"\$LOCK_FILE\"
-            # 再試行
-            if ! (set -C; echo \"\$\$\" > \"\$LOCK_FILE\") 2>/dev/null; then
-                echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗: \$LOCK_FILE\" >> \"\$LOG_FILE\"
-                exit 1
+lock_acquired=false
+retry_count=0
+
+while [ \$retry_count -lt \$MAX_RETRIES ] && [ \"\$lock_acquired\" = false ]; do
+    retry_count=\$((retry_count + 1))
+    
+    # ロックファイルの作成を試行
+    if (set -C; echo \"\$\$\" > \"\$LOCK_FILE\") 2>/dev/null; then
+        # ロックファイルが作成された場合、PIDが正しいか確認
+        if [ -f \"\$LOCK_FILE\" ]; then
+            lock_pid=\$(cat \"\$LOCK_FILE\" 2>/dev/null || echo \"\")
+            if [ \"\$lock_pid\" = \"\$\$\" ]; then
+                lock_acquired=true
+                echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルを取得しました (PID: \$\$, 試行: \$retry_count)\" >> \"\$LOG_FILE\"
+            else
+                echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルのPIDが一致しません (expected: \$\$, actual: \$lock_pid, 試行: \$retry_count)\" >> \"\$LOG_FILE\"
+                rm -f \"\$LOCK_FILE\"
+                sleep \$RETRY_DELAY
             fi
         else
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップ (age: \$LOCK_AGE秒): \$LOCK_FILE\" >> \"\$LOG_FILE\"
-            exit 0
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗 (試行: \$retry_count)\" >> \"\$LOG_FILE\"
+            sleep \$RETRY_DELAY
         fi
     else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗: \$LOCK_FILE\" >> \"\$LOG_FILE\"
-        exit 1
+        # ロックファイルが既に存在する場合
+        if [ -f \"\$LOCK_FILE\" ]; then
+            # ロックファイルの作成時刻をチェック
+            LOCK_TIME=\$(stat -c %Y \"\$LOCK_FILE\" 2>/dev/null || stat -f %m \"\$LOCK_FILE\" 2>/dev/null || echo 0)
+            CURRENT_TIME=\$(date +%s)
+            LOCK_AGE=\$((CURRENT_TIME - LOCK_TIME))
+            
+            # ロックファイルのPIDを確認
+            lock_pid=\$(cat \"\$LOCK_FILE\" 2>/dev/null || echo \"\")
+            
+            # プロセスが実際に実行中かチェック
+            if [ -n \"\$lock_pid\" ] && kill -0 \"\$lock_pid\" 2>/dev/null; then
+                # プロセスが実行中の場合
+                if [ \$LOCK_AGE -gt \$LOCK_TIMEOUT ]; then
+                    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 古いロックファイルを削除 (age: \$LOCK_AGE秒, PID: \$lock_pid, 試行: \$retry_count)\" >> \"\$LOG_FILE\"
+                    rm -f \"\$LOCK_FILE\"
+                    sleep \$RETRY_DELAY
+                else
+                    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 既に実行中のためスキップ (age: \$LOCK_AGE秒, PID: \$lock_pid, 試行: \$retry_count)\" >> \"\$LOG_FILE\"
+                    exit 0
+                fi
+            else
+                # プロセスが存在しない場合、ロックファイルを削除
+                echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 存在しないプロセスのロックファイルを削除 (PID: \$lock_pid, 試行: \$retry_count)\" >> \"\$LOG_FILE\"
+                rm -f \"\$LOCK_FILE\"
+                sleep \$RETRY_DELAY
+            fi
+        else
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの作成に失敗 (試行: \$retry_count)\" >> \"\$LOG_FILE\"
+            sleep \$RETRY_DELAY
+        fi
     fi
+done
+
+# ロックが取得できなかった場合
+if [ \"\$lock_acquired\" = false ]; then
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルの取得に失敗しました（\$MAX_RETRIES回試行後）\" >> \"\$LOG_FILE\"
+    exit 1
 fi
 
 # ログに実行開始を記録
@@ -843,6 +883,48 @@ echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行開始 (PID: \$\$
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] スクリプトディレクトリ: \$SCRIPT_DIR\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressパス: \$WP_PATH\" >> \"\$LOG_FILE\"
 echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: \$PLUGIN_PATH\" >> \"\$LOG_FILE\"
+
+# 実行時間制限を設定（5分でタイムアウト）
+TIMEOUT_SECONDS=300
+START_TIME=\$(date +%s)
+
+# エラーハンドリング用の関数
+cleanup_and_exit() {
+    local exit_code=\$1
+    local error_message=\$2
+    
+    # 実行時間を計算
+    local end_time=\$(date +%s)
+    local execution_time=\$((end_time - START_TIME))
+    
+    # エラーログを記録
+    if [ -n \"\$error_message\" ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: \$error_message (実行時間: \$execution_time秒)\" >> \"\$LOG_FILE\"
+    fi
+    
+    # ロックファイルを削除
+    rm -f \"\$LOCK_FILE\"
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ロックファイルを削除しました\" >> \"\$LOG_FILE\"
+    
+    # 実行終了を記録
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行終了 (PID: \$\$, 実行時間: \$execution_time秒, 終了コード: \$exit_code)\" >> \"\$LOG_FILE\"
+    echo \"---\" >> \"\$LOG_FILE\"
+    
+    exit \$exit_code
+}
+
+# タイムアウトチェック用の関数
+check_timeout() {
+    local current_time=\$(date +%s)
+    local elapsed_time=\$((current_time - START_TIME))
+    
+    if [ \$elapsed_time -gt \$TIMEOUT_SECONDS ]; then
+        cleanup_and_exit 1 \"実行時間が制限を超えました (\$elapsed_time秒 > \$TIMEOUT_SECONDS秒)\"
+    fi
+}
+
+# シグナルハンドラーを設定
+trap 'cleanup_and_exit 130 \"スクリプトが中断されました\"' INT TERM
 
 # Docker環境チェック（Mac開発環境用）
 if command -v docker &> /dev/null && docker ps --format \"{{.Names}}\" | grep -q \"KantanPro_wordpress\"; then
@@ -902,7 +984,7 @@ DOCKER_EOF
     if [ \"\$PHP_STATUS\" -eq 0 ]; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
     else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Docker環境での実行でエラー (exit=\$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"Docker環境での実行でエラー (exit=\$PHP_STATUS)\"
     fi
 # wp-cliが存在する場合は優先して使用（サーバー環境）
 elif command -v wp &> /dev/null; then
@@ -916,7 +998,7 @@ elif command -v wp &> /dev/null; then
         } else {
             echo 'News CrawlerGenreSettingsクラスが見つかりません';
         }
-    \" >> \"\$LOG_FILE\" 2>&1 || echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli実行でエラー\" >> \"\$LOG_FILE\"
+    \" >> \"\$LOG_FILE\" 2>&1 || cleanup_and_exit 1 \"wp-cli実行でエラー\"
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] wp-cli経由でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
 else
     # wp-cliが無い場合はPHP直接実行
@@ -932,8 +1014,7 @@ else
     done
 
     if [ -z \"\$PHP_CMD\" ]; then
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPコマンドが見つかりません。スクリプトを終了します。\" >> \"\$LOG_FILE\"
-        exit 1
+        cleanup_and_exit 1 \"PHPコマンドが見つかりません\"
     fi
 
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: \$PHP_CMD\" >> \"\$LOG_FILE\"
@@ -943,7 +1024,7 @@ else
     
     # エラーハンドリングを強化
     set -e
-    trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; exit 1' ERR
+    trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; cleanup_and_exit 1 \"スクリプト実行中にエラーが発生しました\";' ERR
     
     cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
@@ -1033,8 +1114,7 @@ EOF
     
     # PHPファイルの存在確認
     if [ ! -f \"\$TEMP_PHP_FILE\" ]; then
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHPファイルが存在しません: \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
-        exit 1
+        cleanup_and_exit 1 \"PHPファイルが存在しません: \$TEMP_PHP_FILE\"
     fi
     
     # PHPファイルを実行（タイムアウト付き）
@@ -1056,16 +1136,12 @@ EOF
     if [ \"\$PHP_STATUS\" -eq 0 ]; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
     else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でエラー (exit=\$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"PHP直接実行でエラー (exit=\$PHP_STATUS)\"
     fi
 fi
 
-# ロックファイルを削除
-rm -f \"\$LOCK_FILE\"
-
-# ログに実行終了を記録
-echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] News Crawler Cron 実行終了 (PID: \$\$)\" >> \"\$LOG_FILE\"
-echo \"---\" >> \"\$LOG_FILE\"
+# 正常終了
+cleanup_and_exit 0 \"正常に完了しました\"
 ";
     }
     
