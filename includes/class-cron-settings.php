@@ -1051,8 +1051,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);  // 出力を抑制
 ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/php-errors.log');
-ini_set('memory_limit', '256M');  // メモリ制限を設定
-set_time_limit(20);  // 実行時間制限を短縮
+ini_set('memory_limit', '512M');  // メモリ制限を増加
+set_time_limit(60);  // 実行時間制限を延長
 
 // 出力バッファリングを無効化
 while (ob_get_level()) {
@@ -1119,8 +1119,11 @@ if (class_exists('NewsCrawlerGenreSettings')) {
         \$genre_settings = NewsCrawlerGenreSettings::get_instance();
         \$log('[PHP] インスタンス取得成功');
         \$log('[PHP] 自動投稿実行開始');
+        \$start_time = microtime(true);
         \$result = \$genre_settings->execute_auto_posting();
-        \$log('[PHP] 自動投稿完了: ' . json_encode(\$result));
+        \$end_time = microtime(true);
+        \$execution_time = round(\$end_time - \$start_time, 2);
+        \$log('[PHP] 自動投稿完了: ' . json_encode(\$result) . ' (実行時間: ' . \$execution_time . '秒)');
     } catch (Exception \$e) {
         \$log('[PHP] 実行エラー: ' . \$e->getMessage());
     } catch (Error \$e) {
@@ -1277,8 +1280,8 @@ WPTEST
     
     # 元のPHPファイルを実行
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ4: 元のPHPファイル実行\" >> \"\$LOG_FILE\"
-    timeout 20s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
-        PHP_STATUS=\$?
+    timeout 90s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+    PHP_STATUS=\$?
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 元のPHPファイル実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     
     # 実行結果をログに追加
