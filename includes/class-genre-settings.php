@@ -3314,15 +3314,28 @@ $('#cancel-edit').click(function() {
                 }
             }
             
-            // 候補数チェック
+            // 候補数チェック（緊急モード：設定が正しければスキップしない）
             $cache_key = 'news_crawler_available_count_' . $genre_id;
             $available_candidates = get_transient($cache_key);
-            if ($available_candidates === false || $available_candidates <= 0) {
-                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no available candidates (cached: ' . ($available_candidates === false ? 'false' : $available_candidates) . ')';
+            
+            // 緊急モード：候補数が0でも、設定が正しければ実行を許可
+            $has_valid_config = false;
+            if ($setting['content_type'] === 'news' && !empty($setting['keywords']) && !empty($setting['news_sources'])) {
+                $has_valid_config = true;
+            } else if ($setting['content_type'] === 'youtube' && !empty($setting['keywords']) && !empty($setting['youtube_channels'])) {
+                $has_valid_config = true;
+            }
+            
+            if (($available_candidates === false || $available_candidates <= 0) && !$has_valid_config) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has no available candidates (cached: ' . ($available_candidates === false ? 'false' : $available_candidates) . ') and invalid config';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 $skipped_count++;
                 continue;
+            } else if ($has_valid_config && ($available_candidates === false || $available_candidates <= 0)) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has valid config, proceeding despite no cached candidates';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             }
             
             $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' has auto_posting enabled';
@@ -3373,16 +3386,16 @@ $('#cancel-edit').click(function() {
                     if (method_exists($this, 'count_available_news_candidates')) {
                         $candidates = $this->count_available_news_candidates($genre_id);
                     } else {
-                        // 代替実装：設定が正しければ候補ありとみなす
-                        $candidates = (!empty($setting['keywords']) && !empty($setting['news_sources'])) ? 1 : 0;
+                        // 代替実装：設定が正しければ候補ありとみなす（より寛容に）
+                        $candidates = (!empty($setting['keywords']) && !empty($setting['news_sources'])) ? 5 : 0;
                         error_log('Auto Posting Execution - count_available_news_candidates method not found, using fallback logic: ' . $candidates);
                     }
                 } else if ($setting['content_type'] === 'youtube') {
                     if (method_exists($this, 'count_available_youtube_candidates')) {
                         $candidates = $this->count_available_youtube_candidates($genre_id);
                     } else {
-                        // 代替実装：設定が正しければ候補ありとみなす
-                        $candidates = (!empty($setting['keywords']) && !empty($setting['youtube_channels'])) ? 1 : 0;
+                        // 代替実装：設定が正しければ候補ありとみなす（より寛容に）
+                        $candidates = (!empty($setting['keywords']) && !empty($setting['youtube_channels'])) ? 5 : 0;
                         error_log('Auto Posting Execution - count_available_youtube_candidates method not found, using fallback logic: ' . $candidates);
                     }
                 } else {

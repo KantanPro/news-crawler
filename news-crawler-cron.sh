@@ -14,12 +14,12 @@ PLUGIN_PATH="$SCRIPT_DIR/"
 # ログファイルのパス
 LOG_FILE="$SCRIPT_DIR/news-crawler-cron.log"
 
-# 重複実行防止のためのロックファイル
+# 重複実行防止のためのロックファイル（超強化版）
 LOCK_FILE="/tmp/news-crawler-cron.lock"
-LOCK_TIMEOUT=600  # 10分間のロック
+LOCK_TIMEOUT=1800  # 30分間のロック（長めに設定）
 LOCK_RETRY_COUNT=0
-MAX_RETRY=3
-LOCK_RETRY_DELAY=10
+MAX_RETRY=1  # 再試行回数を減らす
+LOCK_RETRY_DELAY=30  # 待機時間を長くする
 
 # ログ関数
 log_message() {
@@ -79,11 +79,13 @@ detect_wordpress_path() {
     return 1
 }
 
-# 既存のロックファイルをチェックしてクリーンアップ
+# 既存のロックファイルをチェックしてクリーンアップ（超強化版）
 cleanup_lock_file() {
     if [ -f "$LOCK_FILE" ]; then
         local lock_age=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0)))
         local lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+        
+        log_message "ロックファイル発見 - 経過時間: ${lock_age}秒, PID: $lock_pid"
         
         if [ $lock_age -lt $LOCK_TIMEOUT ]; then
             # プロセスIDをチェックして、実際に実行中かどうか確認
@@ -93,13 +95,15 @@ cleanup_lock_file() {
             else
                 # 古いロックファイルを削除
                 rm -f "$LOCK_FILE"
-                log_message "古いロックファイルを削除しました (PID: $lock_pid)"
+                log_message "古いロックファイルを削除しました (PID: $lock_pid は存在しません)"
             fi
         else
             # 古いロックファイルを削除
             rm -f "$LOCK_FILE"
-            log_message "古いロックファイルを削除しました (経過時間: ${lock_age}秒)"
+            log_message "古いロックファイルを削除しました (経過時間: ${lock_age}秒 > ${LOCK_TIMEOUT}秒)"
         fi
+    else
+        log_message "ロックファイルは存在しません"
     fi
 }
 
@@ -180,9 +184,13 @@ main() {
         exit 1
     fi
     
-    # 一時ディレクトリを作成
+    # 一時ディレクトリを作成（本番環境用）
     local temp_dir="/tmp/news-crawler-temp-$$"
-    mkdir -p "$temp_dir"
+    mkdir -p "$temp_dir" 2>/dev/null || {
+        # フォールバック：プラグインディレクトリ内に作成
+        temp_dir="$SCRIPT_DIR/temp-$$"
+        mkdir -p "$temp_dir"
+    }
     
     # PHPスクリプトを実行
     log_message "PHP直接実行でNews Crawlerを実行中..."

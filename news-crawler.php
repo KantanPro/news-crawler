@@ -46,6 +46,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-debug-manager.php';
 
 
 // アップデータクラスを初期化（WordPress標準更新システム）
