@@ -3368,21 +3368,22 @@ $('#cancel-edit').click(function() {
                 error_log('Auto Posting Execution - Initializing candidate cache for genre: ' . $setting['genre_name']);
                 
                 // 候補数を計算してキャッシュに保存
+                $candidates = 0;
                 if ($setting['content_type'] === 'news') {
                     if (method_exists($this, 'count_available_news_candidates')) {
                         $candidates = $this->count_available_news_candidates($genre_id);
                     } else {
-                        // 代替実装：基本的な候補数として1を設定
-                        $candidates = 1;
-                        error_log('Auto Posting Execution - count_available_news_candidates method not found, using default value: 1');
+                        // 代替実装：設定が正しければ候補ありとみなす
+                        $candidates = (!empty($setting['keywords']) && !empty($setting['news_sources'])) ? 1 : 0;
+                        error_log('Auto Posting Execution - count_available_news_candidates method not found, using fallback logic: ' . $candidates);
                     }
                 } else if ($setting['content_type'] === 'youtube') {
                     if (method_exists($this, 'count_available_youtube_candidates')) {
                         $candidates = $this->count_available_youtube_candidates($genre_id);
                     } else {
-                        // 代替実装：基本的な候補数として1を設定
-                        $candidates = 1;
-                        error_log('Auto Posting Execution - count_available_youtube_candidates method not found, using default value: 1');
+                        // 代替実装：設定が正しければ候補ありとみなす
+                        $candidates = (!empty($setting['keywords']) && !empty($setting['youtube_channels'])) ? 1 : 0;
+                        error_log('Auto Posting Execution - count_available_youtube_candidates method not found, using fallback logic: ' . $candidates);
                     }
                 } else {
                     $candidates = 0;

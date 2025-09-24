@@ -88611,3 +88611,132 @@ Content-type: text/html; charset=UTF-8
 [2025-09-24 11:22:14] News Crawler Cron 実行終了
 ---
 [2025-09-24 11:22:14] ロックファイルを削除しました
+[2025-09-24 11:32:37] News Crawler Cron 実行開始
+[2025-09-24 11:32:37] スクリプトディレクトリ: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler
+[2025-09-24 11:32:37] WordPressパスを検出: /Users/kantanpro/Desktop/KantanPro/wordpress/
+[2025-09-24 11:32:37] プラグインパス: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/
+[2025-09-24 11:32:37] ロック取得成功 (PID: 47204)
+[2025-09-24 11:32:37] 使用するPHPコマンド: /usr/local/bin/php
+[2025-09-24 11:32:37] PHP直接実行でNews Crawlerを実行中...
+[2025-09-24 11:32:37] [PHP] 実行開始 - ディレクトリ: /private/tmp/news-crawler-temp-47204
+[2025-09-24 11:32:37] [PHP] wp-load.phpを発見: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-load.php
+[2025-09-24 11:32:37] [PHP] wp-load.php読み込み開始: /Users/kantanpro/Desktop/KantanPro/wordpress/wp-load.php
+[2025-09-24 11:32:37] <!DOCTYPE html>
+[2025-09-24 11:32:37] <html dir='ltr'>
+[2025-09-24 11:32:37] <head>
+[2025-09-24 11:32:37] 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+[2025-09-24 11:32:37] 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+[2025-09-24 11:32:37] 			<title>データベースエラー</title>
+[2025-09-24 11:32:37] 	<style type="text/css">
+[2025-09-24 11:32:37] 		html {
+[2025-09-24 11:32:37] 			background: #f1f1f1;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		body {
+[2025-09-24 11:32:37] 			background: #fff;
+[2025-09-24 11:32:37] 			border: 1px solid #ccd0d4;
+[2025-09-24 11:32:37] 			color: #444;
+[2025-09-24 11:32:37] 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+[2025-09-24 11:32:37] 			margin: 2em auto;
+[2025-09-24 11:32:37] 			padding: 1em 2em;
+[2025-09-24 11:32:37] 			max-width: 700px;
+[2025-09-24 11:32:37] 			-webkit-box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+[2025-09-24 11:32:37] 			box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		h1 {
+[2025-09-24 11:32:37] 			border-bottom: 1px solid #dadada;
+[2025-09-24 11:32:37] 			clear: both;
+[2025-09-24 11:32:37] 			color: #666;
+[2025-09-24 11:32:37] 			font-size: 24px;
+[2025-09-24 11:32:37] 			margin: 30px 0 0 0;
+[2025-09-24 11:32:37] 			padding: 0;
+[2025-09-24 11:32:37] 			padding-bottom: 7px;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		#error-page {
+[2025-09-24 11:32:37] 			margin-top: 50px;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		#error-page p,
+[2025-09-24 11:32:37] 		#error-page .wp-die-message {
+[2025-09-24 11:32:37] 			font-size: 14px;
+[2025-09-24 11:32:37] 			line-height: 1.5;
+[2025-09-24 11:32:37] 			margin: 25px 0 20px;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		#error-page code {
+[2025-09-24 11:32:37] 			font-family: Consolas, Monaco, monospace;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		ul li {
+[2025-09-24 11:32:37] 			margin-bottom: 10px;
+[2025-09-24 11:32:37] 			font-size: 14px ;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		a {
+[2025-09-24 11:32:37] 			color: #2271b1;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		a:hover,
+[2025-09-24 11:32:37] 		a:active {
+[2025-09-24 11:32:37] 			color: #135e96;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		a:focus {
+[2025-09-24 11:32:37] 			color: #043959;
+[2025-09-24 11:32:37] 			box-shadow: 0 0 0 2px #2271b1;
+[2025-09-24 11:32:37] 			outline: 2px solid transparent;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 		.button {
+[2025-09-24 11:32:37] 			background: #f3f5f6;
+[2025-09-24 11:32:37] 			border: 1px solid #016087;
+[2025-09-24 11:32:37] 			color: #016087;
+[2025-09-24 11:32:37] 			display: inline-block;
+[2025-09-24 11:32:37] 			text-decoration: none;
+[2025-09-24 11:32:37] 			font-size: 13px;
+[2025-09-24 11:32:37] 			line-height: 2;
+[2025-09-24 11:32:37] 			height: 28px;
+[2025-09-24 11:32:37] 			margin: 0;
+[2025-09-24 11:32:37] 			padding: 0 10px 1px;
+[2025-09-24 11:32:37] 			cursor: pointer;
+[2025-09-24 11:32:37] 			-webkit-border-radius: 3px;
+[2025-09-24 11:32:37] 			-webkit-appearance: none;
+[2025-09-24 11:32:37] 			border-radius: 3px;
+[2025-09-24 11:32:37] 			white-space: nowrap;
+[2025-09-24 11:32:37] 			-webkit-box-sizing: border-box;
+[2025-09-24 11:32:37] 			-moz-box-sizing:    border-box;
+[2025-09-24 11:32:37] 			box-sizing:         border-box;
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 			vertical-align: top;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 		.button.button-large {
+[2025-09-24 11:32:37] 			line-height: 2.30769231;
+[2025-09-24 11:32:37] 			min-height: 32px;
+[2025-09-24 11:32:37] 			padding: 0 12px;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 		.button:hover,
+[2025-09-24 11:32:37] 		.button:focus {
+[2025-09-24 11:32:37] 			background: #f1f1f1;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 		.button:focus {
+[2025-09-24 11:32:37] 			background: #f3f5f6;
+[2025-09-24 11:32:37] 			border-color: #007cba;
+[2025-09-24 11:32:37] 			-webkit-box-shadow: 0 0 0 1px #007cba;
+[2025-09-24 11:32:37] 			box-shadow: 0 0 0 1px #007cba;
+[2025-09-24 11:32:37] 			color: #016087;
+[2025-09-24 11:32:37] 			outline: 2px solid transparent;
+[2025-09-24 11:32:37] 			outline-offset: 0;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 		.button:active {
+[2025-09-24 11:32:37] 			background: #f3f5f6;
+[2025-09-24 11:32:37] 			border-color: #7e8993;
+[2025-09-24 11:32:37] 			-webkit-box-shadow: none;
+[2025-09-24 11:32:37] 			box-shadow: none;
+[2025-09-24 11:32:37] 		}
+[2025-09-24 11:32:37] 
+[2025-09-24 11:32:37] 			</style>
+[2025-09-24 11:32:37] </head>
+[2025-09-24 11:32:37] <body id="error-page">
+[2025-09-24 11:32:37] 	<div class="wp-die-message"><h1>データベース接続確立エラー</h1></div></body>
+[2025-09-24 11:32:37] </html>
+[2025-09-24 11:32:37] PHP exit status: 0
+[2025-09-24 11:32:37] PHP直接実行でNews Crawlerを実行しました
+[2025-09-24 11:32:37] News Crawler Cron 実行終了
+---
+[2025-09-24 11:32:37] ロックファイルを削除しました
