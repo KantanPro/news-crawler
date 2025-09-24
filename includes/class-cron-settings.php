@@ -1046,117 +1046,91 @@ else
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ3: PHPファイル内容を書き込み中...\" >> \"\$LOG_FILE\"
     cat > \"\$TEMP_PHP_FILE\" << 'EOF'
 <?php
-// 基本的なエラーレポート設定
+// 安全な実行設定
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);  // 出力を抑制
 ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/php-errors.log');
-set_time_limit(30);
+ini_set('memory_limit', '256M');  // メモリ制限を設定
+set_time_limit(20);  // 実行時間制限を短縮
 
 // 出力バッファリングを無効化
-if (ob_get_level()) {
+while (ob_get_level()) {
     ob_end_clean();
 }
 
-echo \"[PHP] 実行開始 - 時刻: \" . date('Y-m-d H:i:s') . \"\\n\";
-echo \"[PHP] 現在のディレクトリ: \" . getcwd() . \"\\n\";
-echo \"[PHP] スクリプトファイル: \" . __FILE__ . \"\\n\";
-echo \"[PHP] PHPバージョン: \" . phpversion() . \"\\n\";
-echo \"[PHP] メモリ制限: \" . ini_get('memory_limit') . \"\\n\";
+// ログファイルに直接書き込み
+\$log_file = '/tmp/php-execution.log';
+\$log = function(\$message) use (\$log_file) {
+    file_put_contents(\$log_file, date('Y-m-d H:i:s') . ' ' . \$message . \"\\n\", FILE_APPEND | LOCK_EX);
+};
 
-// 段階的な実行
-echo \"[PHP] ステップ1: 基本設定完了\\n\";
-flush();
+\$log('[PHP] 実行開始');
+\$log('[PHP] 現在のディレクトリ: ' . getcwd());
+\$log('[PHP] PHPバージョン: ' . phpversion());
+\$log('[PHP] メモリ制限: ' . ini_get('memory_limit'));
 
 // WordPressパスの検索
-echo \"[PHP] ステップ2: WordPressパス検索開始\\n\";
-flush();
-
+\$log('[PHP] WordPressパス検索開始');
 \$wp_paths = array(
     '/virtual/kantan/public_html/wp-load.php',
-    '/var/www/html/wp-load.php',
-    dirname(__FILE__) . '/../../../wp-load.php'
+    '/var/www/html/wp-load.php'
 );
 
 \$wp_load_path = null;
 foreach (\$wp_paths as \$path) {
-    echo \"[PHP] パス確認: \" . \$path . \"\\n\";
-    flush();
+    \$log('[PHP] パス確認: ' . \$path);
     if (file_exists(\$path)) {
         \$wp_load_path = \$path;
-        echo \"[PHP] wp-load.phpを発見: \" . \$path . \"\\n\";
-        flush();
+        \$log('[PHP] wp-load.phpを発見: ' . \$path);
         break;
-    } else {
-        echo \"[PHP] 存在しない: \" . \$path . \"\\n\";
-        flush();
     }
 }
 
 if (!\$wp_load_path) {
-    echo \"[PHP] エラー: wp-load.phpが見つかりません\\n\";
-    flush();
+    \$log('[PHP] エラー: wp-load.phpが見つかりません');
     exit(1);
 }
 
-echo \"[PHP] ステップ3: WordPress読み込み開始\\n\";
-flush();
-
+// WordPress読み込み
+\$log('[PHP] WordPress読み込み開始');
 try {
     require_once(\$wp_load_path);
-    echo \"[PHP] WordPress読み込み成功\\n\";
-    flush();
+    \$log('[PHP] WordPress読み込み成功');
 } catch (Exception \$e) {
-    echo \"[PHP] WordPress読み込みエラー: \" . \$e->getMessage() . \"\\n\";
-    flush();
+    \$log('[PHP] WordPress読み込みエラー: ' . \$e->getMessage());
     exit(1);
 } catch (Error \$e) {
-    echo \"[PHP] WordPress読み込みFatal Error: \" . \$e->getMessage() . \"\\n\";
-    flush();
+    \$log('[PHP] WordPress読み込みFatal Error: ' . \$e->getMessage());
     exit(1);
 }
 
-echo \"[PHP] ステップ4: WordPress関数確認\\n\";
-flush();
-
-if (function_exists('get_option')) {
-    echo \"[PHP] get_option関数: 利用可能\\n\";
-    flush();
-} else {
-    echo \"[PHP] エラー: get_option関数が利用できません\\n\";
-    flush();
+// WordPress関数確認
+if (!function_exists('get_option')) {
+    \$log('[PHP] エラー: get_option関数が利用できません');
     exit(1);
 }
+\$log('[PHP] WordPress関数確認完了');
 
-echo \"[PHP] ステップ5: NewsCrawlerGenreSettingsクラス確認\\n\";
-flush();
-
+// NewsCrawlerGenreSettingsクラス確認
 if (class_exists('NewsCrawlerGenreSettings')) {
-    echo \"[PHP] クラス発見\\n\";
-    flush();
+    \$log('[PHP] NewsCrawlerGenreSettingsクラス発見');
     try {
         \$genre_settings = NewsCrawlerGenreSettings::get_instance();
-        echo \"[PHP] インスタンス取得成功\\n\";
-        flush();
-        echo \"[PHP] 自動投稿実行開始\\n\";
-        flush();
+        \$log('[PHP] インスタンス取得成功');
+        \$log('[PHP] 自動投稿実行開始');
         \$result = \$genre_settings->execute_auto_posting();
-        echo \"[PHP] 自動投稿完了: \" . json_encode(\$result) . \"\\n\";
-        flush();
+        \$log('[PHP] 自動投稿完了: ' . json_encode(\$result));
     } catch (Exception \$e) {
-        echo \"[PHP] 実行エラー: \" . \$e->getMessage() . \"\\n\";
-        flush();
+        \$log('[PHP] 実行エラー: ' . \$e->getMessage());
     } catch (Error \$e) {
-        echo \"[PHP] 実行Fatal Error: \" . \$e->getMessage() . \"\\n\";
-        flush();
+        \$log('[PHP] 実行Fatal Error: ' . \$e->getMessage());
     }
 } else {
-    echo \"[PHP] NewsCrawlerGenreSettingsクラスが見つかりません\\n\";
-    flush();
+    \$log('[PHP] NewsCrawlerGenreSettingsクラスが見つかりません');
 }
 
-echo \"[PHP] スクリプト実行完了\\n\";
-flush();
+\$log('[PHP] スクリプト実行完了');
 ?>
 EOF
 
@@ -1219,27 +1193,43 @@ EOF
     # PHP実行の詳細ログ
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行コマンド: \$PHP_CMD \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
     
-    # まず短いタイムアウトでテスト実行
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] テスト実行開始 (10秒タイムアウト)\" >> \"\$LOG_FILE\"
-    if command -v timeout &> /dev/null; then
-        timeout 10s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+    # より安全な実行方法を試行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 安全な実行方法でPHPを実行中...\" >> \"\$LOG_FILE\"
+    
+    # 方法1: バックグラウンド実行でテスト
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 方法1: バックグラウンド実行テスト\" >> \"\$LOG_FILE\"
+    nohup \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" > /tmp/php-output.log 2>&1 &
+    PHP_PID=\$!
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセス開始 (PID: \$PHP_PID)\" >> \"\$LOG_FILE\"
+    
+    # 5秒待機してプロセス状態を確認
+    sleep 5
+    if kill -0 \"\$PHP_PID\" 2>/dev/null; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセスは実行中です\" >> \"\$LOG_FILE\"
+        # プロセスを終了
+        kill \"\$PHP_PID\" 2>/dev/null
+        wait \"\$PHP_PID\" 2>/dev/null
         PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] テスト実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プロセス終了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
         
-        if [ \"\$PHP_STATUS\" -eq 124 ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] タイムアウトが発生しました (10秒)\" >> \"\$LOG_FILE\"
-        elif [ \"\$PHP_STATUS\" -eq 143 ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プロセスが強制終了されました (SIGTERM)\" >> \"\$LOG_FILE\"
-        elif [ \"\$PHP_STATUS\" -eq 0 ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] テスト実行が正常に完了しました\" >> \"\$LOG_FILE\"
-        else
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] テスト実行でエラーが発生しました (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        # 出力をログに追加
+        if [ -f /tmp/php-output.log ]; then
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP出力:\" >> \"\$LOG_FILE\"
+            cat /tmp/php-output.log >> \"\$LOG_FILE\"
+            rm -f /tmp/php-output.log
         fi
     else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] timeoutコマンドが利用できません。直接実行します\" >> \"\$LOG_FILE\"
-        \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセスは既に終了しています\" >> \"\$LOG_FILE\"
+        wait \"\$PHP_PID\" 2>/dev/null
         PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 直接実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プロセス終了確認 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+        
+        # 出力をログに追加
+        if [ -f /tmp/php-output.log ]; then
+            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP出力:\" >> \"\$LOG_FILE\"
+            cat /tmp/php-output.log >> \"\$LOG_FILE\"
+            rm -f /tmp/php-output.log
+        fi
     fi
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
