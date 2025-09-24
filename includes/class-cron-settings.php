@@ -1062,7 +1062,7 @@ while (ob_get_level()) {
 // ログファイルに直接書き込み
 \$log_file = '/tmp/php-execution.log';
 \$log = function(\$message) use (\$log_file) {
-    file_put_contents(\$log_file, date('Y-m-d H:i:s') . ' ' . \$message . \"\\n\", FILE_APPEND | LOCK_EX);
+    file_put_contents(\$log_file, date('Y-m-d H:i:s') . ' ' . \$message . PHP_EOL, FILE_APPEND | LOCK_EX);
 };
 
 \$log('[PHP] 実行開始');
@@ -1219,40 +1219,40 @@ ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/wp-test-errors.log');
 set_time_limit(15);
 
-$log_file = '/tmp/wp-test.log';
-$log = function($message) use ($log_file) {
-    file_put_contents($log_file, date('Y-m-d H:i:s') . ' ' . $message . PHP_EOL, FILE_APPEND | LOCK_EX);
+\$log_file = '/tmp/wp-test.log';
+\$log = function(\$message) use (\$log_file) {
+    file_put_contents(\$log_file, date('Y-m-d H:i:s') . ' ' . \$message . PHP_EOL, FILE_APPEND | LOCK_EX);
 };
 
-$log('[WP-TEST] 開始');
-$log('[WP-TEST] 現在のディレクトリ: ' . getcwd());
+\$log('[WP-TEST] 開始');
+\$log('[WP-TEST] 現在のディレクトリ: ' . getcwd());
 
 // WordPressパス確認
-$wp_path = '/virtual/kantan/public_html/wp-load.php';
-$log('[WP-TEST] WordPressパス確認: ' . $wp_path);
-$log('[WP-TEST] ファイル存在: ' . (file_exists($wp_path) ? 'YES' : 'NO'));
+\$wp_path = '/virtual/kantan/public_html/wp-load.php';
+\$log('[WP-TEST] WordPressパス確認: ' . \$wp_path);
+\$log('[WP-TEST] ファイル存在: ' . (file_exists(\$wp_path) ? 'YES' : 'NO'));
 
-if (file_exists($wp_path)) {
-    $log('[WP-TEST] WordPress読み込み開始');
+if (file_exists(\$wp_path)) {
+    \$log('[WP-TEST] WordPress読み込み開始');
     try {
-        require_once($wp_path);
-        $log('[WP-TEST] WordPress読み込み成功');
+        require_once(\$wp_path);
+        \$log('[WP-TEST] WordPress読み込み成功');
         
         if (function_exists('get_option')) {
-            $log('[WP-TEST] get_option関数: 利用可能');
-    } else {
-            $log('[WP-TEST] get_option関数: 利用不可');
+            \$log('[WP-TEST] get_option関数: 利用可能');
+        } else {
+            \$log('[WP-TEST] get_option関数: 利用不可');
         }
-    } catch (Exception $e) {
-        $log('[WP-TEST] WordPress読み込みエラー: ' . $e->getMessage());
-    } catch (Error $e) {
-        $log('[WP-TEST] WordPress読み込みFatal Error: ' . $e->getMessage());
+    } catch (Exception \$e) {
+        \$log('[WP-TEST] WordPress読み込みエラー: ' . \$e->getMessage());
+    } catch (Error \$e) {
+        \$log('[WP-TEST] WordPress読み込みFatal Error: ' . \$e->getMessage());
     }
 } else {
-    $log('[WP-TEST] WordPressファイルが見つかりません');
+    \$log('[WP-TEST] WordPressファイルが見つかりません');
 }
 
-$log('[WP-TEST] 終了');
+\$log('[WP-TEST] 終了');
 ?>
 WPTEST
 
