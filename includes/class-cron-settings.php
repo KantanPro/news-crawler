@@ -1095,7 +1095,7 @@ if (!\$wp_load_path) {
 // WordPress読み込み
 \$log('[PHP] WordPress読み込み開始');
 try {
-    require_once(\$wp_load_path);
+require_once(\$wp_load_path);
     \$log('[PHP] WordPress読み込み成功');
 } catch (Exception \$e) {
     \$log('[PHP] WordPress読み込みエラー: ' . \$e->getMessage());
@@ -1193,44 +1193,109 @@ EOF
     # PHP実行の詳細ログ
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行コマンド: \$PHP_CMD \$TEMP_PHP_FILE\" >> \"\$LOG_FILE\"
     
-    # より安全な実行方法を試行
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 安全な実行方法でPHPを実行中...\" >> \"\$LOG_FILE\"
+    # 診断用の実行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 診断実行開始\" >> \"\$LOG_FILE\"
     
-    # 方法1: バックグラウンド実行でテスト
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 方法1: バックグラウンド実行テスト\" >> \"\$LOG_FILE\"
-    nohup \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" > /tmp/php-output.log 2>&1 &
-    PHP_PID=\$!
-    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセス開始 (PID: \$PHP_PID)\" >> \"\$LOG_FILE\"
+    # まず、WordPress読み込みなしでPHPの基本動作をテスト
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ1: PHP基本動作テスト\" >> \"\$LOG_FILE\"
+    echo '<?php echo \"[TEST] PHP基本動作OK\\n\"; ?>' > /tmp/php-test.php
+    timeout 5s \"\$PHP_CMD\" /tmp/php-test.php >> \"\$LOG_FILE\" 2>&1
+    TEST_STATUS=\$?
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP基本テスト完了 (exit status: \$TEST_STATUS)\" >> \"\$LOG_FILE\"
+    rm -f /tmp/php-test.php
     
-    # 5秒待機してプロセス状態を確認
-    sleep 5
-    if kill -0 \"\$PHP_PID\" 2>/dev/null; then
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセスは実行中です\" >> \"\$LOG_FILE\"
-        # プロセスを終了
-        kill \"\$PHP_PID\" 2>/dev/null
-        wait \"\$PHP_PID\" 2>/dev/null
-        PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プロセス終了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
-        
-        # 出力をログに追加
-        if [ -f /tmp/php-output.log ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP出力:\" >> \"\$LOG_FILE\"
-            cat /tmp/php-output.log >> \"\$LOG_FILE\"
-            rm -f /tmp/php-output.log
-        fi
-    else
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPプロセスは既に終了しています\" >> \"\$LOG_FILE\"
-        wait \"\$PHP_PID\" 2>/dev/null
-        PHP_STATUS=\$?
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] プロセス終了確認 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
-        
-        # 出力をログに追加
-        if [ -f /tmp/php-output.log ]; then
-            echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP出力:\" >> \"\$LOG_FILE\"
-            cat /tmp/php-output.log >> \"\$LOG_FILE\"
-            rm -f /tmp/php-output.log
-        fi
+    if [ \"\$TEST_STATUS\" -ne 0 ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラー: PHP基本動作に問題があります\" >> \"\$LOG_FILE\"
+        cleanup_and_exit 1 \"PHP基本動作に問題があります\"
     fi
+    
+    # WordPress読み込みテスト用の簡単なPHPファイルを作成
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ2: WordPress読み込みテスト用ファイル作成\" >> \"\$LOG_FILE\"
+    cat > /tmp/wp-test.php << 'WPTEST'
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', '/tmp/wp-test-errors.log');
+set_time_limit(15);
+
+$log_file = '/tmp/wp-test.log';
+$log = function($message) use ($log_file) {
+    file_put_contents($log_file, date('Y-m-d H:i:s') . ' ' . $message . PHP_EOL, FILE_APPEND | LOCK_EX);
+};
+
+$log('[WP-TEST] 開始');
+$log('[WP-TEST] 現在のディレクトリ: ' . getcwd());
+
+// WordPressパス確認
+$wp_path = '/virtual/kantan/public_html/wp-load.php';
+$log('[WP-TEST] WordPressパス確認: ' . $wp_path);
+$log('[WP-TEST] ファイル存在: ' . (file_exists($wp_path) ? 'YES' : 'NO'));
+
+if (file_exists($wp_path)) {
+    $log('[WP-TEST] WordPress読み込み開始');
+    try {
+        require_once($wp_path);
+        $log('[WP-TEST] WordPress読み込み成功');
+        
+        if (function_exists('get_option')) {
+            $log('[WP-TEST] get_option関数: 利用可能');
+    } else {
+            $log('[WP-TEST] get_option関数: 利用不可');
+        }
+    } catch (Exception $e) {
+        $log('[WP-TEST] WordPress読み込みエラー: ' . $e->getMessage());
+    } catch (Error $e) {
+        $log('[WP-TEST] WordPress読み込みFatal Error: ' . $e->getMessage());
+    }
+} else {
+    $log('[WP-TEST] WordPressファイルが見つかりません');
+}
+
+$log('[WP-TEST] 終了');
+?>
+WPTEST
+
+    # WordPress読み込みテスト実行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ3: WordPress読み込みテスト実行\" >> \"\$LOG_FILE\"
+    timeout 15s \"\$PHP_CMD\" /tmp/wp-test.php >> \"\$LOG_FILE\" 2>&1
+    WP_TEST_STATUS=\$?
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPress読み込みテスト完了 (exit status: \$WP_TEST_STATUS)\" >> \"\$LOG_FILE\"
+    
+    # テスト結果をログに追加
+    if [ -f /tmp/wp-test.log ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressテストログ:\" >> \"\$LOG_FILE\"
+        cat /tmp/wp-test.log >> \"\$LOG_FILE\"
+        rm -f /tmp/wp-test.log
+    fi
+    
+    if [ -f /tmp/wp-test-errors.log ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] WordPressエラーログ:\" >> \"\$LOG_FILE\"
+        cat /tmp/wp-test-errors.log >> \"\$LOG_FILE\"
+        rm -f /tmp/wp-test-errors.log
+    fi
+    
+    # 元のPHPファイルを実行
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ4: 元のPHPファイル実行\" >> \"\$LOG_FILE\"
+    timeout 20s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+        PHP_STATUS=\$?
+    echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 元のPHPファイル実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
+    
+    # 実行結果をログに追加
+    if [ -f /tmp/php-execution.log ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP実行ログ:\" >> \"\$LOG_FILE\"
+        cat /tmp/php-execution.log >> \"\$LOG_FILE\"
+        rm -f /tmp/php-execution.log
+    fi
+    
+    if [ -f /tmp/php-errors.log ]; then
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPエラーログ:\" >> \"\$LOG_FILE\"
+        cat /tmp/php-errors.log >> \"\$LOG_FILE\"
+        rm -f /tmp/php-errors.log
+    fi
+    
+    # 一時ファイルをクリーンアップ
+    rm -f /tmp/wp-test.php
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP exit status: \$PHP_STATUS\" >> \"\$LOG_FILE\"
     
