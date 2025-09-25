@@ -955,9 +955,14 @@ echo \"[PHP] NewsCrawlerGenreSettingsクラスをチェック中\\n\";
 if (class_exists('NewsCrawlerGenreSettings')) {
     echo \"[PHP] クラスが見つかりました。インスタンスを取得中\\n\";
     \$genre_settings = NewsCrawlerGenreSettings::get_instance();
-    echo \"[PHP] 自動投稿を実行中\\n\";
-    \$genre_settings->execute_auto_posting();
-    echo \"[PHP] News Crawler自動投稿を実行しました\\n\";
+    echo \"[PHP] 自動投稿を強制実行中\\n\";
+    // 強制実行を使用（手動実行と同じ処理）
+    \$reflection = new ReflectionClass(\$genre_settings);
+    \$method = \$reflection->getMethod('execute_auto_posting_forced');
+    \$method->setAccessible(true);
+    \$result = \$method->invoke(\$genre_settings);
+    echo \"[PHP] News Crawler自動投稿を強制実行しました\\n\";
+    echo \"[PHP] 実行結果: \" . json_encode(\$result) . \"\\n\";
 } else {
     echo \"[PHP] News CrawlerGenreSettingsクラスが見つかりません\\n\";
 }
@@ -968,7 +973,7 @@ DOCKER_EOF
     docker cp \"\$TEMP_PHP_FILE\" \"\$CONTAINER_NAME:/tmp/news-crawler-exec.php\"
     
     if command -v timeout &> /dev/null; then
-        timeout 120s docker exec \"\$CONTAINER_NAME\" php /tmp/news-crawler-exec.php >> \"\$LOG_FILE\" 2>&1
+        timeout 600s docker exec \"\$CONTAINER_NAME\" php /tmp/news-crawler-exec.php >> \"\$LOG_FILE\" 2>&1
         PHP_STATUS=\$?
     else
         docker exec \"\$CONTAINER_NAME\" php /tmp/news-crawler-exec.php >> \"\$LOG_FILE\" 2>&1
@@ -993,8 +998,12 @@ elif command -v wp &> /dev/null; then
     wp --path=\"\$WP_PATH\" eval \"
         if (class_exists('NewsCrawlerGenreSettings')) {
             \\\$genre_settings = NewsCrawlerGenreSettings::get_instance();
-            \\\$genre_settings->execute_auto_posting();
-            echo 'News Crawler自動投稿を実行しました';
+            // 強制実行を使用（手動実行と同じ処理）
+            \\\$reflection = new ReflectionClass(\\\$genre_settings);
+            \\\$method = \\\$reflection->getMethod('execute_auto_posting_forced');
+            \\\$method->setAccessible(true);
+            \\\$result = \\\$method->invoke(\\\$genre_settings);
+            echo 'News Crawler自動投稿を強制実行しました: ' . json_encode(\\\$result);
         } else {
             echo 'News CrawlerGenreSettingsクラスが見つかりません';
         }
@@ -1026,7 +1035,6 @@ else
     
     # エラーハンドリングを強化（set -eを一時的に無効化）
     set +e
-    trap 'echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] エラーが発生しました (行: \$LINENO)\" >> \"\$LOG_FILE\"; rm -f \"\$TEMP_PHP_FILE\"; cleanup_and_exit 1 \"スクリプト実行中にエラーが発生しました\";' ERR
     
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHPファイル内容を生成中...\" >> \"\$LOG_FILE\"
     
@@ -1052,7 +1060,7 @@ ini_set('display_errors', 0);  // 出力を抑制
 ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/php-errors.log');
 ini_set('memory_limit', '512M');  // メモリ制限を増加
-set_time_limit(60);  // 実行時間制限を延長
+set_time_limit(600);  // 実行時間制限を10分に延長（手動実行と同じ）
 
 // 出力バッファリングを無効化
 while (ob_get_level()) {
@@ -1118,9 +1126,13 @@ if (class_exists('NewsCrawlerGenreSettings')) {
     try {
         \$genre_settings = NewsCrawlerGenreSettings::get_instance();
         \$log('[PHP] インスタンス取得成功');
-        \$log('[PHP] 自動投稿実行開始');
+        \$log('[PHP] 自動投稿強制実行開始');
         \$start_time = microtime(true);
-        \$result = \$genre_settings->execute_auto_posting();
+        // 強制実行を使用（手動実行と同じ処理）
+        \$reflection = new ReflectionClass(\$genre_settings);
+        \$method = \$reflection->getMethod('execute_auto_posting_forced');
+        \$method->setAccessible(true);
+        \$result = \$method->invoke(\$genre_settings);
         \$end_time = microtime(true);
         \$execution_time = round(\$end_time - \$start_time, 2);
         \$log('[PHP] 自動投稿完了: ' . json_encode(\$result) . ' (実行時間: ' . \$execution_time . '秒)');
@@ -1296,7 +1308,7 @@ WPTEST
     
     # 元のPHPファイルを実行
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] ステップ4: 元のPHPファイル実行\" >> \"\$LOG_FILE\"
-    timeout 90s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
+        timeout 600s \"\$PHP_CMD\" \"\$TEMP_PHP_FILE\" >> \"\$LOG_FILE\" 2>&1
     PHP_STATUS=\$?
     echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 元のPHPファイル実行完了 (exit status: \$PHP_STATUS)\" >> \"\$LOG_FILE\"
     
@@ -1323,7 +1335,7 @@ WPTEST
     
     if [ \"\$PHP_STATUS\" -eq 0 ]; then
         echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行しました\" >> \"\$LOG_FILE\"
-        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 正常に完了しました (実行時間: \$execution_time秒)\" >> \"\$LOG_FILE\"
+        echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] 正常に完了しました\" >> \"\$LOG_FILE\"
     else
         cleanup_and_exit 1 \"PHP直接実行でエラー (exit=\$PHP_STATUS)\"
     fi

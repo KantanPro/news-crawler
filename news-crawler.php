@@ -2657,8 +2657,8 @@ class NewsCrawler {
                     $cleaned_content = $this->clean_article_content($match);
                     $content_length = strlen(strip_tags($cleaned_content));
                     
-                    // より長いコンテンツを優先
-                    if ($content_length > $max_length && $content_length > 100) {
+                    // より長いコンテンツを優先（閾値を緩和）
+                    if ($content_length > $max_length && $content_length > 50) {
                         $best_content = $cleaned_content;
                         $max_length = $content_length;
                     }
@@ -2685,7 +2685,7 @@ class NewsCrawler {
             $paragraphs = array();
             foreach ($matches[1] as $paragraph) {
                 $cleaned = $this->clean_article_content($paragraph);
-                if (strlen(strip_tags($cleaned)) > 50) { // 短すぎる段落は除外
+                if (strlen(strip_tags($cleaned)) > 20) { // 短すぎる段落は除外（閾値を緩和）
                     $paragraphs[] = $cleaned;
                 }
             }
@@ -2991,6 +2991,9 @@ class NewsCrawler {
         $title = $article['title'];
         $url = $article['url'];
         
+        // デバッグログを追加
+        error_log('NewsCrawler: 重複チェック開始 - タイトル: ' . $title . ', URL: ' . $url);
+        
         // 基本設定から重複チェック設定を取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $period = isset($basic_settings['duplicate_check_period']) ? intval($basic_settings['duplicate_check_period']) : 30;
@@ -3007,6 +3010,7 @@ class NewsCrawler {
         ));
         
         if ($existing_url) {
+            error_log('NewsCrawler: URL重複で重複を検出 - URL: ' . $url . ', 既存投稿ID: ' . $existing_url);
             return true;
         }
         
@@ -3022,9 +3026,11 @@ class NewsCrawler {
         ));
         
         if ($exact_title_match) {
+            error_log('NewsCrawler: タイトル重複で重複を検出 - タイトル: ' . $title . ', 既存投稿ID: ' . $exact_title_match);
             return true;
         }
         
+        error_log('NewsCrawler: 重複チェック完了 - 重複なし');
         return false;
     }
     
@@ -3829,8 +3835,8 @@ class NewsCrawler {
             error_log('NewsCrawler: ナビゲーションテキストは正常に除去されました');
         }
 
-        // コンテンツが短すぎる場合は空文字を返す（閾値緩和）
-        if (mb_strlen($clean_content) < 20) {
+        // コンテンツが短すぎる場合は空文字を返す（閾値を大幅に緩和）
+        if (mb_strlen($clean_content) < 10) {
             error_log('NewsCrawler: コンテンツが短すぎるため空文字を返します');
             return '';
         }
