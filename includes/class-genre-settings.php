@@ -3283,6 +3283,14 @@ $('#cancel-edit').click(function() {
         
         // 実行対象のジャンルを事前にフィルタリング
         $ready_genres = array();
+        
+        // 緊急モード：すべてのジャンルを強制実行（デバッグ用）
+        $force_all_genres = true; // 一時的に有効化
+        if ($force_all_genres) {
+            error_log('Auto Posting Execution - EMERGENCY MODE: Forcing execution of ALL genres regardless of schedule');
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Auto Posting Execution - EMERGENCY MODE: Forcing execution of ALL genres regardless of schedule' . PHP_EOL, FILE_APPEND | LOCK_EX);
+        }
+        
         foreach ($genre_settings as $genre_id => $setting) {
             $display_id = $this->get_display_genre_id($genre_id);
             
@@ -3378,15 +3386,21 @@ $('#cancel-edit').click(function() {
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 実行判定を修正（現在時刻より前または等しい場合は実行可能）
-            if ($next_execution > $current_time) {
+            // 緊急モードの場合はスケジュールを無視
+            if ($force_all_genres) {
+                $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' forced execution (emergency mode)';
+                error_log($log_message);
+                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                // スキップせずに実行対象に追加
+            } else if ($next_execution > $current_time) {
                 $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' not ready for execution yet (next: ' . date('Y-m-d H:i:s', $next_execution) . ', current: ' . date('Y-m-d H:i:s', $current_time) . ') - SKIPPING';
                 error_log($log_message);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 
-                // 緊急モード：次回実行時刻が24時間以上先の場合は強制実行
+                // 緊急モード：次回実行時刻が30分以上先の場合は強制実行（条件をさらに緩和）
                 $time_diff = $next_execution - $current_time;
-                if ($time_diff > 86400) { // 24時間 = 86400秒
-                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution is more than 24 hours away, forcing execution';
+                if ($time_diff > 1800) { // 30分 = 1800秒（1時間から30分に短縮）
+                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' next execution is more than 30 minutes away (diff: ' . $time_diff . ' seconds), forcing execution';
                     error_log($log_message);
                     file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                     
@@ -3397,6 +3411,9 @@ $('#cancel-edit').click(function() {
                     file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                     // スキップせずに実行対象に追加
                 } else {
+                    $log_message = 'Auto Posting Execution - Genre ' . $setting['genre_name'] . ' time difference is ' . $time_diff . ' seconds, skipping';
+                    error_log($log_message);
+                    file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                     $skipped_count++;
                     continue;
                 }
