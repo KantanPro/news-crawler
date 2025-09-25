@@ -3287,8 +3287,11 @@ $('#cancel-edit').click(function() {
         // 緊急モード：すべてのジャンルを強制実行（デバッグ用）
         $force_all_genres = true; // 一時的に有効化
         if ($force_all_genres) {
-            error_log('Auto Posting Execution - EMERGENCY MODE: Forcing execution of ALL genres regardless of schedule');
-            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Auto Posting Execution - EMERGENCY MODE: Forcing execution of ALL genres regardless of schedule' . PHP_EOL, FILE_APPEND | LOCK_EX);
+            $log_message = 'Auto Posting Execution - EMERGENCY MODE: Forcing execution of ALL genres regardless of schedule';
+            error_log($log_message);
+            file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+            // 追加のログ出力
+            file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
         }
         
         foreach ($genre_settings as $genre_id => $setting) {
@@ -3298,6 +3301,8 @@ $('#cancel-edit').click(function() {
             $log_message = 'Auto Posting Execution - Processing genre: ' . $setting['genre_name'] . ' (ID: ' . $display_id . ', Full ID: ' . $genre_id . ')';
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+            // 追加のログ出力
+            file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 自動投稿が無効または設定されていない場合はスキップ
             if (!isset($setting['auto_posting']) || !$setting['auto_posting']) {
@@ -3650,7 +3655,9 @@ $('#cancel-edit').click(function() {
         
         try {
             $max_posts = isset($setting['max_posts_per_execution']) ? intval($setting['max_posts_per_execution']) : 3;
-            error_log('Execute Auto Posting For Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')');
+            $log_message = 'Execute Auto Posting For Genre - Starting for genre: ' . $setting['genre_name'] . ' (ID: ' . $genre_id . ')';
+            error_log($log_message);
+            file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
                 // 実行前のチェック
                 $check_result = $this->pre_execution_check($setting, $genre_id, $is_forced);
@@ -3689,23 +3696,38 @@ $('#cancel-edit').click(function() {
             error_log('Execute Auto Posting For Genre - Starting crawl for genre: ' . $setting['genre_name'] . ', Content type: ' . $setting['content_type']);
             
             if ($setting['content_type'] === 'news') {
-                error_log('Execute Auto Posting For Genre - Executing news crawling for genre: ' . $setting['genre_name']);
+                $log_message = 'Execute Auto Posting For Genre - Executing news crawling for genre: ' . $setting['genre_name'];
+                error_log($log_message);
+                file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                
                 $result = $this->execute_news_crawling_with_limit($setting, $available_posts);
+                
+                $log_message = 'Execute Auto Posting For Genre - News crawling result: ' . substr($result, 0, 200) . (strlen($result) > 200 ? '...' : '');
+                error_log($log_message);
+                file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
-                    error_log('Execute Auto Posting For Genre - News post created with ID: ' . $post_id);
+                    $log_message = 'Execute Auto Posting For Genre - News post created with ID: ' . $post_id;
+                    error_log($log_message);
+                    file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 } else {
-                    error_log('Execute Auto Posting For Genre - No post ID found in news crawling result');
+                    $log_message = 'Execute Auto Posting For Genre - No post ID found in news crawling result';
+                    error_log($log_message);
+                    file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 }
             } elseif ($setting['content_type'] === 'youtube') {
-                error_log('Execute Auto Posting For Genre - Executing YouTube crawling for genre: ' . $setting['genre_name']);
-                file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - Executing YouTube crawling for genre: ' . $setting['genre_name'] . PHP_EOL, FILE_APPEND | LOCK_EX);
+                $log_message = 'Execute Auto Posting For Genre - Executing YouTube crawling for genre: ' . $setting['genre_name'];
+                error_log($log_message);
+                file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+                
                 $result = $this->execute_youtube_crawling_with_limit($setting, $available_posts);
                 
                 // YouTubeクロール結果を詳細にログ出力
-                error_log('Execute Auto Posting For Genre - YouTube crawling result: ' . substr($result, 0, 500));
+                $log_message = 'Execute Auto Posting For Genre - YouTube crawling result: ' . substr($result, 0, 200) . (strlen($result) > 200 ? '...' : '');
+                error_log($log_message);
+                file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
                 file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - YouTube crawling result: ' . substr($result, 0, 500) . PHP_EOL, FILE_APPEND | LOCK_EX);
                 
                 // 投稿IDを抽出（結果から投稿IDを取得）
