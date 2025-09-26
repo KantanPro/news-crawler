@@ -108,14 +108,21 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] プラグインパス: $PLUGIN_PATH" >> "$L
 TIMEOUT_SECONDS=300
 START_TIME=$(date +%s)
 
+# START_TIMEが正しく設定されているか確認
+if [ -z "${START_TIME:-}" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] エラー: START_TIMEが設定されませんでした" >> "$LOG_FILE"
+    exit 1
+fi
+
 # エラーハンドリング用の関数
 cleanup_and_exit() {
     local exit_code=$1
     local error_message=$2
     
-    # 実行時間を計算
+    # 実行時間を計算（START_TIMEが未定義の場合は0を設定）
     local end_time=$(date +%s)
-    local execution_time=$((end_time - START_TIME))
+    local start_time=${START_TIME:-$end_time}
+    local execution_time=$((end_time - start_time))
     
     # エラーログを記録
     if [ -n "$error_message" ]; then
@@ -144,6 +151,7 @@ check_timeout() {
 }
 
 # シグナルハンドラーを設定
+trap 'echo "[$(date "+%Y-%m-%d %H:%M:%S")] エラーが発生しました (行: $LINENO)" >> "$LOG_FILE"; rm -f "$TEMP_PHP_FILE"; cleanup_and_exit 1 "スクリプト実行中にエラーが発生しました"' ERR
 trap 'cleanup_and_exit 130 "スクリプトが中断されました"' INT TERM
 
 # Docker環境チェック（Mac開発環境用）
