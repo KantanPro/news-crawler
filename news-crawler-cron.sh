@@ -1,6 +1,6 @@
 #!/bin/bash
 # News Crawler Cron Script
-# 修正版 - 2025-09-25 05:15:18 (同時実行防止強化版)
+# 修正版 - 2025-09-26 08:39:55 (同時実行防止強化版)
 
 set -euo pipefail
 
@@ -201,7 +201,7 @@ DOCKER_EOF
     docker cp "$TEMP_PHP_FILE" "$CONTAINER_NAME:/tmp/news-crawler-exec.php"
     
     if command -v timeout &> /dev/null; then
-        timeout 300s docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
+        timeout 600s docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
         PHP_STATUS=$?
     else
         docker exec "$CONTAINER_NAME" php /tmp/news-crawler-exec.php >> "$LOG_FILE" 2>&1
@@ -288,7 +288,7 @@ ini_set('display_errors', 0);  // 出力を抑制
 ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/php-errors.log');
 ini_set('memory_limit', '512M');  // メモリ制限を増加
-set_time_limit(300);  // 実行時間制限を5分に延長（手動実行と同じ）
+set_time_limit(600);  // 実行時間制限を10分に延長（手動実行と同じ）
 
 // 出力バッファリングを無効化
 while (ob_get_level()) {
@@ -536,7 +536,7 @@ WPTEST
     
     # 元のPHPファイルを実行
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ステップ4: 元のPHPファイル実行" >> "$LOG_FILE"
-    timeout 300s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
+        timeout 600s "$PHP_CMD" "$TEMP_PHP_FILE" >> "$LOG_FILE" 2>&1
     PHP_STATUS=$?
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 元のPHPファイル実行完了 (exit status: $PHP_STATUS)" >> "$LOG_FILE"
     
