@@ -1284,7 +1284,7 @@ class NewsCrawlerGenreSettings {
                                         <p style="margin-bottom: 10px;">自動投稿は<strong>サーバーのcronジョブ</strong>を使用して実行されます。</p>
                                         <p style="margin-bottom: 0;">
                                             <strong>設定手順：</strong><br>
-                                            1. <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブを設定<br>
+                                            1. <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > 自動投稿設定</a> で生成されたcronコマンドを確認<br>
                                             2. サーバーのcrontabに設定を追加<br>
                                             3. この設定で自動投稿を有効化<br>
                                             <strong>※ 実行頻度と時刻はサーバーのcronジョブ設定に完全に依存します</strong>
@@ -1343,7 +1343,7 @@ class NewsCrawlerGenreSettings {
                             <h4 style="margin-top: 0; color: #495057;">📋 サーバーcron設定について</h4>
                             <p style="margin-bottom: 10px;">自動投稿のスケジュールは<strong>サーバーのcronジョブ</strong>で管理されます。</p>
                             <p style="margin-bottom: 0;">
-                                <strong>設定確認：</strong> <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > Cron設定</a> でcronジョブの設定を確認してください。
+                                <strong>設定確認：</strong> <a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" target="_blank">News Crawler > 自動投稿設定</a> で生成されたcronコマンドを確認してください。
                             </p>
                         </div>
                         

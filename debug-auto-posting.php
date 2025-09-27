@@ -167,7 +167,7 @@ if (!current_user_can('manage_options')) {
     
     <div class="debug-section">
         <h2>4. ログの確認</h2>
-        <p><a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" class="button">Cron設定ページへ</a></p>
+        <p><a href="<?php echo admin_url('admin.php?page=news-crawler-cron-settings'); ?>" class="button">自動投稿設定ページへ</a></p>
         <p><a href="<?php echo admin_url('admin.php?page=news-crawler-genre-settings'); ?>" class="button">ジャンル設定ページへ</a></p>
     </div>
 </body>
