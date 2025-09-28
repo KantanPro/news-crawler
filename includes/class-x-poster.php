@@ -281,44 +281,26 @@ class News_Crawler_X_Poster {
      * @return array 結果配列
      */
     private function post_to_x($message, $settings) {
-        $endpoint = 'https://api.twitter.com/1.1/statuses/update.json';
+        $endpoint = 'https://api.twitter.com/2/tweets';
         
-        // OAuth 1.0a認証のための署名を生成
-        $oauth_params = array(
-            'oauth_consumer_key' => $settings['twitter_api_key'],
-            'oauth_nonce' => wp_generate_password(32, false),
-            'oauth_signature_method' => 'HMAC-SHA1',
-            'oauth_timestamp' => time(),
-            'oauth_token' => $settings['twitter_access_token'],
-            'oauth_version' => '1.0'
+        // Bearer Tokenを使用した認証
+        $headers = array(
+            'Authorization: Bearer ' . $settings['twitter_bearer_token'],
+            'Content-Type: application/json'
         );
         
-        // 署名用のパラメータを準備
-        $signature_params = $oauth_params;
-        $signature_params['status'] = $message;
-        
-        // 署名を生成
-        $signature = $this->generate_oauth_signature('POST', $endpoint, $signature_params, $settings['twitter_api_secret'], $settings['twitter_access_token_secret']);
-        $oauth_params['oauth_signature'] = $signature;
-        
-        // Authorizationヘッダーを生成
-        $auth_header = 'OAuth ';
-        $auth_parts = array();
-        foreach ($oauth_params as $key => $value) {
-            $auth_parts[] = $key . '="' . rawurlencode($value) . '"';
-        }
-        $auth_header .= implode(', ', $auth_parts);
+        // 投稿データを準備
+        $post_data = array(
+            'text' => $message
+        );
         
         // 直接cURLを使用して投稿
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array('status' => $message)));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Authorization: ' . $auth_header,
-            'Content-Type: application/x-www-form-urlencoded'
-        ));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -339,14 +321,16 @@ class News_Crawler_X_Poster {
         }
         $data = json_decode($body, true);
         
-        if ($response_code === 200 && isset($data['id_str'])) {
+        if ($response_code === 201 && isset($data['data']['id'])) {
             return array(
                 'success' => true,
-                'tweet_id' => $data['id_str']
+                'tweet_id' => $data['data']['id']
             );
         } else {
             $error_message = '不明なエラー';
-            if (isset($data['errors'][0]['message'])) {
+            if (isset($data['errors'][0]['detail'])) {
+                $error_message = $data['errors'][0]['detail'];
+            } elseif (isset($data['errors'][0]['message'])) {
                 $error_message = $data['errors'][0]['message'];
             } elseif (isset($data['error'])) {
                 $error_message = $data['error'];
@@ -358,36 +342,6 @@ class News_Crawler_X_Poster {
         }
     }
     
-    /**
-     * OAuth 1.0a署名を生成
-     * 
-     * @param string $method HTTPメソッド
-     * @param string $url エンドポイントURL
-     * @param array $params パラメータ
-     * @param string $consumer_secret コンシューマーシークレット
-     * @param string $token_secret トークンシークレット
-     * @return string 署名
-     */
-    private function generate_oauth_signature($method, $url, $params, $consumer_secret, $token_secret) {
-        // パラメータをソート
-        ksort($params);
-        
-        // クエリ文字列を作成
-        $query_string = '';
-        foreach ($params as $key => $value) {
-            $query_string .= rawurlencode($key) . '=' . rawurlencode($value) . '&';
-        }
-        $query_string = rtrim($query_string, '&');
-        
-        // 署名ベース文字列を作成
-        $signature_base_string = $method . '&' . rawurlencode($url) . '&' . rawurlencode($query_string);
-        
-        // 署名キーを作成
-        $signature_key = rawurlencode($consumer_secret) . '&' . rawurlencode($token_secret);
-        
-        // HMAC-SHA1で署名を生成
-        return base64_encode(hash_hmac('sha1', $signature_base_string, $signature_key, true));
-    }
     
     /**
      * X（Twitter）接続テスト
@@ -412,52 +366,28 @@ class News_Crawler_X_Poster {
             wp_send_json_error(array('message' => 'X（Twitter）自動シェアが無効になっています'));
         }
         
-        // 認証情報の詳細チェック（OAuth 1.0a用）
-        $missing_fields = array();
-        if (empty($settings['twitter_api_key'])) $missing_fields[] = 'API Key';
-        if (empty($settings['twitter_api_secret'])) $missing_fields[] = 'API Secret';
-        if (empty($settings['twitter_access_token'])) $missing_fields[] = 'Access Token';
-        if (empty($settings['twitter_access_token_secret'])) $missing_fields[] = 'Access Token Secret';
-        
-        if (!empty($missing_fields)) {
-            wp_send_json_error(array('message' => '以下の認証情報が不足しています: ' . implode(', ', $missing_fields)));
+        // 認証情報の詳細チェック（Bearer Token用）
+        if (empty($settings['twitter_bearer_token'])) {
+            wp_send_json_error(array('message' => 'Bearer Tokenが設定されていません'));
         }
         
         try {
-            error_log('X Poster: 接続テスト開始 - OAuth 1.0a認証を使用');
+            error_log('X Poster: 接続テスト開始 - Bearer Token認証を使用');
             
-            // OAuth 1.0a認証を使用して接続をテスト
-            $endpoint = 'https://api.twitter.com/1.1/account/verify_credentials.json';
+            // Bearer Token認証を使用して接続をテスト
+            $endpoint = 'https://api.twitter.com/2/users/me';
             
-            $oauth_params = array(
-                'oauth_consumer_key' => $settings['twitter_api_key'],
-                'oauth_nonce' => wp_generate_password(32, false),
-                'oauth_signature_method' => 'HMAC-SHA1',
-                'oauth_timestamp' => time(),
-                'oauth_token' => $settings['twitter_access_token'],
-                'oauth_version' => '1.0'
+            // Bearer Token認証を使用
+            $headers = array(
+                'Authorization: Bearer ' . $settings['twitter_bearer_token'],
+                'Content-Type: application/json'
             );
-            
-            // 署名を生成
-            $signature = $this->generate_oauth_signature('GET', $endpoint, $oauth_params, $settings['twitter_api_secret'], $settings['twitter_access_token_secret']);
-            $oauth_params['oauth_signature'] = $signature;
-            
-            // Authorizationヘッダーを構築
-            $auth_header = 'OAuth ';
-            $auth_parts = array();
-            foreach ($oauth_params as $key => $value) {
-                $auth_parts[] = $key . '="' . rawurlencode($value) . '"';
-            }
-            $auth_header .= implode(', ', $auth_parts);
             
             // 直接cURLを使用して接続テスト
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $endpoint);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                'Authorization: ' . $auth_header,
-                'Content-Type: application/json'
-            ));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_TIMEOUT, 60);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -480,14 +410,16 @@ class News_Crawler_X_Poster {
             error_log('X Poster: レスポンスコード: ' . $response_code);
             error_log('X Poster: レスポンスボディ: ' . $body);
             
-            if ($response_code === 200 && isset($data['screen_name'])) {
-                error_log('X Poster: 接続テスト成功 - ユーザー名: @' . $data['screen_name']);
+            if ($response_code === 200 && isset($data['data']['username'])) {
+                error_log('X Poster: 接続テスト成功 - ユーザー名: @' . $data['data']['username']);
                 wp_send_json_success(array(
-                    'message' => '接続成功！アカウント: @' . $data['screen_name']
+                    'message' => '接続成功！アカウント: @' . $data['data']['username']
                 ));
             } else {
                 $error_message = '不明なエラー';
-                if (isset($data['errors'][0]['message'])) {
+                if (isset($data['errors'][0]['detail'])) {
+                    $error_message = $data['errors'][0]['detail'];
+                } elseif (isset($data['errors'][0]['message'])) {
                     $error_message = $data['errors'][0]['message'];
                 } elseif (isset($data['error'])) {
                     $error_message = $data['error'];
