@@ -40,12 +40,14 @@ cp -r assets "${TEMP_DIR}/"
 cp -r languages "${TEMP_DIR}/"
 cp news-crawler.php "${TEMP_DIR}/"
 cp readme.txt "${TEMP_DIR}/"
+cp news-crawler-cron.sh "${TEMP_DIR}/"
 
 # 不要なファイルを除外（配布サイト用に最適化）
 echo "不要なファイルを除外中..."
 find "${TEMP_DIR}" -name ".git*" -type d -exec rm -rf {} + 2>/dev/null || true
 find "${TEMP_DIR}" -name ".DS_Store" -type f -delete 2>/dev/null || true
-find "${TEMP_DIR}" -name "*.sh" -type f -delete 2>/dev/null || true
+# news-crawler-cron.shは自動投稿に必要不可欠なため除外しない
+# find "${TEMP_DIR}" -name "*.sh" -type f -delete 2>/dev/null || true
 find "${TEMP_DIR}" -name "*.zip" -type f -delete 2>/dev/null || true
 find "${TEMP_DIR}" -name "*.backup" -type f -delete 2>/dev/null || true
 find "${TEMP_DIR}" -name "*.tmp" -type f -delete 2>/dev/null || true
