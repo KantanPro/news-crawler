@@ -27,9 +27,6 @@ class News_Crawler_X_Poster {
         
         // 投稿公開時のフックを直接登録（確実性を高める）
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
-        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
-        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
-        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
         
         // より早いタイミングでも登録
         add_action('wp_loaded', array($this, 'register_hooks_early'), 5);
@@ -45,9 +42,6 @@ class News_Crawler_X_Poster {
         
         // 投稿公開時の自動投稿フック（init内でも登録）
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
-        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
-        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
-        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
         
         // AJAXハンドラーを管理画面でのみ登録
         add_action('admin_init', array($this, 'register_ajax_handlers'));
@@ -63,9 +57,6 @@ class News_Crawler_X_Poster {
         
         // 投稿関連フックを再登録
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
-        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
-        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
-        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
         
         error_log('X Poster: 早期フック登録完了');
     }
@@ -490,44 +481,6 @@ class News_Crawler_X_Poster {
         }
     }
     
-    /**
-     * 投稿ステータス変更時の処理
-     */
-    public function handle_post_status_change($new_status, $old_status, $post) {
-        error_log('X Poster: 投稿ステータス変更 - Post ID: ' . $post->ID . ', Old: ' . $old_status . ', New: ' . $new_status);
-        
-        // 公開された場合のみ処理
-        if ($new_status === 'publish' && $old_status !== 'publish') {
-            error_log('X Poster: 投稿が公開されました - Post ID: ' . $post->ID);
-            $this->auto_post_to_x($post->ID);
-        }
-    }
-    
-    /**
-     * 投稿挿入時の処理
-     */
-    public function handle_wp_insert_post($post_id, $post, $update) {
-        error_log('X Poster: wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
-        
-        // 新規投稿で公開された場合
-        if (!$update && $post->post_status === 'publish') {
-            error_log('X Poster: 新規投稿が公開されました - Post ID: ' . $post_id);
-            $this->auto_post_to_x($post_id);
-        }
-    }
-    
-    /**
-     * 投稿保存時の処理
-     */
-    public function handle_save_post($post_id, $post, $update) {
-        error_log('X Poster: save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
-        
-        // 公開された場合
-        if ($post->post_status === 'publish') {
-            error_log('X Poster: 投稿が保存されました（公開状態） - Post ID: ' . $post_id);
-            $this->auto_post_to_x($post_id);
-        }
-    }
     
     /**
      * 手動でX投稿をテスト（デバッグ用）
