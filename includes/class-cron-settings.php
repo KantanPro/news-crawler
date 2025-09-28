@@ -386,10 +386,26 @@ class NewsCrawlerCronSettings {
         
         // スクリプトが既に存在する場合は何もしない
         if (file_exists($script_path)) {
+            error_log('News Crawler: cronスクリプトは既に存在します - パス: ' . $script_path);
             return;
         }
         
-        // 基本的なcronスクリプトを作成
+        error_log('News Crawler: cronスクリプトを作成中 - パス: ' . $script_path);
+        
+        // 既存のcronスクリプトをコピーして作成
+        $source_script = plugin_dir_path(__FILE__) . '../news-crawler-cron-backup.sh';
+        
+        if (file_exists($source_script)) {
+            // バックアップスクリプトからコピー
+            $result = copy($source_script, $script_path);
+            if ($result) {
+                chmod($script_path, 0755);
+                error_log('News Crawler: バックアップからcronスクリプトを復元しました - パス: ' . $script_path);
+                return;
+            }
+        }
+        
+        // バックアップが存在しない場合は基本的なスクリプトを作成
         $script_content = '#!/bin/bash
 # News Crawler Auto Posting Script
 # Generated automatically by News Crawler plugin
@@ -408,10 +424,17 @@ echo "$(date): News Crawler cron executed" >> wp-content/plugins/news-crawler/ne
 ';
         
         // スクリプトファイルを作成
-        file_put_contents($script_path, $script_content);
+        $result = file_put_contents($script_path, $script_content);
+        
+        if ($result === false) {
+            error_log('News Crawler: cronスクリプトの作成に失敗しました - パス: ' . $script_path);
+            return;
+        }
         
         // 実行権限を付与
         chmod($script_path, 0755);
+        
+        error_log('News Crawler: cronスクリプトを作成しました - パス: ' . $script_path);
     }
     
     /**
