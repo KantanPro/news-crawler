@@ -154,9 +154,9 @@ check_timeout() {
 trap 'echo "[$(date "+%Y-%m-%d %H:%M:%S")] エラーが発生しました (行: $LINENO)" >> "$LOG_FILE"; rm -f "$TEMP_PHP_FILE"; cleanup_and_exit 1 "スクリプト実行中にエラーが発生しました"' ERR
 trap 'cleanup_and_exit 130 "スクリプトが中断されました"' INT TERM
 
-# Docker環境チェック（Mac開発環境用）
-if command -v docker &> /dev/null && docker ps --format "{{.Names}}" | grep -q "KantanPro_wordpress"; then
-    # Docker環境の場合
+# Docker環境チェック（開発環境用 - 本番環境ではスキップ）
+if command -v docker &> /dev/null && docker ps --format "{{.Names}}" | grep -q "KantanPro_wordpress" && [ -f "/Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/news-crawler.php" ]; then
+    # Docker環境の場合（開発環境のみ）
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker環境でdocker exec経由でNews Crawlerを実行中..." >> "$LOG_FILE"
     
     CONTAINER_NAME="KantanPro_wordpress"
