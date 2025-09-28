@@ -342,6 +342,36 @@ class News_Crawler_X_Poster {
         }
     }
     
+    /**
+     * OAuth 1.0a署名を生成
+     * 
+     * @param string $method HTTPメソッド
+     * @param string $url エンドポイントURL
+     * @param array $params パラメータ
+     * @param string $consumer_secret コンシューマーシークレット
+     * @param string $token_secret トークンシークレット
+     * @return string 署名
+     */
+    private function generate_oauth_signature($method, $url, $params, $consumer_secret, $token_secret) {
+        // パラメータをソート
+        ksort($params);
+        
+        // クエリ文字列を作成
+        $query_string = '';
+        foreach ($params as $key => $value) {
+            $query_string .= rawurlencode($key) . '=' . rawurlencode($value) . '&';
+        }
+        $query_string = rtrim($query_string, '&');
+        
+        // 署名ベース文字列を作成
+        $signature_base_string = $method . '&' . rawurlencode($url) . '&' . rawurlencode($query_string);
+        
+        // 署名キーを作成
+        $signature_key = rawurlencode($consumer_secret) . '&' . rawurlencode($token_secret);
+        
+        // HMAC-SHA1で署名を生成
+        return base64_encode(hash_hmac('sha1', $signature_base_string, $signature_key, true));
+    }
     
     /**
      * X（Twitter）接続テスト
@@ -366,20 +396,47 @@ class News_Crawler_X_Poster {
             wp_send_json_error(array('message' => 'X（Twitter）自動シェアが無効になっています'));
         }
         
-        // 認証情報の詳細チェック（Bearer Token用）
-        if (empty($settings['twitter_bearer_token'])) {
-            wp_send_json_error(array('message' => 'Bearer Tokenが設定されていません'));
+        // 認証情報の詳細チェック（OAuth 1.0a用）
+        $missing_fields = array();
+        if (empty($settings['twitter_api_key'])) $missing_fields[] = 'API Key';
+        if (empty($settings['twitter_api_secret'])) $missing_fields[] = 'API Secret';
+        if (empty($settings['twitter_access_token'])) $missing_fields[] = 'Access Token';
+        if (empty($settings['twitter_access_token_secret'])) $missing_fields[] = 'Access Token Secret';
+        
+        if (!empty($missing_fields)) {
+            wp_send_json_error(array('message' => '以下の認証情報が不足しています: ' . implode(', ', $missing_fields)));
         }
         
         try {
-            error_log('X Poster: 接続テスト開始 - Bearer Token認証を使用');
+            error_log('X Poster: 接続テスト開始 - OAuth 1.0a認証を使用');
             
-            // Bearer Token認証を使用して接続をテスト
-            $endpoint = 'https://api.twitter.com/2/users/me';
+            // OAuth 1.0a認証を使用して接続をテスト
+            $endpoint = 'https://api.twitter.com/1.1/account/verify_credentials.json';
             
-            // Bearer Token認証を使用
+            // OAuth 1.0a認証を使用
+            $oauth_params = array(
+                'oauth_consumer_key' => $settings['twitter_api_key'],
+                'oauth_nonce' => wp_generate_password(32, false),
+                'oauth_signature_method' => 'HMAC-SHA1',
+                'oauth_timestamp' => time(),
+                'oauth_token' => $settings['twitter_access_token'],
+                'oauth_version' => '1.0'
+            );
+            
+            // 署名を生成
+            $signature = $this->generate_oauth_signature('GET', $endpoint, $oauth_params, $settings['twitter_api_secret'], $settings['twitter_access_token_secret']);
+            $oauth_params['oauth_signature'] = $signature;
+            
+            // Authorizationヘッダーを構築
+            $auth_header = 'OAuth ';
+            $auth_parts = array();
+            foreach ($oauth_params as $key => $value) {
+                $auth_parts[] = $key . '="' . rawurlencode($value) . '"';
+            }
+            $auth_header .= implode(', ', $auth_parts);
+            
             $headers = array(
-                'Authorization: Bearer ' . $settings['twitter_bearer_token'],
+                'Authorization: ' . $auth_header,
                 'Content-Type: application/json'
             );
             
@@ -410,16 +467,14 @@ class News_Crawler_X_Poster {
             error_log('X Poster: レスポンスコード: ' . $response_code);
             error_log('X Poster: レスポンスボディ: ' . $body);
             
-            if ($response_code === 200 && isset($data['data']['username'])) {
-                error_log('X Poster: 接続テスト成功 - ユーザー名: @' . $data['data']['username']);
+            if ($response_code === 200 && isset($data['screen_name'])) {
+                error_log('X Poster: 接続テスト成功 - ユーザー名: @' . $data['screen_name']);
                 wp_send_json_success(array(
-                    'message' => '接続成功！アカウント: @' . $data['data']['username']
+                    'message' => '接続成功！アカウント: @' . $data['screen_name']
                 ));
             } else {
                 $error_message = '不明なエラー';
-                if (isset($data['errors'][0]['detail'])) {
-                    $error_message = $data['errors'][0]['detail'];
-                } elseif (isset($data['errors'][0]['message'])) {
+                if (isset($data['errors'][0]['message'])) {
                     $error_message = $data['errors'][0]['message'];
                 } elseif (isset($data['error'])) {
                     $error_message = $data['error'];
