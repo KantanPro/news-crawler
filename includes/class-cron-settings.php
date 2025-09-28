@@ -379,6 +379,42 @@ class NewsCrawlerCronSettings {
     }
     
     /**
+     * 強制的にcronスクリプトを作成
+     */
+    public function force_create_cron_script() {
+        $script_path = plugin_dir_path(__FILE__) . '../news-crawler-cron.sh';
+        
+        // スクリプトが既に存在する場合は何もしない
+        if (file_exists($script_path)) {
+            return;
+        }
+        
+        // 基本的なcronスクリプトを作成
+        $script_content = '#!/bin/bash
+# News Crawler Auto Posting Script
+# Generated automatically by News Crawler plugin
+
+# WordPress root directory
+WP_ROOT="' . ABSPATH . '"
+
+# Change to WordPress directory
+cd "$WP_ROOT"
+
+# Run WordPress cron
+php wp-cron.php
+
+# Log the execution
+echo "$(date): News Crawler cron executed" >> wp-content/plugins/news-crawler/news-crawler-cron.log
+';
+        
+        // スクリプトファイルを作成
+        file_put_contents($script_path, $script_content);
+        
+        // 実行権限を付与
+        chmod($script_path, 0755);
+    }
+    
+    /**
      * プラグインバージョンを取得
      */
     private function get_plugin_version() {
