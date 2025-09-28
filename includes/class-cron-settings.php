@@ -199,7 +199,7 @@ class NewsCrawlerCronSettings {
      * 生成されたCronジョブ設定を表示
      */
     private function display_generated_cron_settings() {
-        $script_path = plugin_dir_path(__FILE__) . '../news-crawler-cron.sh';
+        $script_path = dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron.sh';
         $script_exists = file_exists($script_path);
         
         if (!$script_exists) {
@@ -252,8 +252,7 @@ class NewsCrawlerCronSettings {
      * Cronコマンドを生成
      */
     private function generate_cron_command() {
-        $script_path = plugin_dir_path(__FILE__) . '../news-crawler-cron.sh';
-        $script_path = realpath($script_path);
+        $script_path = dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron.sh';
         
         // スクリプトのパスのみを返す
         return $script_path;
@@ -382,7 +381,7 @@ class NewsCrawlerCronSettings {
      * 強制的にcronスクリプトを作成
      */
     public function force_create_cron_script() {
-        $script_path = plugin_dir_path(__FILE__) . '../news-crawler-cron.sh';
+        $script_path = dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron.sh';
         
         // スクリプトが既に存在する場合は何もしない
         if (file_exists($script_path)) {
@@ -393,7 +392,7 @@ class NewsCrawlerCronSettings {
         error_log('News Crawler: cronスクリプトを作成中 - パス: ' . $script_path);
         
         // 既存のcronスクリプトをコピーして作成
-        $source_script = plugin_dir_path(__FILE__) . '../news-crawler-cron-backup.sh';
+        $source_script = dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron-backup.sh';
         
         if (file_exists($source_script)) {
             // バックアップスクリプトからコピー
