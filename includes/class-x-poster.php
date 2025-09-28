@@ -166,13 +166,72 @@ class News_Crawler_X_Poster {
             $message .= $hashtag_text;
         }
         
-        // 文字数制限（280文字）に合わせて調整
-        if (mb_strlen($message) > 280) {
-            $message = mb_substr($message, 0, 277) . '...';
-        }
+        // 文字数制限に合わせて調整（URLの長さを考慮）
+        $max_length = isset($settings['twitter_max_length']) ? intval($settings['twitter_max_length']) : 280;
+        $message = $this->adjust_message_length($message, $max_length);
         
         // 改行を保持したまま返す
         return $message;
+    }
+    
+    /**
+     * メッセージの文字数を調整（URLの長さを考慮）
+     * 
+     * @param string $message メッセージ
+     * @param int $max_length 最大文字数
+     * @return string 調整後のメッセージ
+     */
+    private function adjust_message_length($message, $max_length) {
+        // URLの長さを予測（短縮URLは約23文字）
+        $url_length = 0;
+        if (preg_match_all('/https?:\/\/[^\s]+/', $message, $matches)) {
+            foreach ($matches[0] as $url) {
+                // 実際のURL長と短縮URL長の小さい方を採用
+                $actual_length = mb_strlen($url);
+                $shortened_length = 23; // Xの短縮URL長
+                $url_length += min($actual_length, $shortened_length);
+            }
+        }
+        
+        // ハッシュタグの長さを計算
+        $hashtag_length = 0;
+        if (preg_match_all('/#\w+/', $message, $hashtag_matches)) {
+            foreach ($hashtag_matches[0] as $hashtag) {
+                $hashtag_length += mb_strlen($hashtag) + 1; // +1はスペース
+            }
+        }
+        
+        // テキスト部分の最大長を計算
+        $text_max_length = $max_length - $url_length - $hashtag_length;
+        
+        // テキスト部分を抽出（URLとハッシュタグを除く）
+        $text_part = preg_replace('/https?:\/\/[^\s]+/', '', $message);
+        $text_part = preg_replace('/#\w+/', '', $text_part);
+        $text_part = trim($text_part);
+        
+        // テキスト部分が制限を超える場合は切り詰め
+        if (mb_strlen($text_part) > $text_max_length) {
+            $text_part = mb_substr($text_part, 0, max(1, $text_max_length - 3)) . '...';
+        }
+        
+        // URLとハッシュタグを再構築
+        $final_message = $text_part;
+        
+        // URLを追加
+        if (preg_match_all('/https?:\/\/[^\s]+/', $message, $url_matches)) {
+            foreach ($url_matches[0] as $url) {
+                $final_message .= ' ' . $url;
+            }
+        }
+        
+        // ハッシュタグを追加
+        if (preg_match_all('/#\w+/', $message, $hashtag_matches)) {
+            foreach ($hashtag_matches[0] as $hashtag) {
+                $final_message .= ' ' . $hashtag;
+            }
+        }
+        
+        return trim($final_message);
     }
     
     /**
