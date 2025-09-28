@@ -707,6 +707,10 @@ class NewsCrawlerGenreSettings {
             $sanitized['twitter_hashtags'] = sanitize_text_field($input['twitter_hashtags']);
         }
         
+        if (isset($input['twitter_max_length'])) {
+            $sanitized['twitter_max_length'] = max(1, min(280, intval($input['twitter_max_length'])));
+        }
+        
         // 重複チェック設定の処理
         if (isset($input['duplicate_check_strictness'])) {
             $allowed_strictness = array('low', 'medium', 'high');

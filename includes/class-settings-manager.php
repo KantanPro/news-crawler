@@ -962,6 +962,11 @@ class NewsCrawlerSettingsManager {
             }
         }
         
+        // X（Twitter）数値設定
+        if (array_key_exists('twitter_max_length', $input)) {
+            $sanitized['twitter_max_length'] = max(1, min(280, intval($input['twitter_max_length'])));
+        }
+        
         // メッセージテンプレートは改行を保持
         if (array_key_exists('twitter_message_template', $input)) {
             $sanitized['twitter_message_template'] = sanitize_textarea_field($input['twitter_message_template']);
