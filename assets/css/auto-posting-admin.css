@@ -258,7 +258,8 @@
 
 /* コマンドカード */
 .ktp-command-box {
-    background: #2c3e50;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
     border-radius: 8px;
     padding: 20px;
     margin: 16px 0;
@@ -278,7 +279,7 @@
     min-width: 300px;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 14px;
-    color: #ecf0f1;
+    color: #333;
     background: transparent;
     border: none;
     padding: 0;

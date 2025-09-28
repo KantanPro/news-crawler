@@ -253,85 +253,6 @@ class NewsCrawlerSettingsManager {
             'quality_settings'
         );
         
-        // X（Twitter）設定セクション（専用スラッグ）
-        add_settings_section(
-            'twitter_settings',
-            'X（旧Twitter）自動シェア設定',
-            array($this, 'twitter_section_callback'),
-            'news-crawler-settings-twitter'
-        );
-        
-        add_settings_field(
-            'twitter_enabled',
-            'X（Twitter）への自動シェアを有効にする',
-            array($this, 'twitter_enabled_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_bearer_token',
-            'Bearer Token',
-            array($this, 'twitter_bearer_token_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_key',
-            'API Key（Consumer Key）',
-            array($this, 'twitter_api_key_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_secret',
-            'API Secret（Consumer Secret）',
-            array($this, 'twitter_api_secret_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_access_token',
-            'Access Token',
-            array($this, 'twitter_access_token_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_access_token_secret',
-            'Access Token Secret',
-            array($this, 'twitter_access_token_secret_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_message_template',
-            'メッセージテンプレート',
-            array($this, 'twitter_message_template_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_include_link',
-            '投稿へのリンクを含める',
-            array($this, 'twitter_include_link_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_hashtags',
-            'ハッシュタグ',
-            array($this, 'twitter_hashtags_callback'),
-            'news-crawler-settings-twitter',
-            'twitter_settings'
-        );
     }
 
     /**
@@ -488,7 +409,6 @@ class NewsCrawlerSettingsManager {
                 <a href="#feature-settings" class="nav-tab<?php echo ($active_tab === 'feature-settings' ? ' nav-tab-active' : ''); ?>" data-tab="feature-settings">機能設定</a>
                 <a href="#quality-settings" class="nav-tab<?php echo ($active_tab === 'quality-settings' ? ' nav-tab-active' : ''); ?>" data-tab="quality-settings">品質管理</a>
                 <a href="#seo-settings" class="nav-tab<?php echo ($active_tab === 'seo-settings' ? ' nav-tab-active' : ''); ?>" data-tab="seo-settings">SEO設定</a>
-                <a href="#twitter-settings" class="nav-tab<?php echo ($active_tab === 'twitter-settings' ? ' nav-tab-active' : ''); ?>" data-tab="twitter-settings">X（Twitter）設定</a>
                 <a href="#youtube-settings" class="nav-tab<?php echo ($active_tab === 'youtube-settings' ? ' nav-tab-active' : ''); ?>" data-tab="youtube-settings">YouTube設定</a>
                 
             </div>
@@ -541,17 +461,6 @@ class NewsCrawlerSettingsManager {
                 </form>
             </div>
             
-            <div id="twitter-settings" class="tab-content<?php echo ($active_tab === 'twitter-settings' ? ' active' : ''); ?>">
-                <form method="post" action="options.php">
-                    <?php 
-                    // X（Twitter）設定のフィールドを表示（開発段階の機能のためライセンス不要）
-                    settings_fields('news_crawler_basic_settings');
-                    do_settings_sections('news-crawler-settings-twitter');
-                    ?>
-                    <input type="hidden" name="current_tab" value="twitter-settings" />
-                    <?php submit_button(); ?>
-                </form>
-            </div>
             
             <div id="youtube-settings" class="tab-content<?php echo ($active_tab === 'youtube-settings' ? ' active' : ''); ?>">
                 <form method="post" action="options.php">
@@ -1001,106 +910,6 @@ class NewsCrawlerSettingsManager {
         echo '<p class="description">この日数より古いコンテンツをスキップします。</p>';
     }
     
-    // X（Twitter）設定のコールバック関数
-    public function twitter_section_callback() {
-        echo '<p>X（旧Twitter）への自動投稿に関する設定です。投稿作成後に自動的にXにシェアされます。</p>';
-        echo '<p><button type="button" id="test-x-connection" class="button button-secondary">接続テスト</button></p>';
-        wp_nonce_field('twitter_connection_test_nonce', 'twitter_connection_test_nonce');
-    }
-    
-    public function twitter_enabled_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_enabled']) ? $settings['twitter_enabled'] : false;
-        echo '<input type="hidden" name="' . $this->option_name . '[twitter_enabled]" value="0" />';
-        echo '<input type="checkbox" name="' . $this->option_name . '[twitter_enabled]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">投稿作成後に自動的にXにシェアされます。</p>';
-    }
-    
-    public function twitter_bearer_token_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_bearer_token']) ? $settings['twitter_bearer_token'] : '';
-        echo '<input type="text" name="' . $this->option_name . '[twitter_bearer_token]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したBearer Tokenを入力してください。</p>';
-    }
-    
-    public function twitter_api_key_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_api_key']) ? $settings['twitter_api_key'] : '';
-        echo '<input type="text" name="' . $this->option_name . '[twitter_api_key]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Key（Consumer Key）を入力してください。</p>';
-    }
-    
-    public function twitter_api_secret_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_api_secret']) ? $settings['twitter_api_secret'] : '';
-        echo '<input type="password" name="' . $this->option_name . '[twitter_api_secret]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Secret（Consumer Secret）を入力してください。</p>';
-    }
-    
-    public function twitter_access_token_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_access_token']) ? $settings['twitter_access_token'] : '';
-        echo '<input type="text" name="' . $this->option_name . '[twitter_access_token]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Tokenを入力してください。</p>';
-    }
-    
-    public function twitter_access_token_secret_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_access_token_secret']) ? $settings['twitter_access_token_secret'] : '';
-        echo '<input type="password" name="' . $this->option_name . '[twitter_access_token_secret]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
-    }
-    
-    public function twitter_message_template_callback() {
-        $settings = get_option($this->option_name, array());
-        if (!is_array($settings)) {
-            $settings = array();
-        }
-        $value = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : '%TITLE%';
-        
-        // 旧形式の{title}を%TITLE%に自動変換
-        if ($value === '{title}') {
-            $value = '%TITLE%';
-            // 設定を更新
-            $settings['twitter_message_template'] = $value;
-            update_option($this->option_name, $settings);
-        }
-        
-        echo '<textarea name="' . $this->option_name . '[twitter_message_template]" rows="3" cols="50">' . esc_textarea($value) . '</textarea>';
-        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。以下のプレースホルダーが使用できます：</p>';
-        echo '<div class="description" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 5px; margin: 10px 0;">';
-        echo '<div><strong>%TITLE%</strong> - 投稿タイトル</div>';
-        echo '<div><strong>%URL%</strong> - 投稿URL</div>';
-        echo '<div><strong>%SURL%</strong> - 短縮URL</div>';
-        echo '<div><strong>%IMG%</strong> - アイキャッチ画像URL</div>';
-        echo '<div><strong>%EXCERPT%</strong> - 抜粋（処理済み）</div>';
-        echo '<div><strong>%RAWEXCERPT%</strong> - 抜粋（生）</div>';
-        echo '<div><strong>%ANNOUNCE%</strong> - アナウンス文</div>';
-        echo '<div><strong>%FULLTEXT%</strong> - 本文（処理済み）</div>';
-        echo '<div><strong>%RAWTEXT%</strong> - 本文（生）</div>';
-        echo '<div><strong>%TAGS%</strong> - タグ</div>';
-        echo '<div><strong>%CATS%</strong> - カテゴリー</div>';
-        echo '<div><strong>%HTAGS%</strong> - タグ（ハッシュタグ）</div>';
-        echo '<div><strong>%HCATS%</strong> - カテゴリー（ハッシュタグ）</div>';
-        echo '<div><strong>%AUTHORNAME%</strong> - 投稿者名</div>';
-        echo '<div><strong>%SITENAME%</strong> - サイト名</div>';
-        echo '</div>';
-    }
-    
-    public function twitter_include_link_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_include_link']) ? $settings['twitter_include_link'] : true;
-        echo '<input type="hidden" name="' . $this->option_name . '[twitter_include_link]" value="0" />';
-        echo '<input type="checkbox" name="' . $this->option_name . '[twitter_include_link]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">X投稿に投稿へのリンクを含めます。</p>';
-    }
-    
-    public function twitter_hashtags_callback() {
-        $settings = get_option($this->option_name, array());
-        $value = isset($settings['twitter_hashtags']) ? $settings['twitter_hashtags'] : '';
-        echo '<input type="text" name="' . $this->option_name . '[twitter_hashtags]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X投稿に含めるハッシュタグをスペース区切りで入力してください（例：ニュース テクノロジー）。</p>';
-    }
     
     /**
      * 設定をサニタイズ
