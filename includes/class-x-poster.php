@@ -28,6 +28,9 @@ class News_Crawler_X_Poster {
         // 投稿公開時のフックを直接登録（確実性を高める）
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
         
+        // より確実なフック：投稿ステータス変更時
+        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
+        
         // より早いタイミングでも登録
         add_action('wp_loaded', array($this, 'register_hooks_early'), 5);
         
@@ -42,6 +45,9 @@ class News_Crawler_X_Poster {
         
         // 投稿公開時の自動投稿フック（init内でも登録）
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
+        
+        // より確実なフック：投稿ステータス変更時
+        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
         
         // AJAXハンドラーを管理画面でのみ登録
         add_action('admin_init', array($this, 'register_ajax_handlers'));
@@ -566,6 +572,7 @@ class News_Crawler_X_Poster {
         
         // 投稿が公開された場合のみX投稿を実行
         if ($new_status === 'publish' && $old_status !== 'publish') {
+            error_log('X Poster: 投稿が公開されました - X投稿を実行します');
             $this->auto_post_to_x($post->ID);
         }
     }
