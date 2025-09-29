@@ -553,4 +553,57 @@ class News_Crawler_X_Poster {
         // X投稿を実行
         $this->auto_post_to_x($post_id);
     }
+    
+    /**
+     * 投稿ステータス変更時の処理
+     * 
+     * @param string $new_status 新しいステータス
+     * @param string $old_status 古いステータス
+     * @param WP_Post $post 投稿オブジェクト
+     */
+    public function handle_post_status_change($new_status, $old_status, $post) {
+        error_log('X Poster: handle_post_status_change が呼び出されました - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
+        
+        // 投稿が公開された場合のみX投稿を実行
+        if ($new_status === 'publish' && $old_status !== 'publish') {
+            $this->auto_post_to_x($post->ID);
+        }
+    }
+    
+    /**
+     * 投稿挿入時の処理
+     * 
+     * @param int $post_id 投稿ID
+     * @param WP_Post $post 投稿オブジェクト
+     * @param bool $update 更新かどうか
+     */
+    public function handle_wp_insert_post($post_id, $post, $update) {
+        error_log('X Poster: handle_wp_insert_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+        
+        // 新規投稿で公開状態の場合のみX投稿を実行
+        if (!$update && $post->post_status === 'publish') {
+            $this->auto_post_to_x($post_id);
+        }
+    }
+    
+    /**
+     * 投稿保存時の処理
+     * 
+     * @param int $post_id 投稿ID
+     * @param WP_Post $post 投稿オブジェクト
+     * @param bool $update 更新かどうか
+     */
+    public function handle_save_post($post_id, $post, $update) {
+        error_log('X Poster: handle_save_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+        
+        // 自動保存やリビジョンの場合はスキップ
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+        
+        // 投稿が公開状態の場合のみX投稿を実行
+        if ($post->post_status === 'publish') {
+            $this->auto_post_to_x($post_id);
+        }
+    }
 }
