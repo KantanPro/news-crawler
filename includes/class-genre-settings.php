@@ -3702,6 +3702,7 @@ $('#cancel-edit').click(function() {
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
+                    $posts_created = 1; // 投稿が作成されたことを記録
                     $log_message = 'Execute Auto Posting For Genre - News post created with ID: ' . $post_id;
                     error_log($log_message);
                     file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
@@ -3726,6 +3727,7 @@ $('#cancel-edit').click(function() {
                 // 投稿IDを抽出（結果から投稿IDを取得）
                 if (preg_match('/投稿ID:\s*(\d+)/', $result, $matches)) {
                     $post_id = intval($matches[1]);
+                    $posts_created = 1; // 投稿が作成されたことを記録
                     error_log('Execute Auto Posting For Genre - YouTube post created with ID: ' . $post_id);
                     file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Execute Auto Posting For Genre - YouTube post created with ID: ' . $post_id . PHP_EOL, FILE_APPEND | LOCK_EX);
                 } else {
@@ -3742,12 +3744,15 @@ $('#cancel-edit').click(function() {
             }
             
             // 実行結果をログに記録（投稿IDを含める）
+            $log_message = 'Execute Auto Posting For Genre - Final result for genre: ' . $setting['genre_name'] . ' - Posts created: ' . $posts_created;
+            error_log($log_message);
+            file_put_contents('/tmp/news-crawler-debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
             
             // 次回実行スケジュールを更新
             $this->reschedule_next_execution($genre_id, $setting);
             
             // 投稿作成数を返す
-            return ($post_id !== null) ? 1 : 0;
+            return $posts_created;
             
         } catch (Exception $e) {
             // エラーログを記録
