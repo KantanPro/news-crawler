@@ -3685,6 +3685,7 @@ $('#cancel-edit').click(function() {
             // クロール実行
             $result = '';
             $post_id = null;
+            $posts_created = 0; // 投稿作成数を初期化
             
             error_log('Execute Auto Posting For Genre - Starting crawl for genre: ' . $setting['genre_name'] . ', Content type: ' . $setting['content_type']);
             
