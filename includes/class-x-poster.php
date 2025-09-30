@@ -20,6 +20,10 @@ class News_Crawler_X_Poster {
         
         // initフックを登録
         add_action('init', array($this, 'init'));
+        error_log('X Poster: initフックを登録しました');
+        
+        // より早いタイミングでもフックを登録
+        add_action('wp_loaded', array($this, 'init'), 5);
         
         // AJAXハンドラーを直接登録（確実性を高める）
         add_action('wp_ajax_test_x_connection', array($this, 'test_x_connection'));
@@ -33,6 +37,9 @@ class News_Crawler_X_Poster {
         
         // より早いタイミングでも登録
         add_action('wp_loaded', array($this, 'register_hooks_early'), 5);
+        
+        // さらに確実にするため、wp_loadedでも直接登録
+        add_action('wp_loaded', array($this, 'register_hooks_direct'), 10);
         
         error_log('X Poster: コンストラクタでAJAXハンドラーと投稿フックを登録しました');
     }
@@ -49,10 +56,30 @@ class News_Crawler_X_Poster {
         // より確実なフック：投稿ステータス変更時
         add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
         
+        // 投稿挿入時
+        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
+        
+        // 投稿保存時
+        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
+        
         // AJAXハンドラーを管理画面でのみ登録
         add_action('admin_init', array($this, 'register_ajax_handlers'));
         
         error_log('X Poster: init() でフックを再登録しました');
+        
+        // フック登録確認
+        global $wp_filter;
+        if (isset($wp_filter['publish_post'])) {
+            error_log('X Poster: publish_post フックが登録されています');
+        } else {
+            error_log('X Poster: publish_post フックが登録されていません');
+        }
+        
+        if (isset($wp_filter['transition_post_status'])) {
+            error_log('X Poster: transition_post_status フックが登録されています');
+        } else {
+            error_log('X Poster: transition_post_status フックが登録されていません');
+        }
     }
     
     /**
@@ -64,7 +91,85 @@ class News_Crawler_X_Poster {
         // 投稿関連フックを再登録
         add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
         
+        // より確実なフック：投稿ステータス変更時
+        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
+        
+        // 投稿挿入時
+        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
+        
+        // 投稿保存時
+        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
+        
         error_log('X Poster: 早期フック登録完了');
+    }
+    
+    /**
+     * 直接フック登録
+     */
+    public function register_hooks_direct() {
+        error_log('X Poster: register_hooks_direct が呼び出されました');
+        
+        // 投稿関連フックを直接登録
+        add_action('publish_post', array($this, 'auto_post_to_x'), 10, 1);
+        add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
+        add_action('wp_insert_post', array($this, 'handle_wp_insert_post'), 10, 3);
+        add_action('save_post', array($this, 'handle_save_post'), 10, 3);
+        
+        // より確実なフックを追加
+        add_action('wp_after_insert_post', array($this, 'handle_wp_after_insert_post'), 10, 4);
+        add_action('post_updated', array($this, 'handle_post_updated'), 10, 3);
+        
+        // デバッグ用：すべての投稿関連フックを監視
+        add_action('wp_insert_post', array($this, 'debug_wp_insert_post'), 5, 3);
+        add_action('save_post', array($this, 'debug_save_post'), 5, 3);
+        add_action('publish_post', array($this, 'debug_publish_post'), 5, 1);
+        add_action('transition_post_status', array($this, 'debug_transition_post_status'), 5, 3);
+        
+        // より広範囲なフックを監視
+        add_action('wp_after_insert_post', array($this, 'debug_wp_after_insert_post'), 5, 4);
+        add_action('post_updated', array($this, 'debug_post_updated'), 5, 3);
+        add_action('wp_update_post', array($this, 'debug_wp_update_post'), 5, 3);
+        add_action('wp_publish_post', array($this, 'debug_wp_publish_post'), 5, 1);
+        
+        // さらに広範囲なフックを監視
+        add_action('wp_insert_post', array($this, 'debug_wp_insert_post_general'), 1, 3);
+        add_action('save_post', array($this, 'debug_save_post_general'), 1, 3);
+        add_action('publish_post', array($this, 'debug_publish_post_general'), 1, 1);
+        add_action('transition_post_status', array($this, 'debug_transition_post_status_general'), 1, 3);
+        
+        // さらに広範囲なフックを監視（すべてのフック）
+        add_action('wp_insert_post', array($this, 'debug_wp_insert_post_all'), 999, 3);
+        add_action('save_post', array($this, 'debug_save_post_all'), 999, 3);
+        add_action('publish_post', array($this, 'debug_publish_post_all'), 999, 1);
+        add_action('transition_post_status', array($this, 'debug_transition_post_status_all'), 999, 3);
+        
+        // さらに広範囲なフックを監視（すべてのフック）
+        add_action('wp_insert_post', array($this, 'debug_wp_insert_post_ultra'), 0, 3);
+        add_action('save_post', array($this, 'debug_save_post_ultra'), 0, 3);
+        add_action('publish_post', array($this, 'debug_publish_post_ultra'), 0, 1);
+        add_action('transition_post_status', array($this, 'debug_transition_post_status_ultra'), 0, 3);
+        
+        // さらに広範囲なフックを監視（すべてのフック）
+        add_action('wp_insert_post', array($this, 'debug_wp_insert_post_super'), -1, 3);
+        add_action('save_post', array($this, 'debug_save_post_super'), -1, 3);
+        add_action('publish_post', array($this, 'debug_publish_post_super'), -1, 1);
+        add_action('transition_post_status', array($this, 'debug_transition_post_status_super'), -1, 3);
+        
+        error_log('X Poster: 直接フック登録完了');
+        
+        // フック登録確認
+        global $wp_filter;
+        if (isset($wp_filter['publish_post'])) {
+            error_log('X Poster: publish_post フックが登録されています（直接登録後）');
+        } else {
+            error_log('X Poster: publish_post フックが登録されていません（直接登録後）');
+        }
+        
+        if (isset($wp_filter['transition_post_status'])) {
+            error_log('X Poster: transition_post_status フックが登録されています（直接登録後）');
+        } else {
+            error_log('X Poster: transition_post_status フックが登録されていません（直接登録後）');
+        }
     }
     
     /**
@@ -574,6 +679,8 @@ class News_Crawler_X_Poster {
         if ($new_status === 'publish' && $old_status !== 'publish') {
             error_log('X Poster: 投稿が公開されました - X投稿を実行します');
             $this->auto_post_to_x($post->ID);
+        } else {
+            error_log('X Poster: 投稿は公開されていません - スキップします');
         }
     }
     
@@ -585,11 +692,14 @@ class News_Crawler_X_Poster {
      * @param bool $update 更新かどうか
      */
     public function handle_wp_insert_post($post_id, $post, $update) {
-        error_log('X Poster: handle_wp_insert_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+        error_log('X Poster: handle_wp_insert_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
         
         // 新規投稿で公開状態の場合のみX投稿を実行
         if (!$update && $post->post_status === 'publish') {
+            error_log('X Poster: 新規投稿が公開されました - X投稿を実行します');
             $this->auto_post_to_x($post_id);
+        } else {
+            error_log('X Poster: 新規投稿ではありません - スキップします');
         }
     }
     
@@ -601,16 +711,227 @@ class News_Crawler_X_Poster {
      * @param bool $update 更新かどうか
      */
     public function handle_save_post($post_id, $post, $update) {
-        error_log('X Poster: handle_save_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+        error_log('X Poster: handle_save_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
         
         // 自動保存やリビジョンの場合はスキップ
         if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            error_log('X Poster: 自動保存またはリビジョンのためスキップします');
             return;
         }
         
         // 投稿が公開状態の場合のみX投稿を実行
         if ($post->post_status === 'publish') {
+            error_log('X Poster: 投稿が保存されました - X投稿を実行します');
             $this->auto_post_to_x($post_id);
+        } else {
+            error_log('X Poster: 投稿は公開状態ではありません - スキップします');
         }
+    }
+    
+    /**
+     * 投稿挿入後の処理
+     * 
+     * @param int $post_id 投稿ID
+     * @param WP_Post $post 投稿オブジェクト
+     * @param bool $update 更新かどうか
+     * @param WP_Post $post_before 更新前の投稿オブジェクト
+     */
+    public function handle_wp_after_insert_post($post_id, $post, $update, $post_before) {
+        error_log('X Poster: handle_wp_after_insert_post が呼び出されました - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+        
+        // 投稿が公開状態の場合のみX投稿を実行
+        if ($post->post_status === 'publish') {
+            error_log('X Poster: 投稿挿入後が公開されました - X投稿を実行します');
+            $this->auto_post_to_x($post_id);
+        } else {
+            error_log('X Poster: 投稿挿入後は公開状態ではありません - スキップします');
+        }
+    }
+    
+    /**
+     * 投稿更新時の処理
+     * 
+     * @param int $post_id 投稿ID
+     * @param WP_Post $post_after 更新後の投稿オブジェクト
+     * @param WP_Post $post_before 更新前の投稿オブジェクト
+     */
+    public function handle_post_updated($post_id, $post_after, $post_before) {
+        error_log('X Poster: handle_post_updated が呼び出されました - Post ID: ' . $post_id . ', Status: ' . $post_after->post_status);
+        
+        // 投稿が公開状態の場合のみX投稿を実行
+        if ($post_after->post_status === 'publish') {
+            error_log('X Poster: 投稿更新後が公開されました - X投稿を実行します');
+            $this->auto_post_to_x($post_id);
+        } else {
+            error_log('X Poster: 投稿更新後は公開状態ではありません - スキップします');
+        }
+    }
+    
+    /**
+     * デバッグ用：wp_insert_postフック
+     */
+    public function debug_wp_insert_post($post_id, $post, $update) {
+        error_log('X Poster: DEBUG wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：save_postフック
+     */
+    public function debug_save_post($post_id, $post, $update) {
+        error_log('X Poster: DEBUG save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：publish_postフック
+     */
+    public function debug_publish_post($post_id) {
+        error_log('X Poster: DEBUG publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：transition_post_statusフック
+     */
+    public function debug_transition_post_status($new_status, $old_status, $post) {
+        error_log('X Poster: DEBUG transition_post_status - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
+    }
+    
+    /**
+     * デバッグ用：wp_after_insert_postフック
+     */
+    public function debug_wp_after_insert_post($post_id, $post, $update, $post_before) {
+        error_log('X Poster: DEBUG wp_after_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：post_updatedフック
+     */
+    public function debug_post_updated($post_id, $post_after, $post_before) {
+        error_log('X Poster: DEBUG post_updated - Post ID: ' . $post_id . ', Status: ' . $post_after->post_status);
+    }
+    
+    /**
+     * デバッグ用：wp_update_postフック
+     */
+    public function debug_wp_update_post($post_id, $post, $update) {
+        error_log('X Poster: DEBUG wp_update_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：wp_publish_postフック
+     */
+    public function debug_wp_publish_post($post_id) {
+        error_log('X Poster: DEBUG wp_publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：wp_insert_postフック（一般）
+     */
+    public function debug_wp_insert_post_general($post_id, $post, $update) {
+        error_log('X Poster: DEBUG GENERAL wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：save_postフック（一般）
+     */
+    public function debug_save_post_general($post_id, $post, $update) {
+        error_log('X Poster: DEBUG GENERAL save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：publish_postフック（一般）
+     */
+    public function debug_publish_post_general($post_id) {
+        error_log('X Poster: DEBUG GENERAL publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：transition_post_statusフック（一般）
+     */
+    public function debug_transition_post_status_general($new_status, $old_status, $post) {
+        error_log('X Poster: DEBUG GENERAL transition_post_status - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
+    }
+    
+    /**
+     * デバッグ用：wp_insert_postフック（すべて）
+     */
+    public function debug_wp_insert_post_all($post_id, $post, $update) {
+        error_log('X Poster: DEBUG ALL wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：save_postフック（すべて）
+     */
+    public function debug_save_post_all($post_id, $post, $update) {
+        error_log('X Poster: DEBUG ALL save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：publish_postフック（すべて）
+     */
+    public function debug_publish_post_all($post_id) {
+        error_log('X Poster: DEBUG ALL publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：transition_post_statusフック（すべて）
+     */
+    public function debug_transition_post_status_all($new_status, $old_status, $post) {
+        error_log('X Poster: DEBUG ALL transition_post_status - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
+    }
+    
+    /**
+     * デバッグ用：wp_insert_postフック（ウルトラ）
+     */
+    public function debug_wp_insert_post_ultra($post_id, $post, $update) {
+        error_log('X Poster: DEBUG ULTRA wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：save_postフック（ウルトラ）
+     */
+    public function debug_save_post_ultra($post_id, $post, $update) {
+        error_log('X Poster: DEBUG ULTRA save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：publish_postフック（ウルトラ）
+     */
+    public function debug_publish_post_ultra($post_id) {
+        error_log('X Poster: DEBUG ULTRA publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：transition_post_statusフック（ウルトラ）
+     */
+    public function debug_transition_post_status_ultra($new_status, $old_status, $post) {
+        error_log('X Poster: DEBUG ULTRA transition_post_status - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
+    }
+    
+    /**
+     * デバッグ用：wp_insert_postフック（スーパー）
+     */
+    public function debug_wp_insert_post_super($post_id, $post, $update) {
+        error_log('X Poster: DEBUG SUPER wp_insert_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：save_postフック（スーパー）
+     */
+    public function debug_save_post_super($post_id, $post, $update) {
+        error_log('X Poster: DEBUG SUPER save_post - Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false') . ', Status: ' . $post->post_status);
+    }
+    
+    /**
+     * デバッグ用：publish_postフック（スーパー）
+     */
+    public function debug_publish_post_super($post_id) {
+        error_log('X Poster: DEBUG SUPER publish_post - Post ID: ' . $post_id);
+    }
+    
+    /**
+     * デバッグ用：transition_post_statusフック（スーパー）
+     */
+    public function debug_transition_post_status_super($new_status, $old_status, $post) {
+        error_log('X Poster: DEBUG SUPER transition_post_status - Post ID: ' . $post->ID . ', Status: ' . $old_status . ' -> ' . $new_status);
     }
 }

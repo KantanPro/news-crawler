@@ -281,6 +281,10 @@ function news_crawler_init_components() {
         add_action('save_post', array($x_poster, 'handle_save_post'), 10, 3);
         
         error_log('News Crawler: X Posterクラスを初期化し、フックを直接登録しました');
+        error_log('News Crawler: publish_post フックを登録しました');
+        error_log('News Crawler: transition_post_status フックを登録しました');
+        error_log('News Crawler: wp_insert_post フックを登録しました');
+        error_log('News Crawler: save_post フックを登録しました');
     }
     
     // 更新チェッククラスは早期初期化で処理済み
