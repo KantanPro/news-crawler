@@ -1,0 +1,45 @@
+---
+description: news-crawler の GitHub リリース手順と、完了報告の必須フォーマット
+alwaysApply: true
+---
+
+# news-crawler リリース手順
+
+## リリース完了の明記（必須）
+
+リリース作業を行った場合、**回答の冒頭**に必ず次のどちらかを明記する。
+
+- **✅ リリース完了** — タグ push・GitHub Release・ZIP 生成まで実施済み
+- **❌ リリース未実施** — コード変更のみ、または手順の途中で止まっている
+
+機能追加なしのバージョン上げのみの場合も、**「機能変更なしのリリース」** と明示する。
+
+## リリース完了時に必ず記載する項目
+
+1. **バージョン**（旧 → 新）
+2. **リリース種別**（機能追加 / バグ修正 / 機能変更なし）
+3. **GitHub Release URL**
+4. **zipballUrl**（asset なしであること）
+5. **assets: []** の確認結果
+6. **ZIP 保存先**（`/Users/kantanpro/Desktop/news-crawler_TEST_UP/news-crawler_{version}_{date}.zip`）
+7. **解凍後フォルダ名**（`news-crawler`）
+8. **コミットハッシュ**（例: `c28a830`）
+
+## バージョン上げの判断
+
+- ユーザーが「リリースしてください」と依頼したときのみリリースする
+- **コード変更がない場合**は、バージョン上げリリースを勝手に行わない。必要なら「変更がないためリリース不要」と伝える
+- 機能修正・追加をコミットしたあと、ユーザーがリリースを依頼した場合のみバージョンを +1 する
+
+## 手順（依頼時）
+
+1. `git diff` / `git log` から変更内容を要約
+2. `news-crawler.php` / `readme.txt` のバージョン更新
+3. 日本語コミット → タグ → push
+4. `gh release create`（**asset なし**）
+5. `./create_release_zip.sh`
+6. `gh release view {tag} --json zipballUrl,assets` で確認
+
+## コミットメッセージ
+
+必ず日本語（例: 「Unsplash Content removedエラーを修正（v3.1.6）」）
