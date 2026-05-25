@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.1.3
+ * Version: 3.1.4
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '3.1.3');
+define('NEWS_CRAWLER_VERSION', '3.1.4');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -203,7 +203,50 @@ function news_crawler_auto_posting_license_notice() {
 }
 
 // プラグインコンポーネントの初期化
+function news_crawler_migrate_featured_image_method_settings() {
+    if (get_option('news_crawler_featured_method_migrated_314')) {
+        return;
+    }
+
+    $aliases = array(
+        'ai_generated' => 'ai',
+        'template_based' => 'template',
+        'external_api' => 'unsplash',
+    );
+
+    $basic_settings = get_option('news_crawler_basic_settings', array());
+    if (is_array($basic_settings) && !empty($basic_settings['featured_image_method'])) {
+        $current = $basic_settings['featured_image_method'];
+        if (isset($aliases[$current])) {
+            $basic_settings['featured_image_method'] = $aliases[$current];
+            update_option('news_crawler_basic_settings', $basic_settings);
+        }
+    }
+
+    $genre_settings = get_option('news_crawler_genre_settings', array());
+    if (is_array($genre_settings) && !empty($genre_settings)) {
+        $updated = false;
+        foreach ($genre_settings as $genre_id => $setting) {
+            if (!is_array($setting) || empty($setting['featured_image_method'])) {
+                continue;
+            }
+            $current = $setting['featured_image_method'];
+            if (isset($aliases[$current])) {
+                $genre_settings[$genre_id]['featured_image_method'] = $aliases[$current];
+                $updated = true;
+            }
+        }
+        if ($updated) {
+            update_option('news_crawler_genre_settings', $genre_settings);
+        }
+    }
+
+    update_option('news_crawler_featured_method_migrated_314', true);
+}
+
 function news_crawler_init_components() {
+    news_crawler_migrate_featured_image_method_settings();
+
     // ライセンス管理クラスの初期化（最初に実行）
     if (class_exists('NewsCrawler_License_Manager')) {
         $license_manager = NewsCrawler_License_Manager::get_instance();
@@ -2135,7 +2178,7 @@ class NewsCrawler {
             // 基本設定から設定を作成
             $genre_setting = array(
                 'auto_featured_image' => true,
-                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai'
             );
             error_log('NewsCrawler: Using basic settings for featured image generation');
         }
@@ -2152,13 +2195,13 @@ class NewsCrawler {
         
         error_log('NewsCrawler: Creating featured image generator instance');
         $generator = new NewsCrawlerFeaturedImageGenerator();
-        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
+        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'ai';
         
         error_log('NewsCrawler: Generating featured image with method: ' . $method);
         
         try {
-            // タイムアウト設定（60秒に延長）
-            set_time_limit(60);
+            // DALL-E生成のためタイムアウトを延長（最大3分）
+            set_time_limit(300);
             
             $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
             

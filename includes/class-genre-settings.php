@@ -610,9 +610,9 @@ class NewsCrawlerGenreSettings {
         $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
         
         $methods = array(
-            'template' => 'テンプレート生成（推奨）',
-            'ai' => 'AI生成（OpenAI DALL-E）',
-            'unsplash' => 'Unsplash画像取得'
+            'ai' => 'AI生成（OpenAI DALL-E）（推奨）',
+            'unsplash' => 'Unsplash画像取得',
+            'template' => 'テンプレート生成（グラデーション＋文字）'
         );
         
         echo '<select name="news_crawler_basic_settings[featured_image_method]">';
@@ -2241,7 +2241,7 @@ $('#cancel-edit').click(function() {
             // アイキャッチ設定の表示
             $featured_image_status = '';
             if (isset($setting['auto_featured_image']) && $setting['auto_featured_image']) {
-                $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'template';
+                $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'ai';
                 $method_labels = array(
                     'template' => 'テンプレート',
                     'ai' => 'AI生成',
@@ -2340,7 +2340,7 @@ $('#cancel-edit').click(function() {
             'post_categories' => $post_categories,
             'post_status' => sanitize_text_field($_POST['post_status']),
             'auto_featured_image' => isset($_POST['auto_featured_image']) ? 1 : 0,
-            'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'template'),
+            'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'ai'),
             'auto_posting' => $auto_posting,
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
             'created_at' => current_time('mysql'),
@@ -2710,7 +2710,7 @@ $('#cancel-edit').click(function() {
         }
         
         $generator = new NewsCrawlerFeaturedImageGenerator();
-        $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'template';
+        $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'ai';
         
         return $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
     }

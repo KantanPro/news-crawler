@@ -832,14 +832,22 @@ class NewsCrawlerSettingsManager {
     
     public function featured_image_method_callback() {
         $settings = get_option($this->option_name, array());
-        $value = isset($settings['featured_image_method']) ? $settings['featured_image_method'] : 'ai_generated';
+        $value = isset($settings['featured_image_method']) ? $settings['featured_image_method'] : 'ai';
+        if ($value === 'ai_generated') {
+            $value = 'ai';
+        } elseif ($value === 'template_based') {
+            $value = 'template';
+        } elseif ($value === 'external_api') {
+            $value = 'unsplash';
+        }
         $options = array(
-            'ai_generated' => 'AI生成画像',
-            'template_based' => 'テンプレートベース'
+            'ai' => 'AI生成（OpenAI DALL-E）（推奨）',
+            'unsplash' => 'Unsplash画像取得',
+            'template' => 'テンプレート生成（グラデーション＋文字）'
         );
         echo '<select name="' . $this->option_name . '[featured_image_method]">';
         foreach ($options as $key => $label) {
-            echo '<option value="' . $key . '" ' . selected($key, $value, false) . '>' . $label . '</option>';
+            echo '<option value="' . esc_attr($key) . '" ' . selected($key, $value, false) . '>' . esc_html($label) . '</option>';
         }
         echo '</select>';
         echo '<p class="description">アイキャッチ画像の生成方法を選択してください。</p>';
@@ -942,7 +950,22 @@ class NewsCrawlerSettingsManager {
         $selects = array('featured_image_method', 'summary_generation_model', 'duplicate_check_strictness');
         foreach ($selects as $select) {
             if (array_key_exists($select, $input)) {
-                $sanitized[$select] = sanitize_text_field($input[$select]);
+                $value = sanitize_text_field($input[$select]);
+                if ($select === 'featured_image_method') {
+                    $allowed_methods = array('ai', 'unsplash', 'template', 'ai_generated', 'template_based', 'external_api');
+                    if (!in_array($value, $allowed_methods, true)) {
+                        $value = 'ai';
+                    }
+                    $aliases = array(
+                        'ai_generated' => 'ai',
+                        'template_based' => 'template',
+                        'external_api' => 'unsplash',
+                    );
+                    if (isset($aliases[$value])) {
+                        $value = $aliases[$value];
+                    }
+                }
+                $sanitized[$select] = $value;
             }
         }
 
@@ -1081,7 +1104,7 @@ class NewsCrawlerSettingsManager {
             'youtube_api_key' => '',
             'openai_api_key' => '',
             'auto_featured_image' => true,
-            'featured_image_method' => 'ai_generated',
+            'featured_image_method' => 'ai',
             'auto_summary_generation' => true,
             'summary_generation_model' => 'gpt-3.5-turbo',
             'duplicate_check_strictness' => 'medium',

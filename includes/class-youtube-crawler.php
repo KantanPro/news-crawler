@@ -1132,7 +1132,7 @@ class NewsCrawlerYouTubeCrawler {
             // 基本設定から設定を作成
             $genre_setting = array(
                 'auto_featured_image' => true,
-                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'template'
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai'
             );
             error_log('YouTubeCrawler: Using basic settings for featured image generation');
         }
@@ -1149,7 +1149,7 @@ class NewsCrawlerYouTubeCrawler {
         
         error_log('YouTubeCrawler: Creating featured image generator instance');
         $generator = new NewsCrawlerFeaturedImageGenerator();
-        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'template';
+        $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'ai';
         
         error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
         

@@ -38,8 +38,10 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $method 生成方法 ('ai', 'template', 'unsplash')
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
-    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
-        $method = $this->normalize_featured_image_method($method);
+    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai') {
+        $requested_method = $this->normalize_featured_image_method($method);
+        $method = $requested_method;
+        $actual_method = $requested_method;
 
         // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
         $current_categories = wp_get_post_categories($post_id);
@@ -51,48 +53,54 @@ class NewsCrawlerFeaturedImageGenerator {
         // 現在のカテゴリーを保存（固定ページの場合は空配列）
         $saved_categories = $current_categories;
         
-        // ライセンスチェック - AI画像生成などの高度な機能が有効かどうかを確認
+        // ライセンスチェック - AIが無効な場合はUnsplashへ切り替え
         if ($method === 'ai' && class_exists('NewsCrawler_License_Manager')) {
             $license_manager = NewsCrawler_License_Manager::get_instance();
             if (!$license_manager->is_advanced_features_enabled()) {
-                error_log('NewsCrawlerFeaturedImageGenerator: ライセンスが無効なため、AI画像生成機能をスキップします');
-                // AI画像生成が無効な場合は、テンプレートベースの生成にフォールバック
-                $method = 'template';
+                error_log('NewsCrawlerFeaturedImageGenerator: ライセンスが無効なため、Unsplash画像取得へ切り替えます');
+                $method = 'unsplash';
             }
         }
         
         $settings = get_option($this->option_name, array());
         
         $result = false;
-        $original_method = $method;
         
         switch ($method) {
             case 'ai':
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
-                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート生成へフォールバックします');
-                    $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします');
+                    $actual_method = 'unsplash';
+                    $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
                 }
                 break;
             case 'unsplash':
                 $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                if (is_array($result) && isset($result['error'])) {
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得に失敗 - エラー: ' . $result['error']);
-                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート生成へフォールバックします');
-                    $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
-                }
                 break;
             case 'template':
                 $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 break;
             default:
-                $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
+                if (is_array($result) && isset($result['error'])) {
+                    $actual_method = 'unsplash';
+                    $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                }
                 break;
         }
         
         // 最終確認：アイキャッチ画像が正しく設定されているかチェック
-        if ($result) {
+        if ($result && !is_array($result)) {
+            update_post_meta($post_id, '_news_crawler_featured_image_requested_method', $requested_method);
+            update_post_meta($post_id, '_news_crawler_featured_image_method', $actual_method);
+            error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ生成完了 - 要求: ' . $requested_method . ', 実際: ' . $actual_method . ', 投稿ID: ' . $post_id);
+        } elseif (is_array($result) && isset($result['error'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ生成失敗 - 要求: ' . $requested_method . ', エラー: ' . $result['error']);
+        }
+
+        if ($result && !is_array($result)) {
             $final_check = has_post_thumbnail($post_id);
             $final_thumbnail_id = get_post_thumbnail_id($post_id);
             
@@ -247,8 +255,8 @@ class NewsCrawlerFeaturedImageGenerator {
                     'model' => 'dall-e-3',
                     'prompt' => $prompt,
                     'n' => 1,
-                    'size' => '1024x1024',
-                    'quality' => 'standard',
+                    'size' => '1792x1024',
+                    'quality' => 'hd',
                     'response_format' => 'url'
                 )),
                 'timeout' => $timeout,
@@ -1428,6 +1436,7 @@ class NewsCrawlerFeaturedImageGenerator {
             'template_based' => 'template',
             'template-based' => 'template',
             'builtin' => 'template',
+            'external_api' => 'unsplash',
         );
 
         if (isset($aliases[$method])) {
@@ -1435,7 +1444,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         $allowed = array('ai', 'unsplash', 'template');
-        return in_array($method, $allowed, true) ? $method : 'template';
+        return in_array($method, $allowed, true) ? $method : 'ai';
     }
     
     /**
@@ -1616,7 +1625,11 @@ class NewsCrawlerFeaturedImageGenerator {
             }
             
             $date = date_i18n('n月j日');
-            $japanese_title = $genre . $main_keyword . 'ニュースまとめ ' . $date;
+            if ($genre === '最新' || $genre === $main_keyword || ($main_keyword !== '' && mb_strpos($main_keyword, $genre) === 0)) {
+                $japanese_title = $main_keyword . 'ニュースまとめ ' . $date;
+            } else {
+                $japanese_title = $genre . $main_keyword . 'ニュースまとめ ' . $date;
+            }
         }
         
         return $japanese_title;
@@ -1972,8 +1985,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * AI画像生成用のプロンプトを作成
      */
     private function create_ai_prompt($title, $keywords, $settings) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'modern, clean, professional, engaging';
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create an attractive and engaging featured image for a blog post about';
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'vivid, cinematic, photorealistic, editorial photography, high detail';
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a visually striking, professional blog featured image about';
         
         $keyword_text = !empty($keywords) ? implode(', ', array_slice($keywords, 0, 3)) : '';
         
@@ -1981,7 +1994,7 @@ class NewsCrawlerFeaturedImageGenerator {
         if (!empty($keyword_text)) {
             $prompt .= ' related to ' . $keyword_text;
         }
-        $prompt .= '. Style: ' . $style . '. The image should be visually appealing and draw readers\' attention. No text overlay. High quality, professional appearance.';
+        $prompt .= '. Style: ' . $style . '. Use rich colors, compelling composition, and realistic imagery. No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
         
         return $prompt;
     }
@@ -2108,7 +2121,13 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // アイキャッチ画像設定を取得
         $featured_image_settings = get_option('news_crawler_featured_image_settings', array());
-        $generation_method = isset($featured_image_settings['featured_image_method']) ? $featured_image_settings['featured_image_method'] : 'ai';
+        $generation_method = isset($featured_image_settings['featured_image_method']) ? $featured_image_settings['featured_image_method'] : '';
+        if ($generation_method === '' && isset($basic_settings['featured_image_method'])) {
+            $generation_method = $basic_settings['featured_image_method'];
+        }
+        if ($generation_method === '') {
+            $generation_method = 'ai';
+        }
         
         // 既にアイキャッチ画像が設定されているかチェック
         $has_featured_image = has_post_thumbnail($post->ID);
@@ -2151,9 +2170,9 @@ class NewsCrawlerFeaturedImageGenerator {
         echo '<label for="featured-image-method" style="display: block; margin-bottom: 5px; font-weight: bold;">生成方法:</label>';
         $generation_method = $this->normalize_featured_image_method($generation_method);
         echo '<select id="featured-image-method" style="width: 100%;">';
-        echo '<option value="template"' . ($generation_method === 'template' ? ' selected' : '') . '>テンプレート生成（推奨）</option>';
-        echo '<option value="ai"' . ($generation_method === 'ai' ? ' selected' : '') . '>AI画像生成 (OpenAI DALL-E)</option>';
+        echo '<option value="ai"' . ($generation_method === 'ai' ? ' selected' : '') . '>AI画像生成 (OpenAI DALL-E)（推奨）</option>';
         echo '<option value="unsplash"' . ($generation_method === 'unsplash' ? ' selected' : '') . '>Unsplash画像取得</option>';
+        echo '<option value="template"' . ($generation_method === 'template' ? ' selected' : '') . '>テンプレート生成（グラデーション＋文字）</option>';
         echo '</select>';
         echo '</div>';
         
@@ -2192,7 +2211,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
-                    timeout: 60000, // 60秒タイムアウト
+                    timeout: 180000, // 180秒タイムアウト（DALL-E生成用）
                     data: {
                         action: 'generate_featured_image',
                         nonce: '<?php echo wp_create_nonce('generate_featured_image_nonce'); ?>',
@@ -2281,7 +2300,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     url: ajaxurl,
                     type: 'POST',
                     dataType: 'json',
-                    timeout: 60000, // 60秒タイムアウト
+                    timeout: 180000, // 180秒タイムアウト（DALL-E生成用）
                     data: {
                         action: 'regenerate_featured_image',
                         nonce: '<?php echo wp_create_nonce('regenerate_featured_image_nonce'); ?>',
