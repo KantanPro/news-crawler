@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.1.6
+ * Version: 3.1.7
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '3.1.6');
+define('NEWS_CRAWLER_VERSION', '3.1.7');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -52,7 +52,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 // アップデータクラスを初期化（WordPress標準更新システム / GitHub Releases連携）
 // レート制限回避: wp-config.php 等で define('KP_GITHUB_TOKEN', 'ghp_xxx'); または NEWS_CRAWLER_GITHUB_TOKEN を定義
 add_action('plugins_loaded', function() {
-    if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
+    if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         NewsCrawlerUpdater::get_instance();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
