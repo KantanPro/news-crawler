@@ -73,7 +73,13 @@ class NewsCrawlerFeaturedImageGenerator {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
                     error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします');
                     $actual_method = 'unsplash';
-                    $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
+                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
+                        $result = false;
+                    } else {
+                        $result = $unsplash_result;
+                    }
                 }
                 break;
             case 'unsplash':
@@ -86,7 +92,8 @@ class NewsCrawlerFeaturedImageGenerator {
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
                     $actual_method = 'unsplash';
-                    $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
                 }
                 break;
         }
@@ -396,24 +403,71 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
-     * Unsplash画像取得 - 強化版通信エラーハンドリング
+     * Unsplash画像取得 - 複数クエリ・複数候補・ランダムAPIフォールバック対応
      */
     private function fetch_unsplash_image($post_id, $title, $keywords, $settings) {
-        // 複数の設定からAccess Keyを取得（優先順位付き）
+        $access_key = $this->get_unsplash_access_key($settings);
+        if (is_array($access_key)) {
+            return $access_key;
+        }
+
+        $search_queries = $this->build_unsplash_search_queries($title, $keywords);
+        $last_error = '一致する画像が見つかりませんでした。';
+
+        foreach ($search_queries as $search_query) {
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索クエリ: ' . $search_query);
+            $search_result = $this->search_unsplash_photos($access_key, $search_query, $post_id, $title);
+
+            if ($search_result && !is_array($search_result)) {
+                return $search_result;
+            }
+
+            if (is_array($search_result) && !empty($search_result['fatal'])) {
+                return array('error' => $search_result['error']);
+            }
+
+            if (is_array($search_result) && isset($search_result['error'])) {
+                $last_error = $search_result['error'];
+            }
+        }
+
+        $random_queries = array('news', 'business', 'technology');
+        foreach ($random_queries as $random_query) {
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplashランダム画像取得 - クエリ: ' . $random_query);
+            $random_result = $this->fetch_unsplash_random_photo($access_key, $random_query, $post_id, $title);
+
+            if ($random_result && !is_array($random_result)) {
+                return $random_result;
+            }
+
+            if (is_array($random_result) && !empty($random_result['fatal'])) {
+                return array('error' => $random_result['error']);
+            }
+
+            if (is_array($random_result) && isset($random_result['error'])) {
+                $last_error = $random_result['error'];
+            }
+        }
+
+        error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得失敗 - 最終エラー: ' . $last_error);
+        return array('error' => $last_error);
+    }
+
+    /**
+     * Unsplash Access Keyを取得
+     */
+    private function get_unsplash_access_key($settings) {
         $access_key = '';
 
-        // 1. 基本設定から取得（最優先）
         $basic_settings = get_option('news_crawler_basic_settings', array());
         if (!empty($basic_settings['unsplash_access_key'])) {
             $access_key = $basic_settings['unsplash_access_key'];
         }
 
-        // 2. フィーチャー画像設定から取得
         if (empty($access_key) && !empty($settings['unsplash_access_key'])) {
             $access_key = $settings['unsplash_access_key'];
         }
 
-        // 3. ジャンル設定から取得
         if (empty($access_key)) {
             $genre_settings = get_option('news_crawler_genre_settings', array());
             foreach ($genre_settings as $setting) {
@@ -428,43 +482,29 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'Unsplash Access Keyが設定されていません。基本設定、フィーチャー画像設定、またはジャンル設定でAccess Keyを設定してください。');
         }
 
-        // Access Keyの形式検証
         if (!is_string($access_key) || strlen($access_key) < 20) {
             return array('error' => 'Unsplash Access Keyの形式が無効です。正しいAccess Keyを設定してください。');
         }
 
-        // 検索キーワード生成
-        $search_query = $this->create_unsplash_query($title, $keywords);
+        return $access_key;
+    }
 
-        // Unsplash API呼び出し（強化版指数バックオフ付き）
+    /**
+     * Unsplash APIリクエスト（リトライ付き）
+     */
+    private function unsplash_api_request($access_key, $api_url) {
         $max_retries = 3;
         $base_delay = 2;
         $max_delay = 30;
+        $response = null;
 
         for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
-            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash API試行回数 ' . $attempt . '/' . $max_retries);
-
-            // リクエスト間の待機（2回目以降）
             if ($attempt > 1) {
                 $delay = min($base_delay * pow(2, $attempt - 2), $max_delay);
-                $jitter = mt_rand(0, 1000) / 1000;
-                $total_delay = $delay + $jitter;
-
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash通信エラー対策で ' . round($total_delay, 2) . '秒待機します');
-                usleep($total_delay * 1000000);
+                usleep(($delay + (mt_rand(0, 1000) / 1000)) * 1000000);
             }
 
-            // タイムアウトを動的に設定
-            $timeout = 20 + ($attempt * 10); // 20秒から開始、試行ごとに10秒延ばす
-            $timeout = min($timeout, 60); // 最大60秒
-
-            $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
-                'query' => $search_query,
-                'per_page' => 1,
-                'orientation' => 'landscape',
-                'content_filter' => 'high'
-            ));
-
+            $timeout = min(20 + ($attempt * 10), 60);
             $response = wp_remote_get($api_url, array(
                 'headers' => array(
                     'Authorization' => 'Client-ID ' . $access_key,
@@ -475,125 +515,225 @@ class NewsCrawlerFeaturedImageGenerator {
                 'httpversion' => '1.1'
             ));
 
-            // ネットワークエラーの詳細な処理
             if (is_wp_error($response)) {
-                $error_code = $response->get_error_code();
-                $error_message = $response->get_error_message();
-
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash試行' . $attempt . ' - ネットワークエラー: ' . $error_code . ' - ' . $error_message);
-
-                // エラーの種類に応じた処理
-                if (strpos($error_message, 'timed out') !== false || strpos($error_message, 'timeout') !== false) {
-                    $user_message = 'Unsplash APIとの通信がタイムアウトしました。インターネット接続を確認してください。';
-                } elseif (strpos($error_message, 'could not resolve host') !== false) {
-                    $user_message = 'Unsplash APIサーバーに接続できません。DNSまたはネットワーク設定を確認してください。';
-                } elseif (strpos($error_message, 'SSL') !== false) {
-                    $user_message = 'SSL接続エラーが発生しました。証明書の有効性を確認してください。';
-                } else {
-                    $user_message = 'Unsplash APIへの通信に失敗しました: ' . $error_message;
-                }
-
-                // ネットワークエラーの場合は再試行
                 if ($attempt < $max_retries) {
                     continue;
                 }
-                return array('error' => $user_message);
+                return array('fatal' => false, 'error' => 'Unsplash APIへの通信に失敗しました: ' . $response->get_error_message());
             }
 
             $response_code = wp_remote_retrieve_response_code($response);
-            $body = wp_remote_retrieve_body($response);
 
-            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash試行' . $attempt . ' - APIレスポンスコード: ' . $response_code);
-
-            // HTTPステータスコードに応じた処理
-            if ($response_code === 429) {
-                // レート制限エラー
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限エラーが発生しました。試行' . $attempt . '/' . $max_retries);
-
-                // レスポンスヘッダーからリトライ時間を取得
+            if ($response_code === 429 && $attempt < $max_retries) {
                 $retry_after = wp_remote_retrieve_header($response, 'retry-after');
-                if ($retry_after) {
-                    $wait_time = min(intval($retry_after), $max_delay);
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash Retry-Afterヘッダーに従い ' . $wait_time . '秒待機します');
-                    sleep($wait_time);
-                } elseif ($attempt < $max_retries) {
-                    // 指数バックオフ
-                    $rate_limit_delay = min($base_delay * pow(2, $attempt), $max_delay);
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限対策で ' . $rate_limit_delay . '秒待機します');
-                    sleep($rate_limit_delay);
-                    continue;
-                }
-
-                if ($attempt >= $max_retries) {
-                    $user_friendly_message = 'Unsplash APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。';
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplashレート制限エラー - 最大再試行回数に達しました');
-                    return array('error' => $user_friendly_message);
-                }
-            } elseif ($response_code === 401) {
-                // 認証エラー
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIキー認証エラー');
-                return array('error' => 'Unsplash Access Keyが無効です。正しいAccess Keyを設定してください。');
-            } elseif ($response_code === 403) {
-                // アクセス拒否
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIアクセス拒否エラー');
-                return array('error' => 'Unsplash APIへのアクセスが拒否されました。アカウントの状態を確認してください。');
-            } elseif ($response_code >= 500 && $response_code < 600) {
-                // サーバーエラー
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashサーバーエラー: ' . $response_code);
-
-                if ($attempt < $max_retries) {
-                    continue;
-                }
-
-                $user_message = 'Unsplashサーバーで一時的なエラーが発生しています。しばらく時間をおいてから再度お試しください。';
-                return array('error' => $user_message);
-            } elseif ($response_code >= 400 && $response_code < 500) {
-                // クライアントエラー（429以外）
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplashクライアントエラー: ' . $response_code);
-                break; // 再試行せず終了
+                sleep($retry_after ? min(intval($retry_after), $max_delay) : min($base_delay * pow(2, $attempt), $max_delay));
+                continue;
             }
 
-            // 成功または4xxエラーの場合はループを抜ける
-            if ($response_code === 200 || ($response_code >= 400 && $response_code < 500)) {
-                break;
+            if ($response_code === 401) {
+                return array('fatal' => true, 'error' => 'Unsplash Access Keyが無効です。正しいAccess Keyを設定してください。');
             }
+
+            if ($response_code === 403) {
+                return array('fatal' => true, 'error' => 'Unsplash APIへのアクセスが拒否されました。アカウントの状態を確認してください。');
+            }
+
+            if ($response_code >= 500 && $response_code < 600 && $attempt < $max_retries) {
+                continue;
+            }
+
+            break;
         }
 
-        // 最終的なレスポンスを評価
         if (is_wp_error($response)) {
-            return array('error' => 'Unsplash API呼び出しエラー: ' . $response->get_error_message());
+            return array('fatal' => false, 'error' => 'Unsplash API呼び出しエラー: ' . $response->get_error_message());
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return array('fatal' => false, 'error' => 'Unsplash APIからの応答が不正です。');
         }
 
         $response_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-
-        $data = json_decode($body, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $json_error = json_last_error_msg();
-            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash JSONデコードエラー: ' . $json_error);
-            return array('error' => 'Unsplash APIからの応答が不正です。JSONデコードエラー: ' . $json_error);
+        if (isset($data['errors']) && !empty($data['errors'])) {
+            $error_messages = is_array($data['errors']) ? implode(', ', $data['errors']) : (string) $data['errors'];
+            return array('fatal' => false, 'error' => 'Unsplash APIエラー: ' . $error_messages);
         }
 
-        if (isset($data['results']) && is_array($data['results']) && !empty($data['results'])) {
-            if (isset($data['results'][0]['urls']['regular'])) {
-                $image_url = $data['results'][0]['urls']['regular'];
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得成功 - URL: ' . $image_url);
-                return $this->download_and_attach_image($image_url, $post_id, $title);
+        if ($response_code !== 200) {
+            $error_messages = '';
+            if (isset($data['errors'])) {
+                $error_messages = is_array($data['errors']) ? implode(', ', $data['errors']) : (string) $data['errors'];
+            }
+            if ($error_messages === '') {
+                $error_messages = 'HTTP ' . $response_code;
+            }
+            return array('fatal' => false, 'error' => 'Unsplash APIエラー: ' . $error_messages);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Unsplash検索APIで複数候補から画像を取得
+     */
+    private function search_unsplash_photos($access_key, $search_query, $post_id, $title) {
+        $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
+            'query' => $search_query,
+            'per_page' => 10,
+            'orientation' => 'landscape',
+            'content_filter' => 'low'
+        ));
+
+        $data = $this->unsplash_api_request($access_key, $api_url);
+        if (isset($data['fatal']) || isset($data['error'])) {
+            return $data;
+        }
+
+        if (empty($data['results']) || !is_array($data['results'])) {
+            return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。');
+        }
+
+        foreach ($data['results'] as $photo) {
+            if (empty($photo['urls']['regular'])) {
+                continue;
+            }
+
+            $download_result = $this->download_and_attach_image($photo['urls']['regular'], $post_id, $title);
+            if ($download_result && !is_array($download_result)) {
+                $this->track_unsplash_download($access_key, $photo);
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索画像取得成功 - クエリ: ' . $search_query);
+                return $download_result;
             }
         }
 
-        // APIレスポンスの解析に失敗した場合
-        if (isset($data['errors'])) {
-            $error_messages = is_array($data['errors']) ? implode(', ', $data['errors']) : $data['errors'];
-            error_log('NewsCrawlerFeaturedImageGenerator: Unsplash APIエラー: ' . $error_messages);
-            return array('error' => 'Unsplash APIエラー: ' . $error_messages);
+        return array('error' => 'キーワード「' . $search_query . '」の候補画像をダウンロードできませんでした。');
+    }
+
+    /**
+     * Unsplashランダム画像API（最終フォールバック）
+     */
+    private function fetch_unsplash_random_photo($access_key, $query, $post_id, $title) {
+        $api_url = 'https://api.unsplash.com/photos/random?' . http_build_query(array(
+            'query' => $query,
+            'orientation' => 'landscape',
+            'content_filter' => 'low'
+        ));
+
+        $data = $this->unsplash_api_request($access_key, $api_url);
+        if (isset($data['fatal']) || isset($data['error'])) {
+            return $data;
         }
 
-        // 画像が見つからない場合
-        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashで画像が見つからない - 検索クエリ: ' . $search_query);
-        return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。別のキーワードを試してください。');
+        if (empty($data['urls']['regular'])) {
+            return array('error' => 'Unsplashランダム画像の取得に失敗しました。');
+        }
+
+        $download_result = $this->download_and_attach_image($data['urls']['regular'], $post_id, $title);
+        if ($download_result && !is_array($download_result)) {
+            $this->track_unsplash_download($access_key, $data);
+            error_log('NewsCrawlerFeaturedImageGenerator: Unsplashランダム画像取得成功 - クエリ: ' . $query);
+            return $download_result;
+        }
+
+        return array('error' => 'Unsplashランダム画像のダウンロードに失敗しました。');
     }
-    
+
+    /**
+     * Unsplashダウンロードイベントを記録（API利用規約準拠）
+     */
+    private function track_unsplash_download($access_key, $photo) {
+        if (empty($photo['links']['download_location'])) {
+            return;
+        }
+
+        wp_remote_get($photo['links']['download_location'], array(
+            'headers' => array(
+                'Authorization' => 'Client-ID ' . $access_key,
+                'User-Agent' => 'NewsCrawler/1.0'
+            ),
+            'timeout' => 15
+        ));
+    }
+
+    /**
+     * Unsplash検索用クエリ候補を生成（英語優先）
+     */
+    private function build_unsplash_search_queries($title, $keywords) {
+        $queries = array();
+        $english_terms = $this->map_keywords_to_english_search_terms($keywords, $title);
+
+        foreach ($english_terms as $term) {
+            $queries[] = $term;
+            if (strpos($term, ' ') === false) {
+                $queries[] = $term . ' news';
+            }
+        }
+
+        if (!empty($keywords) && is_array($keywords)) {
+            $raw_query = implode(' ', array_slice($keywords, 0, 2));
+            if ($raw_query !== '' && preg_match('/[a-zA-Z]/', $raw_query)) {
+                $queries[] = $raw_query;
+            }
+        }
+
+        $queries[] = 'news media';
+        $queries[] = 'business office';
+        $queries[] = 'technology';
+
+        $queries = array_values(array_unique(array_filter(array_map('trim', $queries))));
+        return $queries;
+    }
+
+    /**
+     * 日本語キーワードをUnsplash向け英語検索語に変換
+     */
+    private function map_keywords_to_english_search_terms($keywords, $title) {
+        $terms = array();
+        $dictionary = array(
+            'ai' => 'artificial intelligence',
+            '人工知能' => 'artificial intelligence',
+            'テクノロジー' => 'technology',
+            'technology' => 'technology',
+            'ビジネス' => 'business',
+            'business' => 'business',
+            'ニュース' => 'news',
+            'news' => 'news',
+            '経済' => 'economy',
+            '政治' => 'politics',
+            'スポーツ' => 'sports',
+            '健康' => 'health',
+            '科学' => 'science',
+            '最新' => 'news',
+            'まとめ' => 'news',
+        );
+
+        $sources = is_array($keywords) ? $keywords : array();
+        foreach ($sources as $keyword) {
+            $keyword = trim((string) $keyword);
+            if ($keyword === '') {
+                continue;
+            }
+
+            $lower = mb_strtolower($keyword);
+            if (isset($dictionary[$lower])) {
+                $terms[] = $dictionary[$lower];
+                continue;
+            }
+
+            if (preg_match('/^[a-zA-Z0-9\s\-]+$/', $keyword)) {
+                $terms[] = $keyword;
+            }
+        }
+
+        if (preg_match_all('/[a-zA-Z]{3,}/', (string) $title, $matches)) {
+            $terms = array_merge($terms, array_slice($matches[0], 0, 2));
+        }
+
+        return array_values(array_unique($terms));
+    }
+
 /**
      * グラデーション背景を作成
      */
@@ -2003,15 +2143,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * Unsplash検索用のクエリを作成
      */
     private function create_unsplash_query($title, $keywords) {
-        if (!empty($keywords)) {
-            return implode(' ', array_slice($keywords, 0, 2));
-        }
-        
-        // タイトルから重要なキーワードを抽出
-        $words = explode(' ', $title);
-        $important_words = array_slice($words, 0, 2);
-        
-        return implode(' ', $important_words);
+        $queries = $this->build_unsplash_search_queries($title, $keywords);
+        return !empty($queries) ? $queries[0] : 'news';
     }
     
     /**
