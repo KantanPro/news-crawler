@@ -17,7 +17,7 @@ echo "リリース名: ${RELEASE_NAME}"
 echo ""
 
 # 指定されたディレクトリに既存のZIPファイルがあるかチェック
-TARGET_DIR="/Users/kantanpro/Desktop/Game_TEST_UP"
+TARGET_DIR="/Users/kantanpro/Desktop/news-crawler_TEST_UP"
 if [ -f "${TARGET_DIR}/${RELEASE_NAME}.zip" ]; then
     echo "既存のZIPファイルを削除中: ${TARGET_DIR}/${RELEASE_NAME}.zip"
     rm "${TARGET_DIR}/${RELEASE_NAME}.zip"

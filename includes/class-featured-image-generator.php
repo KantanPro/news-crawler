@@ -39,6 +39,8 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
     public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'template') {
+        $method = $this->normalize_featured_image_method($method);
+
         // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
         $current_categories = wp_get_post_categories($post_id);
         $post = get_post($post_id);
@@ -67,30 +69,25 @@ class NewsCrawlerFeaturedImageGenerator {
         switch ($method) {
             case 'ai':
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
-                // AI画像生成に失敗した場合は何も生成しない
                 if (is_array($result) && isset($result['error'])) {
-                    error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
-                    $result = false;
+                    error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
+                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート生成へフォールバックします');
+                    $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 }
                 break;
             case 'unsplash':
                 $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                // Unsplash画像取得に失敗した場合は何も生成しない
                 if (is_array($result) && isset($result['error'])) {
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
-                    $result = false;
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得に失敗 - エラー: ' . $result['error']);
+                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート生成へフォールバックします');
+                    $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 }
                 break;
             case 'template':
                 $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 break;
             default:
-                // デフォルトはAI画像生成を使用し、失敗時は何も生成しない
-                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
-                if (is_array($result) && isset($result['error'])) {
-                    error_log('NewsCrawlerFeaturedImageGenerator: デフォルトAI画像生成に失敗、アイキャッチ画像生成をスキップ - エラー: ' . $result['error']);
-                    $result = false;
-                }
+                $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
                 break;
         }
         
@@ -180,11 +177,8 @@ class NewsCrawlerFeaturedImageGenerator {
                 }
             }
             
-            // 画像を保存
+            // 画像を保存（save_image_as_attachment 内で image リソースを解放）
             $result = $this->save_image_as_attachment($image, $post_id, $title);
-            
-            // メモリを解放
-            imagedestroy($image);
             
             if (!$result) {
                 error_log('NewsCrawlerFeaturedImageGenerator: Failed to save image as attachment');
@@ -607,8 +601,14 @@ class NewsCrawlerFeaturedImageGenerator {
             $b = intval($rgb1['b'] * (1 - $ratio) + $rgb2['b'] * $ratio);
             
             $color = imagecolorallocate($image, $r, $g, $b);
+            if ($color === false) {
+                error_log('NewsCrawlerFeaturedImageGenerator: imagecolorallocate failed at y=' . $y);
+                return false;
+            }
             imageline($image, 0, $y, $width, $y, $color);
         }
+
+        return true;
     }
     
     /**
@@ -807,6 +807,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
         
         error_log("Featured Image Generator: Japanese text drawing completed");
+        return true;
     }
     
     /**
@@ -872,6 +873,8 @@ class NewsCrawlerFeaturedImageGenerator {
             // 拡大描画のために文字を1文字ずつ処理
             $this->draw_scaled_text($image, $safe_line, $font_size, $color, $x, $y, $scale_factor);
         }
+
+        return true;
     }
     
     /**
@@ -1408,6 +1411,31 @@ class NewsCrawlerFeaturedImageGenerator {
             
             $tag_x += $tag_width + 15;
         }
+
+        return true;
+    }
+
+    /**
+     * 生成方法の値を正規化
+     */
+    private function normalize_featured_image_method($method) {
+        $method = sanitize_text_field((string) $method);
+
+        $aliases = array(
+            'ai_generated' => 'ai',
+            'ai-generate' => 'ai',
+            'dalle' => 'ai',
+            'template_based' => 'template',
+            'template-based' => 'template',
+            'builtin' => 'template',
+        );
+
+        if (isset($aliases[$method])) {
+            return $aliases[$method];
+        }
+
+        $allowed = array('ai', 'unsplash', 'template');
+        return in_array($method, $allowed, true) ? $method : 'template';
     }
     
     /**
@@ -1415,8 +1443,22 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function get_japanese_font_path() {
         error_log('Featured Image Generator: Starting font path search...');
+
+        // 優先順位1: プラグイン同梱フォント（サーバー環境で最も確実）
+        $plugin_root = dirname(dirname(__FILE__));
+        $plugin_fonts = array(
+            $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf',
+            $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf',
+        );
+
+        foreach ($plugin_fonts as $plugin_font) {
+            if ($this->is_usable_japanese_font($plugin_font)) {
+                error_log('Featured Image Generator: Using plugin font: ' . $plugin_font);
+                return $plugin_font;
+            }
+        }
         
-        // 優先順位1: macOSシステムフォント（信頼性が高い）
+        // 優先順位2: macOSシステムフォント
         $macos_fonts = array(
             '/System/Library/Fonts/PingFang.ttc',
             '/System/Library/Fonts/Hiragino Sans GB.ttc',
@@ -1465,79 +1507,6 @@ class NewsCrawlerFeaturedImageGenerator {
             }
         }
         
-        error_log('Featured Image Generator: No working system fonts found, trying plugin fonts...');
-        
-        // 優先順位2: プラグイン内のフォントファイル（フォールバック）
-        $plugin_fonts = array();
-        
-        // 現在のファイルの場所から相対パスで解決
-        $current_file = __FILE__;
-        $plugin_root = dirname(dirname($current_file));
-        
-        // 複数のパスパターンを試行
-        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf';
-        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf';
-        
-        // WordPress関数を使用したパス解決
-        if (function_exists('plugin_dir_path')) {
-            $plugin_dir = plugin_dir_path(__FILE__);
-            $plugin_fonts[] = $plugin_dir . '../assets/fonts/NotoSansJP-Regular.ttf';
-            $plugin_fonts[] = $plugin_dir . '../assets/fonts/NotoSansJP-Regular.otf';
-        }
-        
-        // 絶対パスでの解決（フォールバック）
-        $fallback_path = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf';
-        $plugin_fonts[] = $fallback_path;
-        $plugin_fonts[] = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.otf';
-        
-        // さらに確実なパス解決
-        $absolute_paths = array(
-            '/Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/assets/fonts/NotoSansJP-Regular.ttf',
-            dirname(dirname(__DIR__)) . '/assets/fonts/NotoSansJP-Regular.ttf',
-            realpath(dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf')
-        );
-        
-        foreach ($absolute_paths as $path) {
-            if ($path && file_exists($path)) {
-                $plugin_fonts[] = $path;
-            }
-        }
-        
-        // 重複を除去
-        $plugin_fonts = array_unique($plugin_fonts);
-        
-        error_log('Featured Image Generator: Checking ' . count($plugin_fonts) . ' plugin fonts...');
-        foreach ($plugin_fonts as $plugin_font) {
-            error_log('Featured Image Generator: Checking plugin font: ' . $plugin_font);
-            if (file_exists($plugin_font)) {
-                error_log('Featured Image Generator: Plugin font file exists: ' . $plugin_font);
-                if (is_readable($plugin_font)) {
-                    error_log('Featured Image Generator: Plugin font file is readable: ' . $plugin_font);
-                    $file_size = filesize($plugin_font);
-                    error_log('Featured Image Generator: Plugin font file size: ' . $file_size . ' bytes');
-                    
-                    // フォントの動作確認（必須）
-                    if (function_exists('imagettfbbox')) {
-                        $test_bbox = imagettfbbox(20, 0, $plugin_font, 'テスト');
-                        if ($test_bbox !== false) {
-                            error_log('Featured Image Generator: Plugin font test successful: ' . $plugin_font);
-                            return $plugin_font;
-                        } else {
-                            error_log('Featured Image Generator: Plugin font test failed (bbox): ' . $plugin_font);
-                        }
-                    } else {
-                        error_log('Featured Image Generator: FreeType functions not available');
-                        // FreeTypeが利用できない場合は、プラグインフォントも使用しない
-                        error_log('Featured Image Generator: Skipping plugin font due to FreeType unavailability');
-                    }
-                } else {
-                    error_log('Featured Image Generator: Plugin font file not readable: ' . $plugin_font);
-                }
-            } else {
-                error_log('Featured Image Generator: Plugin font file does not exist: ' . $plugin_font);
-            }
-        }
-        
         // 優先順位3: Linuxシステムフォント
         $linux_fonts = array(
             '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
@@ -1546,7 +1515,7 @@ class NewsCrawlerFeaturedImageGenerator {
         );
         
         foreach ($linux_fonts as $font) {
-            if (file_exists($font)) {
+            if ($this->is_usable_japanese_font($font)) {
                 error_log('Featured Image Generator: Found Linux system font: ' . $font);
                 return $font;
             }
@@ -1554,6 +1523,22 @@ class NewsCrawlerFeaturedImageGenerator {
         
         error_log('Featured Image Generator: No Japanese font found after checking all sources!');
         return false;
+    }
+
+    /**
+     * 日本語描画に使えるフォントか判定
+     */
+    private function is_usable_japanese_font($font_path) {
+        if (!file_exists($font_path) || !is_readable($font_path)) {
+            return false;
+        }
+
+        if (!function_exists('imagettfbbox')) {
+            return false;
+        }
+
+        $test_bbox = @imagettfbbox(20, 0, $font_path, 'テスト');
+        return $test_bbox !== false && is_array($test_bbox);
     }
     
     /**
@@ -2164,7 +2149,9 @@ class NewsCrawlerFeaturedImageGenerator {
         // 生成方法の選択
         echo '<div style="margin-bottom: 15px;">';
         echo '<label for="featured-image-method" style="display: block; margin-bottom: 5px; font-weight: bold;">生成方法:</label>';
+        $generation_method = $this->normalize_featured_image_method($generation_method);
         echo '<select id="featured-image-method" style="width: 100%;">';
+        echo '<option value="template"' . ($generation_method === 'template' ? ' selected' : '') . '>テンプレート生成（推奨）</option>';
         echo '<option value="ai"' . ($generation_method === 'ai' ? ' selected' : '') . '>AI画像生成 (OpenAI DALL-E)</option>';
         echo '<option value="unsplash"' . ($generation_method === 'unsplash' ? ' selected' : '') . '>Unsplash画像取得</option>';
         echo '</select>';

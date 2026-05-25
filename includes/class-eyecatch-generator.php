@@ -172,6 +172,8 @@ class News_Crawler_Eyecatch_Generator {
             $color = imagecolorallocate($image, $r, $g, $b);
             imageline($image, 0, $y, $width, $y, $color);
         }
+
+        return true;
     }
     
     /**
@@ -252,8 +254,22 @@ class News_Crawler_Eyecatch_Generator {
      */
     private function get_japanese_font_path() {
         error_log('Eyecatch Generator: Starting font path search...');
+
+        // 優先順位1: プラグイン同梱フォント（サーバー環境で最も確実）
+        $plugin_root = dirname(dirname(__FILE__));
+        $plugin_fonts = array(
+            $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf',
+            $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf',
+        );
+
+        foreach ($plugin_fonts as $plugin_font) {
+            if ($this->is_usable_japanese_font($plugin_font)) {
+                error_log('Eyecatch Generator: Using plugin font: ' . $plugin_font);
+                return $plugin_font;
+            }
+        }
         
-        // 優先順位1: システムの日本語フォント（macOS、最も信頼性が高い）
+        // 優先順位2: システムの日本語フォント（macOS）
         $system_fonts = array(
             '/System/Library/Fonts/STHeiti Medium.ttc',  // 最も安定している
             '/System/Library/Fonts/STHeiti Light.ttc',   // 軽量版
@@ -302,114 +318,35 @@ class News_Crawler_Eyecatch_Generator {
                 error_log('Eyecatch Generator: Font file does not exist: ' . $font);
             }
         }
-        
-        error_log('Eyecatch Generator: No working system fonts found, trying plugin fonts...');
-        
-        // 優先順位2: プラグイン内のフォントファイル（フォールバック）
-        $plugin_fonts = array();
-        
-        // 現在のファイルの場所から相対パスで解決
-        $current_file = __FILE__;
-        $plugin_root = dirname(dirname($current_file));
-        
-        // 複数のパスパターンを試行
-        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.ttf';
-        $plugin_fonts[] = $plugin_root . '/assets/fonts/NotoSansJP-Regular.otf';
-        
-        // WordPress関数を使用したパス解決
-        if (function_exists('plugin_dir_path')) {
-            $plugin_dir = plugin_dir_path(dirname(__FILE__));
-            $plugin_fonts[] = $plugin_dir . 'assets/fonts/NotoSansJP-Regular.ttf';
-            $plugin_fonts[] = $plugin_dir . 'assets/fonts/NotoSansJP-Regular.otf';
-        }
-        
-        // 絶対パスでの解決（フォールバック）
-        $fallback_path = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf';
-        $plugin_fonts[] = $fallback_path;
-        $plugin_fonts[] = dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.otf';
-        
-        // さらに確実なパス解決
-        $absolute_paths = array(
-            '/Users/kantanpro/Desktop/KantanPro/wordpress/wp-content/plugins/news-crawler/assets/fonts/NotoSansJP-Regular.ttf',
-            dirname(dirname(__DIR__)) . '/assets/fonts/NotoSansJP-Regular.ttf',
-            realpath(dirname(dirname(__FILE__)) . '/assets/fonts/NotoSansJP-Regular.ttf')
-        );
-        
-        foreach ($absolute_paths as $path) {
-            if ($path && file_exists($path)) {
-                $plugin_fonts[] = $path;
-            }
-        }
-        
-        // 重複を除去
-        $plugin_fonts = array_unique($plugin_fonts);
-        
-        error_log('Eyecatch Generator: Checking ' . count($plugin_fonts) . ' plugin fonts...');
-        foreach ($plugin_fonts as $plugin_font) {
-            error_log('Eyecatch Generator: Checking plugin font: ' . $plugin_font);
-            if (file_exists($plugin_font)) {
-                error_log('Eyecatch Generator: Plugin font file exists: ' . $plugin_font);
-                if (is_readable($plugin_font)) {
-                    error_log('Eyecatch Generator: Plugin font file is readable: ' . $plugin_font);
-                    $file_size = filesize($plugin_font);
-                    error_log('Eyecatch Generator: Plugin font file size: ' . $file_size . ' bytes');
-                    
-                    // フォントの動作確認（必須）
-                    if (function_exists('imagettfbbox')) {
-                        $test_bbox = imagettfbbox(20, 0, $plugin_font, 'テスト');
-                        if ($test_bbox !== false) {
-                            error_log('Eyecatch Generator: Plugin font test successful: ' . $plugin_font);
-                            return $plugin_font;
-                        } else {
-                            error_log('Eyecatch Generator: Plugin font test failed (bbox): ' . $plugin_font);
-                        }
-                    } else {
-                        error_log('Eyecatch Generator: FreeType functions not available');
-                        // FreeTypeが利用できない場合は、プラグインフォントも使用しない
-                        error_log('Eyecatch Generator: Skipping plugin font due to FreeType unavailability');
-                    }
-                } else {
-                    error_log('Eyecatch Generator: Plugin font file not readable: ' . $plugin_font);
-                }
-            } else {
-                error_log('Eyecatch Generator: Plugin font file does not exist: ' . $plugin_font);
-            }
-        }
-        
+
         // 優先順位3: fc-listで検索（Linux/Unix系）
         if (function_exists('exec')) {
             error_log('Eyecatch Generator: Trying fc-list command...');
             $output = array();
             $return_var = 0;
             exec('fc-list :lang=ja file 2>/dev/null', $output, $return_var);
-            
+
             if ($return_var === 0 && !empty($output)) {
                 error_log('Eyecatch Generator: fc-list found ' . count($output) . ' fonts');
                 foreach ($output as $line) {
                     $font_path = trim($line);
-                    error_log('Eyecatch Generator: fc-list font: ' . $font_path);
-                    if (file_exists($font_path) && is_readable($font_path)) {
+                    if ($this->is_usable_japanese_font($font_path)) {
                         error_log('Eyecatch Generator: Found fc-list font: ' . $font_path);
                         return $font_path;
                     }
                 }
-            } else {
-                error_log('Eyecatch Generator: fc-list command failed or returned no results');
             }
-        } else {
-            error_log('Eyecatch Generator: exec function not available');
         }
-        
+
         // 優先順位4: Windows用のフォントパス
         $windows_fonts = array(
             'C:/Windows/Fonts/msgothic.ttc',
             'C:/Windows/Fonts/yu gothic.ttc',
             'C:/Windows/Fonts/meiryo.ttc'
         );
-        
-        error_log('Eyecatch Generator: Checking Windows fonts...');
+
         foreach ($windows_fonts as $font) {
-            if (file_exists($font) && is_readable($font)) {
+            if ($this->is_usable_japanese_font($font)) {
                 error_log('Eyecatch Generator: Found Windows font: ' . $font);
                 return $font;
             }
@@ -417,6 +354,22 @@ class News_Crawler_Eyecatch_Generator {
         
         error_log('Eyecatch Generator: No Japanese font found after checking all sources!');
         return false;
+    }
+
+    /**
+     * 日本語描画に使えるフォントか判定
+     */
+    private function is_usable_japanese_font($font_path) {
+        if (!file_exists($font_path) || !is_readable($font_path)) {
+            return false;
+        }
+
+        if (!function_exists('imagettfbbox')) {
+            return false;
+        }
+
+        $test_bbox = @imagettfbbox(20, 0, $font_path, 'テスト');
+        return $test_bbox !== false && is_array($test_bbox);
     }
     
     /**

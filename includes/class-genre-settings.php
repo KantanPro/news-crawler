@@ -610,6 +610,7 @@ class NewsCrawlerGenreSettings {
         $method = isset($options['featured_image_method']) ? $options['featured_image_method'] : 'ai'; // デフォルトを'ai'に変更
         
         $methods = array(
+            'template' => 'テンプレート生成（推奨）',
             'ai' => 'AI生成（OpenAI DALL-E）',
             'unsplash' => 'Unsplash画像取得'
         );
@@ -645,7 +646,7 @@ class NewsCrawlerGenreSettings {
         }
         
         if (isset($input['featured_image_method'])) {
-            $allowed_methods = array('ai', 'unsplash');
+            $allowed_methods = array('ai', 'unsplash', 'template');
             $method = sanitize_text_field($input['featured_image_method']);
             $sanitized['featured_image_method'] = in_array($method, $allowed_methods) ? $method : 'ai';
         }
