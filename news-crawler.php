@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.1.1
+ * Version: 3.1.2
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '3.1.1');
+define('NEWS_CRAWLER_VERSION', '3.1.2');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -49,11 +49,11 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 
 
-// アップデータクラスを初期化（WordPress標準更新システム）
+// アップデータクラスを初期化（WordPress標準更新システム / GitHub Releases連携）
+// レート制限回避: wp-config.php 等で define('KP_GITHUB_TOKEN', 'ghp_xxx'); または NEWS_CRAWLER_GITHUB_TOKEN を定義
 add_action('plugins_loaded', function() {
-    // 管理画面またはWP-Cronのみで初期化し、フロント側の負荷を回避
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
-        new NewsCrawlerUpdater();
+        NewsCrawlerUpdater::get_instance();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
 }, 1);
@@ -148,8 +148,12 @@ function news_crawler_clear_cache_ajax() {
     }
     
     // キャッシュをクリア
-    delete_transient('news_crawler_latest_version');
-    delete_transient('news_crawler_latest_version_backup');
+    if (class_exists('NewsCrawlerUpdater')) {
+        NewsCrawlerUpdater::get_instance()->clear_version_caches();
+    } else {
+        delete_transient('news_crawler_latest_version');
+        delete_transient('news_crawler_latest_version_backup');
+    }
     
     wp_send_json_success('キャッシュをクリアしました。');
 }

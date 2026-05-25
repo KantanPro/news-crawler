@@ -1120,13 +1120,13 @@ class NewsCrawlerSettingsManager {
         // Updaterから更新状況を取得
         $latest_version = false;
         if (class_exists('NewsCrawlerUpdater')) {
-            $updater = new NewsCrawlerUpdater();
+            $updater = NewsCrawlerUpdater::get_instance();
             $status = $updater->get_update_status();
             if ($status && isset($status['status']) && $status['status'] === 'success') {
                 $latest_version = array(
                     'version' => $status['latest_version'],
-                    'published_at' => date('Y-m-d H:i:s'),
-                    'description' => ''
+                    'published_at' => !empty($status['published_at']) ? $status['published_at'] : date('Y-m-d H:i:s'),
+                    'description' => !empty($status['description']) ? $status['description'] : '',
                 );
             }
         }
@@ -1445,8 +1445,12 @@ class NewsCrawlerSettingsManager {
         }
         
         // キャッシュをクリア
-        delete_transient('news_crawler_latest_version');
-        delete_transient('news_crawler_latest_version_backup');
+        if (class_exists('NewsCrawlerUpdater')) {
+            NewsCrawlerUpdater::get_instance()->clear_version_caches();
+        } else {
+            delete_transient('news_crawler_latest_version');
+            delete_transient('news_crawler_latest_version_backup');
+        }
         
         wp_send_json_success('キャッシュをクリアしました。');
     }
