@@ -196,79 +196,111 @@ class NewsCrawlerUpdater {
     }
 
     public function before_update($response, $hook_extra, $result = null) {
-        if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
-            $was_network_active = is_multisite() && is_plugin_active_for_network($this->plugin_basename);
-            $was_active = is_plugin_active($this->plugin_basename) || $was_network_active;
-
-            set_site_transient($this->key('pre_update_state'), array(
-                'was_active'     => $was_active,
-                'network_active' => $was_network_active,
-            ), 30 * MINUTE_IN_SECONDS);
-
-            if ($was_active) {
-                deactivate_plugins($this->plugin_basename, true, $was_network_active);
-            }
+        if (!$this->is_target_plugin_update($hook_extra)) {
+            return $response;
         }
+
+        $was_network_active = is_multisite() && is_plugin_active_for_network($this->plugin_basename);
+        $was_active = is_plugin_active($this->plugin_basename) || $was_network_active;
+
+        set_site_transient($this->key('pre_update_state'), array(
+            'was_active'     => $was_active,
+            'network_active' => $was_network_active,
+        ), 30 * MINUTE_IN_SECONDS);
+
+        if ($was_active) {
+            deactivate_plugins($this->plugin_basename, true, $was_network_active);
+        }
+
         return $response;
     }
 
     public function rename_github_source($response, $hook_extra, $result) {
-        if (!isset($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_basename) {
+        if (!$this->is_target_plugin_update($hook_extra)) {
             return $response;
         }
-        if (empty($result) || empty($result['destination']) || empty($result['source'])) {
+        if (empty($result) || is_wp_error($result)) {
             return $response;
         }
 
-        $destination  = trailingslashit($result['destination']);
-        $source       = trailingslashit($result['source']);
         $expected_dir = trailingslashit(WP_PLUGIN_DIR) . $this->plugin_slug . '/';
+        $expected_main = $expected_dir . basename($this->plugin_file);
 
-        if (untrailingslashit($destination) === untrailingslashit($expected_dir)) {
+        if (file_exists($expected_main)) {
             return $response;
         }
-        if (strpos(basename($source), $this->plugin_slug) === 0) {
-            if (is_dir($expected_dir)) {
-                $this->rmdir_recursive($expected_dir);
-            }
-            @rename($source, $expected_dir);
-            $result['destination'] = $expected_dir;
-            $response = $result;
+
+        $installed_dir = $this->find_installed_plugin_directory($result);
+        if (!$installed_dir || !file_exists($installed_dir . basename($this->plugin_file))) {
+            error_log('News Crawler Updater: Could not locate plugin files after extract');
+            return $response;
         }
+
+        if (untrailingslashit($installed_dir) === untrailingslashit($expected_dir)) {
+            return $response;
+        }
+
+        if (is_dir($expected_dir)) {
+            $this->rmdir_recursive($expected_dir);
+        }
+
+        if (@rename(untrailingslashit($installed_dir), untrailingslashit($expected_dir))) {
+            error_log('News Crawler Updater: Renamed ' . basename(untrailingslashit($installed_dir)) . ' to ' . $this->plugin_slug);
+            $result['destination'] = $expected_dir;
+            return $result;
+        }
+
+        error_log('News Crawler Updater: Failed to rename extracted folder to ' . $this->plugin_slug);
         return $response;
     }
 
     public function after_update($response, $hook_extra, $result) {
-        if (isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename) {
-            $this->clear_version_cache();
-            delete_site_transient('update_plugins');
-            delete_site_transient('update_plugins_checked');
-            wp_clean_plugins_cache();
-            if (function_exists('wp_cache_flush')) {
-                wp_cache_flush();
-            }
+        if (!$this->is_target_plugin_update($hook_extra)) {
+            return $response;
         }
+
+        wp_clean_plugins_cache(true);
+
+        $was = get_site_transient($this->key('pre_update_state'));
+        if ($was && !empty($was['was_active'])) {
+            $this->reactivate_plugin($was);
+        }
+
+        set_transient(
+            $this->key('admin_reload'),
+            admin_url('admin.php?page=news-crawler-main&nc_updated=1'),
+            5 * MINUTE_IN_SECONDS
+        );
+
+        $this->clear_version_cache();
+        delete_site_transient('update_plugins');
+        delete_site_transient('update_plugins_checked');
+        if (function_exists('wp_cache_flush')) {
+            wp_cache_flush();
+        }
+
         return $response;
     }
 
     public function handle_auto_activation($upgrader_object, $options) {
-        if ($options['action'] === 'update' && $options['type'] === 'plugin') {
-            if (isset($options['plugins']) && in_array($this->plugin_basename, $options['plugins'])) {
-                $was = get_site_transient($this->key('pre_update_state'));
-
-                if ($was && !empty($was['was_active'])) {
-                    if (!is_plugin_active($this->plugin_basename)) {
-                        if (!empty($was['network_active'])) {
-                            activate_plugin($this->plugin_basename, '', true);
-                        } else {
-                            activate_plugin($this->plugin_basename);
-                        }
-                    }
-                }
-                set_transient($this->key('admin_reload'), 1, 5 * MINUTE_IN_SECONDS);
-                delete_site_transient($this->key('pre_update_state'));
-            }
+        if ($options['action'] !== 'update' || $options['type'] !== 'plugin') {
+            return;
         }
+        if (!$this->is_target_plugin_in_options($options)) {
+            return;
+        }
+
+        $was = get_site_transient($this->key('pre_update_state'));
+        if ($was && !empty($was['was_active'])) {
+            $this->reactivate_plugin($was);
+        }
+
+        set_transient(
+            $this->key('admin_reload'),
+            admin_url('admin.php?page=news-crawler-main&nc_updated=1'),
+            5 * MINUTE_IN_SECONDS
+        );
+        delete_site_transient($this->key('pre_update_state'));
     }
 
     public function maybe_reload_admin_after_activation() {
@@ -278,20 +310,22 @@ class NewsCrawlerUpdater {
         if (!current_user_can('activate_plugins')) {
             return;
         }
-        $needs = get_transient($this->key('admin_reload'));
-        if (!$needs) {
+
+        $redirect_url = get_transient($this->key('admin_reload'));
+        if (!$redirect_url) {
             return;
         }
 
         if (!isset($_GET['nc_reloaded'])) {
-            $url = add_query_arg('nc_reloaded', '1');
+            $url = add_query_arg('nc_reloaded', '1', $redirect_url);
             if ($url) {
                 wp_safe_redirect($url);
                 exit;
             }
-        } else {
-            delete_transient($this->key('admin_reload'));
         }
+
+        delete_transient($this->key('admin_reload'));
+        delete_site_transient($this->key('pre_update_state'));
     }
 
     public function scheduled_update_check() {
@@ -560,5 +594,88 @@ class NewsCrawlerUpdater {
 
     private function key($suffix) {
         return 'nc_upd_' . md5($this->plugin_basename) . '_' . $suffix;
+    }
+
+    private function is_target_plugin_update($hook_extra) {
+        return isset($hook_extra['plugin']) && $hook_extra['plugin'] === $this->plugin_basename;
+    }
+
+    private function is_target_plugin_in_options($options) {
+        if (isset($options['plugins']) && is_array($options['plugins'])) {
+            return in_array($this->plugin_basename, $options['plugins'], true);
+        }
+        if (isset($options['plugin']) && $options['plugin'] === $this->plugin_basename) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * GitHub zipball 展開後のフォルダ（例: KantanPro-news-crawler-{hash}）を検出
+     */
+    private function find_installed_plugin_directory($result) {
+        $main_file = basename($this->plugin_file);
+        $paths = array();
+
+        if (!empty($result['source'])) {
+            $paths[] = trailingslashit($result['source']);
+        }
+        if (!empty($result['destination'])) {
+            $paths[] = trailingslashit($result['destination']);
+        }
+
+        foreach ($paths as $path) {
+            if (file_exists($path . $main_file)) {
+                return $path;
+            }
+
+            if (!is_dir($path)) {
+                continue;
+            }
+
+            $entries = @scandir($path);
+            if (!is_array($entries)) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $subdir = trailingslashit($path) . $entry;
+                if (is_dir($subdir) && file_exists(trailingslashit($subdir) . $main_file)) {
+                    return trailingslashit($subdir);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function reactivate_plugin($state) {
+        if (!function_exists('activate_plugin')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        wp_clean_plugins_cache(true);
+
+        $plugin_path = WP_PLUGIN_DIR . '/' . $this->plugin_basename;
+        if (!file_exists($plugin_path)) {
+            error_log('News Crawler Updater: Plugin file missing after update: ' . $plugin_path);
+            return false;
+        }
+
+        if (is_plugin_active($this->plugin_basename)) {
+            return true;
+        }
+
+        $network = !empty($state['network_active']);
+        $activation = activate_plugin($this->plugin_basename, '', $network);
+        if (is_wp_error($activation)) {
+            error_log('News Crawler Updater: Reactivation failed: ' . $activation->get_error_message());
+            return false;
+        }
+
+        return true;
     }
 }
