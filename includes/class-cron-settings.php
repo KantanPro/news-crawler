@@ -176,6 +176,7 @@ class NewsCrawlerCronSettings {
         $oauth = News_Crawler_X_OAuth::instance();
         $auth_method = $oauth->get_auth_method($settings);
         $connected = $oauth->is_connected($settings);
+        $connected_username = $connected ? $oauth->get_connected_username($settings) : '';
         $auth_url = $oauth->get_authorization_url();
         $redirect_uri = $oauth->get_redirect_uri();
 
@@ -258,9 +259,6 @@ class NewsCrawlerCronSettings {
                         </td>
                     </tr>
                 </table>
-                <?php if ($connected && $auth_method === 'oauth2' && !empty($settings['twitter_connected_username'])) : ?>
-                    <p><strong>接続済み</strong> @<?php echo esc_html($settings['twitter_connected_username']); ?></p>
-                <?php endif; ?>
             </div>
 
             <div class="nc-x-auth-panel nc-x-auth-oauth1" <?php echo ($auth_method !== 'oauth1') ? 'style="display:none;"' : ''; ?>>
@@ -291,6 +289,11 @@ class NewsCrawlerCronSettings {
         <hr />
 
         <h3>接続操作</h3>
+        <?php if ($connected && $connected_username !== '') : ?>
+            <p class="nc-x-connection-status"><strong>接続中</strong> @<?php echo esc_html($connected_username); ?></p>
+        <?php elseif ($connected) : ?>
+            <p class="nc-x-connection-status"><strong>接続済み</strong></p>
+        <?php endif; ?>
         <div class="nc-x-actions">
             <?php if ($auth_method === 'oauth2' && $auth_url !== '') : ?>
                 <a class="button button-primary" href="<?php echo esc_url($auth_url); ?>">X アカウントを接続</a>
@@ -314,6 +317,60 @@ class NewsCrawlerCronSettings {
                 <p class="description">Client ID / Secret を保存後、「X アカウントを接続」をクリックしてください。</p>
             <?php endif; ?>
         </div>
+
+        <hr />
+
+        <?php $this->render_share_log_table(); ?>
+        <?php
+    }
+
+    /**
+     * X シェアログを描画
+     */
+    private function render_share_log_table() {
+        $entries = News_Crawler_X_Share_Log::get_entries();
+        ?>
+        <h3>シェアログ</h3>
+        <?php if (empty($entries)) : ?>
+            <p>ログはまだありません。</p>
+        <?php else : ?>
+            <table class="widefat striped nc-x-share-log-table">
+                <thead>
+                    <tr>
+                        <th scope="col">日時</th>
+                        <th scope="col">結果</th>
+                        <th scope="col">内容</th>
+                        <th scope="col">失敗原因</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($entries as $entry) : ?>
+                        <?php
+                        if (!is_array($entry)) {
+                            continue;
+                        }
+                        $level = (string) ($entry['level'] ?? 'info');
+                        $error = trim((string) ($entry['error'] ?? ''));
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html((string) ($entry['time'] ?? '')); ?></td>
+                            <td>
+                                <span class="nc-x-log-level nc-x-log-level-<?php echo esc_attr($level); ?>">
+                                    <?php echo esc_html(News_Crawler_X_Share_Log::get_level_label($level)); ?>
+                                </span>
+                            </td>
+                            <td><?php echo esc_html((string) ($entry['message'] ?? '')); ?></td>
+                            <td><?php echo $error !== '' ? esc_html($error) : '—'; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:12px;">
+                <?php wp_nonce_field('nc_x_clear_share_log'); ?>
+                <input type="hidden" name="action" value="nc_x_clear_share_log" />
+                <?php submit_button('ログをクリア', 'secondary', 'submit', false); ?>
+            </form>
+        <?php endif; ?>
         <?php
     }
     

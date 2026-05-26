@@ -73,6 +73,13 @@ class News_Crawler_X_Poster {
             return;
         }
         if (!$this->is_connected($settings)) {
+            $post_title = get_the_title($post_id);
+            News_Crawler_X_Share_Log::add(
+                sprintf('「%s」の X シェアに失敗', $post_title ?: ('投稿 ID ' . $post_id)),
+                'error',
+                array('post_id' => $post_id),
+                'X アカウントが接続されていません。'
+            );
             $this->log('X 投稿に必要な認証情報が不足しています', 'error');
             return;
         }
@@ -89,9 +96,24 @@ class News_Crawler_X_Poster {
             update_post_meta($post_id, '_x_posted', true);
             update_post_meta($post_id, '_x_post_id', $result['tweet_id']);
             update_post_meta($post_id, '_x_posted_at', current_time('mysql'));
+            News_Crawler_X_Share_Log::add(
+                sprintf('「%s」を X にシェアしました（Tweet ID: %s）', $post->post_title, $result['tweet_id']),
+                'success',
+                array(
+                    'post_id' => $post_id,
+                    'tweet_id' => $result['tweet_id'],
+                )
+            );
             $this->log('X 投稿成功 - Post ID: ' . $post_id . ', Tweet ID: ' . $result['tweet_id'], 'info');
         } else {
-            $this->log('X 投稿失敗 - Post ID: ' . $post_id . ', Error: ' . $result['error'], 'error');
+            $error = $result['error'] ?? '不明なエラー';
+            News_Crawler_X_Share_Log::add(
+                sprintf('「%s」の X シェアに失敗', $post->post_title),
+                'error',
+                array('post_id' => $post_id),
+                $error
+            );
+            $this->log('X 投稿失敗 - Post ID: ' . $post_id . ', Error: ' . $error, 'error');
         }
     }
 

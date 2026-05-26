@@ -30,6 +30,7 @@ class News_Crawler_X_OAuth {
         add_action('admin_init', array($this, 'handle_oauth_callback'));
         add_action('admin_post_nc_x_disconnect', array($this, 'handle_disconnect'));
         add_action('admin_post_nc_x_test_tweet', array($this, 'handle_test_tweet'));
+        add_action('admin_post_nc_x_clear_share_log', array($this, 'handle_clear_share_log'));
         add_action('admin_notices', array($this, 'render_admin_notices'));
     }
 
@@ -187,7 +188,11 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', $result['error'] ?? 'トークン取得に失敗しました。');
         }
 
-        $this->redirect_with_notice('success', 'X アカウントを接続しました。');
+        $username = $this->get_connected_username();
+        $message = $username !== ''
+            ? sprintf('X アカウント @%s に接続しました。', $username)
+            : 'X アカウントを接続しました。';
+        $this->redirect_with_notice('success', $message);
     }
 
     /**
@@ -324,11 +329,47 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * 接続中アカウント名（@username）を取得
+     *
+     * @param array|null $settings 設定
+     * @return string
+     */
+    public function get_connected_username($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        $username = trim((string) ($settings['twitter_connected_username'] ?? ''));
+        if ($username !== '') {
+            return $username;
+        }
+
+        if (!$this->is_connected($settings)) {
+            return '';
+        }
+
+        $verify = $this->verify_credentials($settings);
+        if ($verify['success'] && !empty($verify['username'])) {
+            $settings = $this->get_settings();
+            $settings['twitter_connected_username'] = (string) $verify['username'];
+            $this->update_settings($settings);
+            return (string) $verify['username'];
+        }
+
+        return '';
+    }
+
+    /**
      * 接続情報を確認
      *
+     * @param array|null $settings 設定
      * @return array{success:bool,username?:string,error?:string}
      */
-    public function verify_credentials() {
+    public function verify_credentials($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        $method = $this->get_auth_method($settings);
+
+        if ($method === 'oauth1') {
+            return $this->verify_credentials_oauth1($settings);
+        }
+
         $access_token = $this->get_access_token();
         if ($access_token === '') {
             return array('success' => false, 'error' => 'X アカウントが接続されていません。');
@@ -353,9 +394,46 @@ class News_Crawler_X_OAuth {
 
         if ($code === 401) {
             if ($this->refresh_access_token()) {
-                return $this->verify_credentials();
+                return $this->verify_credentials($settings);
             }
         }
+
+        if ($code === 200 && !empty($data['data']['username'])) {
+            return array(
+                'success' => true,
+                'username' => (string) $data['data']['username'],
+            );
+        }
+
+        return array('success' => false, 'error' => 'アカウント情報の取得に失敗しました。');
+    }
+
+    /**
+     * OAuth 1.0a で接続情報を確認
+     *
+     * @param array $settings 設定
+     * @return array{success:bool,username?:string,error?:string}
+     */
+    private function verify_credentials_oauth1(array $settings) {
+        $endpoint = 'https://api.twitter.com/2/users/me?user.fields=username,name';
+        $auth_header = $this->build_oauth1_authorization_header('GET', $endpoint, $settings);
+
+        $response = wp_remote_get(
+            $endpoint,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Authorization' => $auth_header,
+                ),
+            )
+        );
+
+        if (is_wp_error($response)) {
+            return array('success' => false, 'error' => $response->get_error_message());
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
         if ($code === 200 && !empty($data['data']['username'])) {
             return array(
@@ -406,10 +484,37 @@ class News_Crawler_X_OAuth {
         );
 
         if ($result['success']) {
+            News_Crawler_X_Share_Log::add(
+                '接続テスト投稿に成功しました。',
+                'success',
+                array(
+                    'tweet_id' => $result['tweet_id'] ?? '',
+                )
+            );
             $this->redirect_with_notice('success', 'テスト投稿に成功しました。');
         }
 
-        $this->redirect_with_notice('error', $result['error'] ?? 'テスト投稿に失敗しました。');
+        $error = $result['error'] ?? 'テスト投稿に失敗しました。';
+        News_Crawler_X_Share_Log::add(
+            '接続テスト投稿に失敗しました。',
+            'error',
+            array(),
+            $error
+        );
+        $this->redirect_with_notice('error', $error);
+    }
+
+    /**
+     * シェアログクリアハンドラ
+     */
+    public function handle_clear_share_log() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        check_admin_referer('nc_x_clear_share_log');
+
+        News_Crawler_X_Share_Log::clear();
+        $this->redirect_with_notice('success', 'シェアログをクリアしました。');
     }
 
     /**
@@ -461,6 +566,65 @@ class News_Crawler_X_OAuth {
         $settings['twitter_auth_method'] = 'oauth2';
 
         $this->update_settings($settings);
+    }
+
+    /**
+     * OAuth 1.0a Authorization ヘッダー
+     *
+     * @param string $method   HTTP メソッド
+     * @param string $url      URL
+     * @param array  $settings 設定
+     * @return string
+     */
+    private function build_oauth1_authorization_header($method, $url, $settings) {
+        $parsed_url = wp_parse_url($url);
+        $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . ($parsed_url['path'] ?? '');
+
+        $oauth_params = array(
+            'oauth_consumer_key' => $settings['twitter_api_key'],
+            'oauth_nonce' => wp_generate_password(32, false),
+            'oauth_signature_method' => 'HMAC-SHA1',
+            'oauth_timestamp' => (string) time(),
+            'oauth_token' => $settings['twitter_access_token'],
+            'oauth_version' => '1.0',
+        );
+
+        $signature_params = $oauth_params;
+        if (!empty($parsed_url['query'])) {
+            parse_str($parsed_url['query'], $query_params);
+            if (is_array($query_params)) {
+                $signature_params = array_merge($signature_params, $query_params);
+            }
+        }
+
+        $oauth_params['oauth_signature'] = $this->generate_oauth1_signature(
+            strtoupper($method),
+            $base_url,
+            $signature_params,
+            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_api_secret'] ?? '')),
+            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_access_token_secret'] ?? ''))
+        );
+
+        $auth_parts = array();
+        foreach ($oauth_params as $key => $value) {
+            $auth_parts[] = rawurlencode($key) . '="' . rawurlencode($value) . '"';
+        }
+
+        return 'OAuth ' . implode(', ', $auth_parts);
+    }
+
+    /**
+     * OAuth 1.0a 署名
+     */
+    private function generate_oauth1_signature($method, $url, $params, $consumer_secret, $token_secret) {
+        ksort($params);
+        $query_parts = array();
+        foreach ($params as $key => $value) {
+            $query_parts[] = rawurlencode($key) . '=' . rawurlencode($value);
+        }
+        $signature_base_string = strtoupper($method) . '&' . rawurlencode($url) . '&' . rawurlencode(implode('&', $query_parts));
+        $signature_key = rawurlencode($consumer_secret) . '&' . rawurlencode($token_secret);
+        return base64_encode(hash_hmac('sha1', $signature_base_string, $signature_key, true));
     }
 
     /**
