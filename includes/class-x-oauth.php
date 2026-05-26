@@ -189,9 +189,14 @@ class News_Crawler_X_OAuth {
         }
 
         $username = $this->get_connected_username();
-        $message = $username !== ''
-            ? sprintf('X アカウント @%s に接続しました。', $username)
-            : 'X アカウントを接続しました。';
+        $display_label = $this->get_connected_display_label();
+        if ($display_label !== '') {
+            $message = sprintf('X アカウント %s に接続しました。', $display_label);
+        } elseif ($username !== '') {
+            $message = sprintf('X アカウント @%s に接続しました。', $username);
+        } else {
+            $message = 'X アカウントを接続しました。';
+        }
         $this->redirect_with_notice('success', $message);
     }
 
@@ -245,11 +250,9 @@ class News_Crawler_X_OAuth {
 
         $this->store_tokens($data);
 
-        $verify = $this->verify_credentials();
-        if ($verify['success'] && !empty($verify['username'])) {
-            $settings = $this->get_settings();
-            $settings['twitter_connected_username'] = (string) $verify['username'];
-            $this->update_settings($settings);
+        $verify = $this->verify_credentials(null, (string) $data['access_token']);
+        if ($verify['success']) {
+            $this->save_connected_profile($verify);
         }
 
         return array('success' => true);
@@ -329,6 +332,23 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * 接続中アカウントの表示名（@username または表示名）
+     *
+     * @param array|null $settings 設定
+     * @return string
+     */
+    public function get_connected_display_label($settings = null) {
+        $username = $this->get_connected_username($settings);
+        if ($username !== '') {
+            return '@' . $username;
+        }
+
+        $settings = $settings ?: $this->get_settings();
+        $name = trim((string) ($settings['twitter_connected_name'] ?? ''));
+        return $name;
+    }
+
+    /**
      * 接続中アカウント名（@username）を取得
      *
      * @param array|null $settings 設定
@@ -346,23 +366,40 @@ class News_Crawler_X_OAuth {
         }
 
         $verify = $this->verify_credentials($settings);
-        if ($verify['success'] && !empty($verify['username'])) {
-            $settings = $this->get_settings();
-            $settings['twitter_connected_username'] = (string) $verify['username'];
-            $this->update_settings($settings);
-            return (string) $verify['username'];
+        if ($verify['success']) {
+            $this->save_connected_profile($verify);
+            return trim((string) ($verify['username'] ?? ''));
         }
 
         return '';
     }
 
     /**
+     * 接続プロフィールを保存
+     *
+     * @param array $profile username/name を含む配列
+     */
+    private function save_connected_profile(array $profile) {
+        $settings = $this->get_settings();
+
+        if (!empty($profile['username'])) {
+            $settings['twitter_connected_username'] = (string) $profile['username'];
+        }
+        if (!empty($profile['name'])) {
+            $settings['twitter_connected_name'] = (string) $profile['name'];
+        }
+
+        $this->update_settings($settings);
+    }
+
+    /**
      * 接続情報を確認
      *
-     * @param array|null $settings 設定
-     * @return array{success:bool,username?:string,error?:string}
+     * @param array|null $settings             設定
+     * @param string     $access_token_override 平文アクセストークン（接続直後用）
+     * @return array{success:bool,username?:string,name?:string,error?:string}
      */
-    public function verify_credentials($settings = null) {
+    public function verify_credentials($settings = null, $access_token_override = '') {
         $settings = $settings ?: $this->get_settings();
         $method = $this->get_auth_method($settings);
 
@@ -370,42 +407,71 @@ class News_Crawler_X_OAuth {
             return $this->verify_credentials_oauth1($settings);
         }
 
-        $access_token = $this->get_access_token();
+        $access_token = trim((string) $access_token_override);
+        if ($access_token === '') {
+            $access_token = $this->get_access_token();
+        }
         if ($access_token === '') {
             return array('success' => false, 'error' => 'X アカウントが接続されていません。');
         }
 
-        $response = wp_remote_get(
-            'https://api.x.com/2/users/me?user.fields=username,name',
-            array(
-                'timeout' => 20,
-                'headers' => array(
-                    'Authorization' => 'Bearer ' . $access_token,
-                ),
-            )
+        $profile = $this->fetch_oauth2_user_profile($access_token);
+        if ($profile['success']) {
+            return $profile;
+        }
+
+        if ($access_token_override === '' && $this->refresh_access_token()) {
+            return $this->verify_credentials($settings);
+        }
+
+        return $profile;
+    }
+
+    /**
+     * OAuth 2.0 でユーザー情報を取得
+     *
+     * @param string $access_token アクセストークン
+     * @return array{success:bool,username?:string,name?:string,error?:string}
+     */
+    private function fetch_oauth2_user_profile($access_token) {
+        $endpoints = array(
+            'https://api.x.com/2/users/me',
+            'https://api.twitter.com/2/users/me',
         );
 
-        if (is_wp_error($response)) {
-            return array('success' => false, 'error' => $response->get_error_message());
-        }
+        $last_error = 'アカウント情報の取得に失敗しました。';
 
-        $code = (int) wp_remote_retrieve_response_code($response);
-        $data = json_decode((string) wp_remote_retrieve_body($response), true);
-
-        if ($code === 401) {
-            if ($this->refresh_access_token()) {
-                return $this->verify_credentials($settings);
-            }
-        }
-
-        if ($code === 200 && !empty($data['data']['username'])) {
-            return array(
-                'success' => true,
-                'username' => (string) $data['data']['username'],
+        foreach ($endpoints as $url) {
+            $response = wp_remote_get(
+                $url,
+                array(
+                    'timeout' => 20,
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $access_token,
+                    ),
+                )
             );
+
+            if (is_wp_error($response)) {
+                $last_error = $response->get_error_message();
+                continue;
+            }
+
+            $code = (int) wp_remote_retrieve_response_code($response);
+            $data = json_decode((string) wp_remote_retrieve_body($response), true);
+
+            if ($code >= 200 && $code < 300 && is_array($data) && !empty($data['data']['username'])) {
+                return array(
+                    'success' => true,
+                    'username' => (string) $data['data']['username'],
+                    'name' => !empty($data['data']['name']) ? (string) $data['data']['name'] : '',
+                );
+            }
+
+            $last_error = $this->extract_api_error_message($data, $code);
         }
 
-        return array('success' => false, 'error' => 'アカウント情報の取得に失敗しました。');
+        return array('success' => false, 'error' => $last_error);
     }
 
     /**
@@ -415,34 +481,46 @@ class News_Crawler_X_OAuth {
      * @return array{success:bool,username?:string,error?:string}
      */
     private function verify_credentials_oauth1(array $settings) {
-        $endpoint = 'https://api.twitter.com/2/users/me?user.fields=username,name';
-        $auth_header = $this->build_oauth1_authorization_header('GET', $endpoint, $settings);
-
-        $response = wp_remote_get(
-            $endpoint,
-            array(
-                'timeout' => 20,
-                'headers' => array(
-                    'Authorization' => $auth_header,
-                ),
-            )
+        $endpoints = array(
+            'https://api.x.com/2/users/me',
+            'https://api.twitter.com/2/users/me',
         );
 
-        if (is_wp_error($response)) {
-            return array('success' => false, 'error' => $response->get_error_message());
-        }
+        $last_error = 'アカウント情報の取得に失敗しました。';
 
-        $code = (int) wp_remote_retrieve_response_code($response);
-        $data = json_decode((string) wp_remote_retrieve_body($response), true);
+        foreach ($endpoints as $endpoint) {
+            $auth_header = $this->build_oauth1_authorization_header('GET', $endpoint, $settings);
 
-        if ($code === 200 && !empty($data['data']['username'])) {
-            return array(
-                'success' => true,
-                'username' => (string) $data['data']['username'],
+            $response = wp_remote_get(
+                $endpoint,
+                array(
+                    'timeout' => 20,
+                    'headers' => array(
+                        'Authorization' => $auth_header,
+                    ),
+                )
             );
+
+            if (is_wp_error($response)) {
+                $last_error = $response->get_error_message();
+                continue;
+            }
+
+            $code = (int) wp_remote_retrieve_response_code($response);
+            $data = json_decode((string) wp_remote_retrieve_body($response), true);
+
+            if ($code >= 200 && $code < 300 && !empty($data['data']['username'])) {
+                return array(
+                    'success' => true,
+                    'username' => (string) $data['data']['username'],
+                    'name' => !empty($data['data']['name']) ? (string) $data['data']['name'] : '',
+                );
+            }
+
+            $last_error = $this->extract_api_error_message($data, $code);
         }
 
-        return array('success' => false, 'error' => 'アカウント情報の取得に失敗しました。');
+        return array('success' => false, 'error' => $last_error);
     }
 
     /**
@@ -454,6 +532,7 @@ class News_Crawler_X_OAuth {
         $settings['twitter_oauth2_refresh_token'] = '';
         $settings['twitter_oauth2_token_expires'] = 0;
         $settings['twitter_connected_username'] = '';
+        $settings['twitter_connected_name'] = '';
         $this->update_settings($settings);
     }
 
@@ -546,6 +625,32 @@ class News_Crawler_X_OAuth {
         }
 
         printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), esc_html($message));
+    }
+
+    /**
+     * API エラー抽出
+     *
+     * @param mixed $data          レスポンス
+     * @param int   $response_code HTTP コード
+     * @return string
+     */
+    private function extract_api_error_message($data, $response_code) {
+        if (is_array($data)) {
+            if (!empty($data['errors'][0]['detail'])) {
+                return $data['errors'][0]['detail'] . ' (HTTP ' . $response_code . ')';
+            }
+            if (!empty($data['errors'][0]['message'])) {
+                return $data['errors'][0]['message'] . ' (HTTP ' . $response_code . ')';
+            }
+            if (!empty($data['detail'])) {
+                return $data['detail'] . ' (HTTP ' . $response_code . ')';
+            }
+            if (!empty($data['title'])) {
+                return $data['title'] . ' (HTTP ' . $response_code . ')';
+            }
+        }
+
+        return '不明なエラー (HTTP ' . $response_code . ')';
     }
 
     /**

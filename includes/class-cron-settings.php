@@ -176,7 +176,7 @@ class NewsCrawlerCronSettings {
         $oauth = News_Crawler_X_OAuth::instance();
         $auth_method = $oauth->get_auth_method($settings);
         $connected = $oauth->is_connected($settings);
-        $connected_username = $connected ? $oauth->get_connected_username($settings) : '';
+        $connected_label = $connected ? $oauth->get_connected_display_label($settings) : '';
         $auth_url = $oauth->get_authorization_url();
         $redirect_uri = $oauth->get_redirect_uri();
 
@@ -289,8 +289,8 @@ class NewsCrawlerCronSettings {
         <hr />
 
         <h3>接続操作</h3>
-        <?php if ($connected && $connected_username !== '') : ?>
-            <p class="nc-x-connection-status"><strong>接続中</strong> @<?php echo esc_html($connected_username); ?></p>
+        <?php if ($connected && $connected_label !== '') : ?>
+            <p class="nc-x-connection-status"><strong>接続中</strong> <?php echo esc_html($connected_label); ?></p>
         <?php elseif ($connected) : ?>
             <p class="nc-x-connection-status"><strong>接続済み</strong></p>
         <?php endif; ?>

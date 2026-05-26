@@ -1017,6 +1017,7 @@ class NewsCrawlerSettingsManager {
             'twitter_oauth2_refresh_token',
             'twitter_oauth2_token_expires',
             'twitter_connected_username',
+            'twitter_connected_name',
             'twitter_share_log',
         );
         foreach ($oauth_preserve_keys as $key) {
