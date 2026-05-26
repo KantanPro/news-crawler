@@ -357,7 +357,15 @@ class NewsCrawlerCronSettings {
                     </tr>
                     <tr>
                         <th scope="row">Client Secret</th>
-                        <td><?php echo !empty($connection_diagnostics['client_secret_saved']) ? '保存済み' : '未保存'; ?></td>
+                        <td>
+                            <?php if (!empty($connection_diagnostics['client_secret_usable'])) : ?>
+                                保存済み（利用可能）
+                            <?php elseif (!empty($connection_diagnostics['client_secret_saved'])) : ?>
+                                <strong style="color:#b32d2e;">保存済み（復号不可）</strong> — Client Secret を再入力して「設定を保存」してください
+                            <?php else : ?>
+                                <strong style="color:#b32d2e;">未保存</strong>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row">OAuth 2.0 Access Token</th>

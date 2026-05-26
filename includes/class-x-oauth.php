@@ -86,6 +86,32 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * Client Secret を復号して取得
+     *
+     * @param array|null $settings 設定
+     * @return string
+     */
+    public function get_client_secret($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        return News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? ''));
+    }
+
+    /**
+     * Client Secret が利用可能か
+     *
+     * @param array|null $settings 設定
+     * @return bool
+     */
+    public function has_usable_client_secret($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        if (empty($settings['twitter_client_secret'])) {
+            return false;
+        }
+
+        return trim($this->get_client_secret($settings)) !== '';
+    }
+
+    /**
      * 接続状態の診断情報を取得
      *
      * @param array|null $settings 設定
@@ -100,6 +126,7 @@ class News_Crawler_X_OAuth {
             'connected' => $this->is_connected($settings),
             'client_id_saved' => !empty($settings['twitter_client_id']),
             'client_secret_saved' => !empty($settings['twitter_client_secret']),
+            'client_secret_usable' => $this->has_usable_client_secret($settings),
             'oauth2_access_token_saved' => !empty($settings['twitter_oauth2_access_token']),
             'oauth2_refresh_token_saved' => !empty($settings['twitter_oauth2_refresh_token']),
             'oauth2_token_expires' => isset($settings['twitter_oauth2_token_expires']) ? (int) $settings['twitter_oauth2_token_expires'] : 0,
@@ -245,10 +272,17 @@ class News_Crawler_X_OAuth {
     public function exchange_code_for_tokens($code, $code_verifier) {
         $settings = $this->get_settings();
         $client_id = trim((string) ($settings['twitter_client_id'] ?? ''));
-        $client_secret = News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? ''));
+        $client_secret = $this->get_client_secret($settings);
 
         if ($client_id === '') {
             return array('success' => false, 'error' => 'Client ID が設定されていません。');
+        }
+
+        if ($client_secret === '') {
+            return array(
+                'success' => false,
+                'error' => 'Client Secret が未設定、または復号できません。X Developer Portal の OAuth 2.0 Client Secret を再入力して「設定を保存」してください。',
+            );
         }
 
         $body = array(
@@ -259,10 +293,10 @@ class News_Crawler_X_OAuth {
             'client_id' => $client_id,
         );
 
-        $headers = array('Content-Type' => 'application/x-www-form-urlencoded');
-        if ($client_secret !== '') {
-            $headers['Authorization'] = 'Basic ' . base64_encode($client_id . ':' . $client_secret);
-        }
+        $headers = array(
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'Authorization' => 'Basic ' . base64_encode($client_id . ':' . $client_secret),
+        );
 
         $response = wp_remote_post(
             'https://api.x.com/2/oauth2/token',
@@ -277,9 +311,16 @@ class News_Crawler_X_OAuth {
             return array('success' => false, 'error' => $response->get_error_message());
         }
 
+        $status_code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
         if (!is_array($data) || empty($data['access_token'])) {
             $error = !empty($data['error_description']) ? (string) $data['error_description'] : 'アクセストークンの取得に失敗しました。';
+            if (stripos($error, 'Missing valid authorization header') !== false) {
+                $error = 'Client Secret が正しく設定されていません。X Developer Portal の OAuth 2.0 Client Secret を再入力して「設定を保存」してから、もう一度「X アカウントを接続」してください。';
+            }
+            if ($status_code > 0) {
+                $error .= ' (HTTP ' . $status_code . ')';
+            }
             return array('success' => false, 'error' => $error);
         }
 
@@ -310,10 +351,10 @@ class News_Crawler_X_OAuth {
     public function refresh_access_token() {
         $settings = $this->get_settings();
         $client_id = trim((string) ($settings['twitter_client_id'] ?? ''));
-        $client_secret = News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? ''));
+        $client_secret = $this->get_client_secret($settings);
         $refresh_token = News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_oauth2_refresh_token'] ?? ''));
 
-        if ($client_id === '' || $refresh_token === '') {
+        if ($client_id === '' || $client_secret === '' || $refresh_token === '') {
             return false;
         }
 
@@ -323,10 +364,10 @@ class News_Crawler_X_OAuth {
             'client_id' => $client_id,
         );
 
-        $headers = array('Content-Type' => 'application/x-www-form-urlencoded');
-        if ($client_secret !== '') {
-            $headers['Authorization'] = 'Basic ' . base64_encode($client_id . ':' . $client_secret);
-        }
+        $headers = array(
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'Authorization' => 'Basic ' . base64_encode($client_id . ':' . $client_secret),
+        );
 
         $response = wp_remote_post(
             'https://api.x.com/2/oauth2/token',
