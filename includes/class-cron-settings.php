@@ -252,12 +252,14 @@ class NewsCrawlerCronSettings {
                         <th scope="row"><label for="nc-x-client-id">Client ID</label></th>
                         <td>
                             <input id="nc-x-client-id" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_client_id]" value="<?php echo esc_attr($settings['twitter_client_id'] ?? ''); ?>" autocomplete="off" />
+                            <p class="description">Developer Portal の「Keys and Tokens」→ <strong>OAuth 2.0 Client ID</strong>（API Key ではありません）</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="nc-x-client-secret">Client Secret</label></th>
                         <td>
                             <input id="nc-x-client-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_client_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" />
+                            <p class="description">Developer Portal の「Keys and Tokens」→ <strong>OAuth 2.0 Client Secret</strong>（Regenerate した場合は必ず再入力）</p>
                         </td>
                     </tr>
                 </table>

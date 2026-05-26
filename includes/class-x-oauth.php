@@ -101,7 +101,7 @@ class News_Crawler_X_OAuth {
      */
     public function get_client_secret($settings = null) {
         $settings = $settings ?: $this->get_settings();
-        return News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? ''));
+        return trim(News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? '')));
     }
 
     /**
@@ -348,8 +348,8 @@ class News_Crawler_X_OAuth {
         );
 
         $headers = array(
-            'Content-Type' => 'application/x-www-form-urlencoded',
-            'Authorization' => 'Basic ' . base64_encode($client_id . ':' . $client_secret),
+            'Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Authorization' => $this->build_oauth2_basic_auth_header($client_id, $client_secret),
         );
 
         $response = wp_remote_post(
@@ -368,14 +368,11 @@ class News_Crawler_X_OAuth {
         $status_code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
         if (!is_array($data) || empty($data['access_token'])) {
-            $error = !empty($data['error_description']) ? (string) $data['error_description'] : 'アクセストークンの取得に失敗しました。';
-            if (stripos($error, 'Missing valid authorization header') !== false) {
-                $error = 'Client Secret が正しく設定されていません。X Developer Portal の OAuth 2.0 Client Secret を再入力して「設定を保存」してから、もう一度「X アカウントを接続」してください。';
-            }
-            if ($status_code > 0) {
-                $error .= ' (HTTP ' . $status_code . ')';
-            }
-            return array('success' => false, 'error' => $error);
+            error_log('News Crawler X OAuth: token exchange failed HTTP ' . $status_code . ' - ' . wp_json_encode($data));
+            return array(
+                'success' => false,
+                'error' => $this->format_token_exchange_error($data, $status_code),
+            );
         }
 
         $this->store_tokens($data);
@@ -428,8 +425,8 @@ class News_Crawler_X_OAuth {
         );
 
         $headers = array(
-            'Content-Type' => 'application/x-www-form-urlencoded',
-            'Authorization' => 'Basic ' . base64_encode($client_id . ':' . $client_secret),
+            'Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Authorization' => $this->build_oauth2_basic_auth_header($client_id, $client_secret),
         );
 
         $response = wp_remote_post(
@@ -911,6 +908,51 @@ class News_Crawler_X_OAuth {
     private function should_suppress_notice($message) {
         return strpos($message, 'X アカウントを接続しましたが、アカウント名の取得に失敗しました') !== false
             || strpos($message, 'アカウント名の自動取得に失敗') !== false;
+    }
+
+    /**
+     * OAuth 2.0 Basic 認証ヘッダー（Client ID の : 含む形式に対応）
+     *
+     * @param string $client_id     Client ID
+     * @param string $client_secret Client Secret
+     * @return string
+     */
+    private function build_oauth2_basic_auth_header($client_id, $client_secret) {
+        $credentials = rawurlencode($client_id) . ':' . rawurlencode($client_secret);
+
+        return 'Basic ' . base64_encode($credentials);
+    }
+
+    /**
+     * トークン交換エラーを日本語メッセージに変換
+     *
+     * @param mixed $data          API レスポンス
+     * @param int   $status_code   HTTP コード
+     * @return string
+     */
+    private function format_token_exchange_error($data, $status_code) {
+        $error_code = is_array($data) && !empty($data['error']) ? (string) $data['error'] : '';
+        $description = is_array($data) && !empty($data['error_description'])
+            ? (string) $data['error_description']
+            : 'アクセストークンの取得に失敗しました。';
+
+        if ($error_code === 'invalid_client' || $status_code === 401) {
+            return 'Client ID または Client Secret が正しくありません。Developer Portal の「Keys and Tokens」にある OAuth 2.0 Client ID / Client Secret（API Key ではありません）を再入力し、「Regenerate」した場合は両方を最新値に更新して「設定を保存」してください。 (HTTP ' . $status_code . ')';
+        }
+
+        if ($error_code === 'invalid_grant') {
+            return '認可コードの有効期限が切れたか、Callback URL が一致していません。Developer Portal の Callback URL が診断パネルの URL と完全一致しているか確認し、もう一度「X アカウントを接続」してください。 (HTTP ' . $status_code . ')';
+        }
+
+        if ($error_code === 'unauthorized_client') {
+            return 'このアプリ種別では OAuth 2.0 接続が許可されていません。Developer Portal で「Web App, Automated App or Bot（機密クライアント）」になっているか確認してください。 (HTTP ' . $status_code . ')';
+        }
+
+        if (stripos($description, 'Missing valid authorization header') !== false) {
+            return 'Client Secret が送信されていません。OAuth 2.0 Client Secret を再入力して「設定を保存」してから、もう一度「X アカウントを接続」してください。 (HTTP ' . $status_code . ')';
+        }
+
+        return $description . ($status_code > 0 ? ' (HTTP ' . $status_code . ')' : '');
     }
 
     /**
