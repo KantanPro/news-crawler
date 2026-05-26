@@ -86,6 +86,38 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * 接続状態の診断情報を取得
+     *
+     * @param array|null $settings 設定
+     * @return array
+     */
+    public function get_connection_diagnostics($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        $method = $this->get_auth_method($settings);
+
+        $diagnostics = array(
+            'method' => $method,
+            'connected' => $this->is_connected($settings),
+            'client_id_saved' => !empty($settings['twitter_client_id']),
+            'client_secret_saved' => !empty($settings['twitter_client_secret']),
+            'oauth2_access_token_saved' => !empty($settings['twitter_oauth2_access_token']),
+            'oauth2_refresh_token_saved' => !empty($settings['twitter_oauth2_refresh_token']),
+            'oauth2_token_expires' => isset($settings['twitter_oauth2_token_expires']) ? (int) $settings['twitter_oauth2_token_expires'] : 0,
+            'oauth1_api_key_saved' => !empty($settings['twitter_api_key']),
+            'oauth1_access_token_saved' => !empty($settings['twitter_access_token']),
+            'username_saved' => !empty($settings['twitter_connected_username']),
+        );
+
+        if ($diagnostics['oauth2_token_expires'] > 0) {
+            $diagnostics['oauth2_token_expired'] = time() >= $diagnostics['oauth2_token_expires'];
+        } else {
+            $diagnostics['oauth2_token_expired'] = null;
+        }
+
+        return $diagnostics;
+    }
+
+    /**
      * 認証方式を取得
      *
      * @param array|null $settings 設定
@@ -193,18 +225,14 @@ class News_Crawler_X_OAuth {
         $display_label = $this->get_connected_display_label();
         if ($display_label !== '') {
             $message = sprintf('X アカウント %s に接続しました。', $display_label);
+            $this->redirect_with_notice('success', $message);
         } else {
             $verify_error = isset($result['verify_error']) ? (string) $result['verify_error'] : '';
             if ($verify_error !== '') {
-                $message = sprintf(
-                    'X アカウントを接続しましたが、アカウント名の取得に失敗しました：%s（接続操作欄から手動で再取得できます）',
-                    $verify_error
-                );
-            } else {
-                $message = 'X アカウントを接続しました。アカウント名の自動取得に失敗したため、接続操作欄から「アカウント名を再取得」してください。';
+                error_log('News Crawler X OAuth: connected but username lookup failed - ' . $verify_error);
             }
+            $this->redirect_without_notice();
         }
-        $this->redirect_with_notice('success', $message);
     }
 
     /**
@@ -716,6 +744,9 @@ class News_Crawler_X_OAuth {
 
         $type = (string) ($notice['type'] ?? 'info');
         $message = (string) ($notice['message'] ?? '');
+        if ($this->should_suppress_notice($message)) {
+            return;
+        }
 
         $class = 'notice notice-info is-dismissible';
         if ($type === 'success') {
@@ -755,6 +786,17 @@ class News_Crawler_X_OAuth {
      */
     private function get_notice_transient_key($user_id) {
         return 'nc_x_oauth_notice_' . intval($user_id);
+    }
+
+    /**
+     * 表示しない通知かどうか
+     *
+     * @param string $message 通知メッセージ
+     * @return bool
+     */
+    private function should_suppress_notice($message) {
+        return strpos($message, 'X アカウントを接続しましたが、アカウント名の取得に失敗しました') !== false
+            || strpos($message, 'アカウント名の自動取得に失敗') !== false;
     }
 
     /**
@@ -898,6 +940,24 @@ class News_Crawler_X_OAuth {
                 ),
                 5 * MINUTE_IN_SECONDS
             );
+        }
+
+        wp_safe_redirect(
+            add_query_arg(
+                array('page' => 'news-crawler-cron-settings'),
+                admin_url('admin.php')
+            )
+        );
+        exit;
+    }
+
+    /**
+     * 通知なしで自動投稿設定へ戻る
+     */
+    private function redirect_without_notice() {
+        $user_id = get_current_user_id();
+        if ($user_id > 0) {
+            delete_transient($this->get_notice_transient_key($user_id));
         }
 
         wp_safe_redirect(

@@ -178,6 +178,7 @@ class NewsCrawlerCronSettings {
         $connected = $oauth->is_connected($settings);
         $connected_label = $connected ? $oauth->get_connected_display_label($settings) : '';
         $connected_username = $connected ? $oauth->get_connected_username($settings) : '';
+        $connection_diagnostics = $oauth->get_connection_diagnostics($settings);
         $auth_url = $oauth->get_authorization_url();
         $redirect_uri = $oauth->get_redirect_uri();
 
@@ -341,6 +342,50 @@ class NewsCrawlerCronSettings {
                 </form>
             </div>
         <?php endif; ?>
+
+        <div class="nc-x-connection-diagnostics" style="margin-top:16px;padding:12px;border:1px solid #ddd;border-radius:4px;background:#fff;">
+            <h4 style="margin-top:0;">接続状態の診断</h4>
+            <table class="widefat striped" style="max-width:760px;">
+                <tbody>
+                    <tr>
+                        <th scope="row">認証方式</th>
+                        <td><?php echo esc_html($connection_diagnostics['method']); ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Client ID</th>
+                        <td><?php echo !empty($connection_diagnostics['client_id_saved']) ? '保存済み' : '未保存'; ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Client Secret</th>
+                        <td><?php echo !empty($connection_diagnostics['client_secret_saved']) ? '保存済み' : '未保存'; ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">OAuth 2.0 Access Token</th>
+                        <td>
+                            <?php if (!empty($connection_diagnostics['oauth2_access_token_saved'])) : ?>
+                                保存済み
+                            <?php else : ?>
+                                <strong style="color:#b32d2e;">未保存</strong>（X の許可画面から WordPress への戻り処理が完了していません）
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Refresh Token</th>
+                        <td><?php echo !empty($connection_diagnostics['oauth2_refresh_token_saved']) ? '保存済み' : '未保存'; ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">接続判定</th>
+                        <td><?php echo !empty($connection_diagnostics['connected']) ? '<strong style="color:#008a20;">接続済み</strong>' : '<strong style="color:#b32d2e;">未接続</strong>'; ?></td>
+                    </tr>
+                </tbody>
+            </table>
+            <?php if (empty($connection_diagnostics['connected'])) : ?>
+                <p class="description" style="margin-top:8px;">
+                    <code>接続テスト投稿</code> は OAuth 2.0 Access Token が保存された後に表示されます。
+                    X の許可画面で「許可する」まで完了し、WordPress のコールバック URL に戻る必要があります。
+                </p>
+            <?php endif; ?>
+        </div>
 
         <hr />
 
