@@ -390,6 +390,10 @@ class NewsCrawlerCronSettings {
                         <td><?php echo !empty($connection_diagnostics['oauth2_refresh_token_saved']) ? '保存済み' : '未保存'; ?></td>
                     </tr>
                     <tr>
+                        <th scope="row">トークン保存先</th>
+                        <td><code><?php echo esc_html($connection_diagnostics['oauth2_storage_option'] ?? 'news_crawler_x_oauth'); ?></code>（専用オプション）</td>
+                    </tr>
+                    <tr>
                         <th scope="row">Callback URL</th>
                         <td><code><?php echo esc_html($redirect_uri); ?></code></td>
                     </tr>

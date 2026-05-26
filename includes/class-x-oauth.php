@@ -11,6 +11,8 @@ if (!defined('ABSPATH')) {
 
 class News_Crawler_X_OAuth {
 
+    const OAUTH_OPTION_KEY = 'news_crawler_x_oauth';
+
     /**
      * @var self|null
      */
@@ -47,13 +49,120 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * OAuth トークン等を専用オプションに保存するキー
+     *
+     * @return array<int, string>
+     */
+    private function get_oauth_option_keys() {
+        return array(
+            'twitter_oauth2_access_token',
+            'twitter_oauth2_refresh_token',
+            'twitter_oauth2_token_expires',
+            'twitter_connected_username',
+            'twitter_connected_name',
+        );
+    }
+
+    /**
+     * OAuth 専用オプションを取得（旧 basic_settings からの移行を含む）
+     *
+     * @return array
+     */
+    private function get_oauth_option_settings() {
+        $oauth = get_option(self::OAUTH_OPTION_KEY, array());
+        if (!is_array($oauth)) {
+            $oauth = array();
+        }
+
+        if (!empty($oauth['twitter_oauth2_access_token'])) {
+            return $oauth;
+        }
+
+        $basic = get_option('news_crawler_basic_settings', array());
+        if (!is_array($basic)) {
+            return $oauth;
+        }
+
+        $migrated = false;
+        foreach ($this->get_oauth_option_keys() as $key) {
+            if (!empty($basic[$key])) {
+                $oauth[$key] = $basic[$key];
+                $migrated = true;
+            }
+        }
+
+        if ($migrated) {
+            $this->write_oauth_option($oauth);
+            $this->strip_oauth_keys_from_basic_settings();
+        }
+
+        return $oauth;
+    }
+
+    /**
+     * OAuth 専用オプションを保存
+     *
+     * @param array $oauth OAuth 設定
+     * @return bool
+     */
+    private function write_oauth_option(array $oauth) {
+        update_option(self::OAUTH_OPTION_KEY, $oauth, false);
+        wp_cache_delete(self::OAUTH_OPTION_KEY, 'options');
+    }
+
+    /**
+     * OAuth Access Token が DB に保存されているか
+     *
+     * @return bool
+     */
+    private function verify_oauth_access_token_persisted() {
+        wp_cache_delete(self::OAUTH_OPTION_KEY, 'options');
+        wp_cache_delete('news_crawler_basic_settings', 'options');
+
+        $oauth = get_option(self::OAUTH_OPTION_KEY, array());
+        if (is_array($oauth) && !empty($oauth['twitter_oauth2_access_token'])) {
+            return true;
+        }
+
+        $basic = get_option('news_crawler_basic_settings', array());
+        return is_array($basic) && !empty($basic['twitter_oauth2_access_token']);
+    }
+
+    /**
+     * basic_settings から OAuth キーを削除（移行後の重複防止）
+     */
+    private function strip_oauth_keys_from_basic_settings() {
+        $basic = get_option('news_crawler_basic_settings', array());
+        if (!is_array($basic)) {
+            return;
+        }
+
+        $changed = false;
+        foreach ($this->get_oauth_option_keys() as $key) {
+            if (array_key_exists($key, $basic)) {
+                unset($basic[$key]);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            update_option('news_crawler_basic_settings', $basic);
+            wp_cache_delete('news_crawler_basic_settings', 'options');
+        }
+    }
+
+    /**
      * 設定を取得
      *
      * @return array
      */
     public function get_settings() {
         $settings = get_option('news_crawler_basic_settings', array());
-        return is_array($settings) ? $settings : array();
+        if (!is_array($settings)) {
+            $settings = array();
+        }
+
+        return array_merge($settings, $this->get_oauth_option_settings());
     }
 
     /**
@@ -62,12 +171,29 @@ class News_Crawler_X_OAuth {
      * @param array $settings 設定
      */
     public function update_settings(array $settings) {
+        $oauth_patch = array();
+        foreach ($this->get_oauth_option_keys() as $key) {
+            if (array_key_exists($key, $settings)) {
+                $oauth_patch[$key] = $settings[$key];
+            }
+        }
+
+        if (!empty($oauth_patch)) {
+            $current_oauth = $this->get_oauth_option_settings();
+            $this->write_oauth_option(array_merge($current_oauth, $oauth_patch));
+        }
+
+        $basic_settings = $settings;
+        foreach ($this->get_oauth_option_keys() as $key) {
+            unset($basic_settings[$key]);
+        }
+
         $existing = get_option('news_crawler_basic_settings', array());
         if (!is_array($existing)) {
             $existing = array();
         }
 
-        $merged = array_merge($existing, $settings);
+        $merged = array_merge($existing, $basic_settings);
         update_option('news_crawler_basic_settings', $merged);
         wp_cache_delete('news_crawler_basic_settings', 'options');
     }
@@ -137,6 +263,7 @@ class News_Crawler_X_OAuth {
             'client_secret_usable' => $this->has_usable_client_secret($settings),
             'oauth2_access_token_saved' => !empty($settings['twitter_oauth2_access_token']),
             'oauth2_refresh_token_saved' => !empty($settings['twitter_oauth2_refresh_token']),
+            'oauth2_storage_option' => self::OAUTH_OPTION_KEY,
             'oauth2_token_expires' => isset($settings['twitter_oauth2_token_expires']) ? (int) $settings['twitter_oauth2_token_expires'] : 0,
             'oauth1_api_key_saved' => !empty($settings['twitter_api_key']),
             'oauth1_access_token_saved' => !empty($settings['twitter_access_token']),
@@ -377,12 +504,17 @@ class News_Crawler_X_OAuth {
 
         $this->store_tokens($data);
 
+        wp_cache_delete(self::OAUTH_OPTION_KEY, 'options');
         wp_cache_delete('news_crawler_basic_settings', 'options');
-        if (!$this->is_connected()) {
-            error_log('News Crawler X OAuth: store_tokens completed but access token not persisted');
+        if (!$this->verify_oauth_access_token_persisted()) {
+            global $wpdb;
+            error_log(
+                'News Crawler X OAuth: store_tokens completed but access token not persisted - '
+                . ($wpdb->last_error ?: 'no db error')
+            );
             return array(
                 'success' => false,
-                'error' => 'アクセストークンの保存に失敗しました。もう一度「X アカウントを接続」を試してください。',
+                'error' => 'アクセストークンの保存に失敗しました。サーバーのオプション保存制限の可能性があります。もう一度「X アカウントを接続」を試してください。',
             );
         }
 
@@ -683,13 +815,14 @@ class News_Crawler_X_OAuth {
      * 接続解除
      */
     public function disconnect() {
-        $settings = $this->get_settings();
-        $settings['twitter_oauth2_access_token'] = '';
-        $settings['twitter_oauth2_refresh_token'] = '';
-        $settings['twitter_oauth2_token_expires'] = 0;
-        $settings['twitter_connected_username'] = '';
-        $settings['twitter_connected_name'] = '';
-        $this->update_settings($settings);
+        $this->write_oauth_option(array(
+            'twitter_oauth2_access_token' => '',
+            'twitter_oauth2_refresh_token' => '',
+            'twitter_oauth2_token_expires' => 0,
+            'twitter_connected_username' => '',
+            'twitter_connected_name' => '',
+        ));
+        $this->strip_oauth_keys_from_basic_settings();
     }
 
     /**
@@ -987,18 +1120,19 @@ class News_Crawler_X_OAuth {
      * @param array $data トークンレスポンス
      */
     private function store_tokens(array $data) {
-        $settings = $this->get_settings();
-        $settings['twitter_oauth2_access_token'] = News_Crawler_X_Crypto::encrypt((string) $data['access_token']);
+        $oauth = $this->get_oauth_option_settings();
+        $oauth['twitter_oauth2_access_token'] = News_Crawler_X_Crypto::encrypt((string) $data['access_token']);
 
         if (!empty($data['refresh_token'])) {
-            $settings['twitter_oauth2_refresh_token'] = News_Crawler_X_Crypto::encrypt((string) $data['refresh_token']);
+            $oauth['twitter_oauth2_refresh_token'] = News_Crawler_X_Crypto::encrypt((string) $data['refresh_token']);
         }
 
         $expires_in = isset($data['expires_in']) ? (int) $data['expires_in'] : 7200;
-        $settings['twitter_oauth2_token_expires'] = time() + max(60, $expires_in - 60);
-        $settings['twitter_auth_method'] = 'oauth2';
+        $oauth['twitter_oauth2_token_expires'] = time() + max(60, $expires_in - 60);
 
-        $this->update_settings($settings);
+        $this->write_oauth_option($oauth);
+        $this->update_settings(array('twitter_auth_method' => 'oauth2'));
+        $this->strip_oauth_keys_from_basic_settings();
     }
 
     /**

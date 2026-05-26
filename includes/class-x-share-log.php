@@ -42,6 +42,7 @@ class News_Crawler_X_Share_Log {
 
         $settings[self::OPTION_KEY] = array_slice($entries, 0, self::MAX_ENTRIES);
         update_option('news_crawler_basic_settings', $settings);
+        wp_cache_delete('news_crawler_basic_settings', 'options');
     }
 
     /**
@@ -69,6 +70,7 @@ class News_Crawler_X_Share_Log {
 
         $settings[self::OPTION_KEY] = array();
         update_option('news_crawler_basic_settings', $settings);
+        wp_cache_delete('news_crawler_basic_settings', 'options');
     }
 
     /**
