@@ -62,7 +62,14 @@ class News_Crawler_X_OAuth {
      * @param array $settings 設定
      */
     public function update_settings(array $settings) {
-        update_option('news_crawler_basic_settings', $settings);
+        $existing = get_option('news_crawler_basic_settings', array());
+        if (!is_array($existing)) {
+            $existing = array();
+        }
+
+        $merged = array_merge($existing, $settings);
+        update_option('news_crawler_basic_settings', $merged);
+        wp_cache_delete('news_crawler_basic_settings', 'options');
     }
 
     /**
@@ -292,6 +299,10 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', $result['error'] ?? 'トークン取得に失敗しました。');
         }
 
+        if (!$this->is_connected()) {
+            $this->redirect_with_notice('error', 'アクセストークンの保存に失敗しました。もう一度「X アカウントを接続」を試してください。');
+        }
+
         $display_label = $this->get_connected_display_label();
         if ($display_label !== '') {
             $message = sprintf('X アカウント %s に接続しました。', $display_label);
@@ -368,6 +379,15 @@ class News_Crawler_X_OAuth {
         }
 
         $this->store_tokens($data);
+
+        wp_cache_delete('news_crawler_basic_settings', 'options');
+        if (!$this->is_connected()) {
+            error_log('News Crawler X OAuth: store_tokens completed but access token not persisted');
+            return array(
+                'success' => false,
+                'error' => 'アクセストークンの保存に失敗しました。もう一度「X アカウントを接続」を試してください。',
+            );
+        }
 
         $verify = $this->verify_credentials(null, (string) $data['access_token']);
         if ($verify['success']) {
