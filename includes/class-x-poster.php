@@ -409,8 +409,16 @@ class News_Crawler_X_Poster {
      * @return array{success:bool,tweet_id?:string,error?:string}
      */
     private function post_via_oauth1($message, $settings) {
-        $endpoint = 'https://api.twitter.com/2/tweets';
-        $auth_header = $this->build_oauth_authorization_header('POST', $endpoint, $settings);
+        $oauth = News_Crawler_X_OAuth::instance();
+        if (!$oauth->has_usable_oauth1_credentials($settings)) {
+            return array(
+                'success' => false,
+                'error' => 'OAuth 1.0a の認証情報が未設定、または復号できません。API Key / Secret / Access Token / Access Token Secret を再入力して「設定を保存」してください。',
+            );
+        }
+
+        $endpoint = 'https://api.x.com/2/tweets';
+        $auth_header = $oauth->build_oauth1_authorization_header('POST', $endpoint, $settings);
 
         $response = wp_remote_post(
             $endpoint,
@@ -431,70 +439,31 @@ class News_Crawler_X_Poster {
         $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
-        if ($code === 201 && !empty($data['data']['id'])) {
+        if ($code >= 200 && $code < 300 && !empty($data['data']['id'])) {
             return array('success' => true, 'tweet_id' => (string) $data['data']['id']);
         }
 
-        return array('success' => false, 'error' => $this->extract_api_error_message($data, $code));
+        return array(
+            'success' => false,
+            'error' => $this->format_oauth1_post_error($data, $code),
+        );
     }
 
     /**
-     * OAuth 1.0a Authorization ヘッダー
+     * OAuth 1.0a 投稿エラーを日本語化
      *
-     * @param string $method   HTTP メソッド
-     * @param string $url      URL
-     * @param array  $settings 設定
+     * @param mixed $data          API レスポンス
+     * @param int   $response_code HTTP コード
      * @return string
      */
-    private function build_oauth_authorization_header($method, $url, $settings) {
-        $parsed_url = wp_parse_url($url);
-        $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . ($parsed_url['path'] ?? '');
+    private function format_oauth1_post_error($data, $response_code) {
+        $message = $this->extract_api_error_message($data, $response_code);
 
-        $oauth_params = array(
-            'oauth_consumer_key' => $settings['twitter_api_key'],
-            'oauth_nonce' => wp_generate_password(32, false),
-            'oauth_signature_method' => 'HMAC-SHA1',
-            'oauth_timestamp' => (string) time(),
-            'oauth_token' => $settings['twitter_access_token'],
-            'oauth_version' => '1.0',
-        );
-
-        $signature_params = $oauth_params;
-        if (!empty($parsed_url['query'])) {
-            parse_str($parsed_url['query'], $query_params);
-            if (is_array($query_params)) {
-                $signature_params = array_merge($signature_params, $query_params);
-            }
+        if ($response_code === 401) {
+            return $message . ' — Developer Portal の OAuth 1.0a（API Key / API Secret / Access Token / Access Token Secret）が正しいか確認してください。OAuth 2.0 Client ID/Secret ではありません。Read and Write 権限のトークンを Regenerate して再入力してください。';
         }
 
-        $oauth_params['oauth_signature'] = $this->generate_oauth_signature(
-            strtoupper($method),
-            $base_url,
-            $signature_params,
-            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_api_secret'] ?? '')),
-            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_access_token_secret'] ?? ''))
-        );
-
-        $auth_parts = array();
-        foreach ($oauth_params as $key => $value) {
-            $auth_parts[] = rawurlencode($key) . '="' . rawurlencode($value) . '"';
-        }
-
-        return 'OAuth ' . implode(', ', $auth_parts);
-    }
-
-    /**
-     * OAuth 1.0a 署名
-     */
-    private function generate_oauth_signature($method, $url, $params, $consumer_secret, $token_secret) {
-        ksort($params);
-        $query_parts = array();
-        foreach ($params as $key => $value) {
-            $query_parts[] = rawurlencode($key) . '=' . rawurlencode($value);
-        }
-        $signature_base_string = strtoupper($method) . '&' . rawurlencode($url) . '&' . rawurlencode(implode('&', $query_parts));
-        $signature_key = rawurlencode($consumer_secret) . '&' . rawurlencode($token_secret);
-        return base64_encode(hash_hmac('sha1', $signature_base_string, $signature_key, true));
+        return $message;
     }
 
     /**

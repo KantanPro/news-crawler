@@ -228,14 +228,106 @@ class News_Crawler_X_OAuth {
         $method = $this->get_auth_method($settings);
 
         if ($method === 'oauth1') {
-            return !empty($settings['twitter_api_key'])
-                && !empty($settings['twitter_api_secret'])
-                && !empty($settings['twitter_access_token'])
-                && !empty($settings['twitter_access_token_secret']);
+            return $this->has_usable_oauth1_credentials($settings);
         }
 
         return !empty($settings['twitter_client_id'])
             && !empty($settings['twitter_oauth2_access_token']);
+    }
+
+    /**
+     * OAuth 1.0a 認証情報を復号して取得
+     *
+     * @param array|null $settings 設定
+     * @return array{api_key:string,api_secret:string,access_token:string,access_token_secret:string}
+     */
+    public function get_oauth1_credentials($settings = null) {
+        $settings = $this->resolve_settings($settings);
+
+        return array(
+            'api_key' => trim((string) ($settings['twitter_api_key'] ?? '')),
+            'api_secret' => $this->get_decrypted_secret((string) ($settings['twitter_api_secret'] ?? '')),
+            'access_token' => trim((string) ($settings['twitter_access_token'] ?? '')),
+            'access_token_secret' => $this->get_decrypted_secret((string) ($settings['twitter_access_token_secret'] ?? '')),
+        );
+    }
+
+    /**
+     * OAuth 1.0a 認証情報が利用可能か
+     *
+     * @param array|null $settings 設定
+     * @return bool
+     */
+    public function has_usable_oauth1_credentials($settings = null) {
+        $settings = $this->resolve_settings($settings);
+        $credentials = $this->get_oauth1_credentials($settings);
+
+        if ($credentials['api_key'] === ''
+            || $credentials['access_token'] === ''
+            || $credentials['api_secret'] === ''
+            || $credentials['access_token_secret'] === '') {
+            return false;
+        }
+
+        return $this->has_usable_stored_secret((string) ($settings['twitter_api_secret'] ?? ''))
+            && $this->has_usable_stored_secret((string) ($settings['twitter_access_token_secret'] ?? ''));
+    }
+
+    /**
+     * 保存済み Secret が復号可能か
+     *
+     * @param string $stored 保存値
+     * @return bool
+     */
+    public function has_usable_stored_secret($stored) {
+        $stored = trim((string) $stored);
+        if ($stored === '') {
+            return false;
+        }
+
+        $decrypted = $this->get_decrypted_secret($stored);
+        if ($decrypted === '') {
+            return false;
+        }
+
+        if ($decrypted === $stored && strlen($stored) > 24) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 暗号化 Secret を復号
+     *
+     * @param string $stored 保存値
+     * @return string
+     */
+    public function get_decrypted_secret($stored) {
+        return trim(News_Crawler_X_Crypto::decrypt((string) $stored));
+    }
+
+    /**
+     * OAuth 1.0a Authorization ヘッダー
+     *
+     * @param string $method   HTTP メソッド
+     * @param string $url      URL
+     * @param array|null $settings 設定
+     * @return string
+     */
+    public function build_oauth1_authorization_header($method, $url, $settings = null) {
+        $settings = $this->resolve_settings($settings);
+        $credentials = $this->get_oauth1_credentials($settings);
+
+        return $this->build_oauth1_authorization_header_from_credentials(
+            $method,
+            $url,
+            array(),
+            $credentials['api_key'],
+            $credentials['api_secret'],
+            $credentials['access_token'],
+            $credentials['access_token_secret']
+        );
     }
 
     /**
@@ -285,7 +377,12 @@ class News_Crawler_X_OAuth {
             'oauth2_storage_option' => self::OAUTH_OPTION_KEY,
             'oauth2_token_expires' => isset($settings['twitter_oauth2_token_expires']) ? (int) $settings['twitter_oauth2_token_expires'] : 0,
             'oauth1_api_key_saved' => !empty($settings['twitter_api_key']),
+            'oauth1_api_secret_saved' => !empty($settings['twitter_api_secret']),
+            'oauth1_api_secret_usable' => $this->has_usable_stored_secret((string) ($settings['twitter_api_secret'] ?? '')),
             'oauth1_access_token_saved' => !empty($settings['twitter_access_token']),
+            'oauth1_access_token_secret_saved' => !empty($settings['twitter_access_token_secret']),
+            'oauth1_access_token_secret_usable' => $this->has_usable_stored_secret((string) ($settings['twitter_access_token_secret'] ?? '')),
+            'oauth1_credentials_usable' => $this->has_usable_oauth1_credentials($settings),
             'username_saved' => !empty($settings['twitter_connected_username']),
         );
 
@@ -788,9 +885,16 @@ class News_Crawler_X_OAuth {
      * @return array{success:bool,username?:string,error?:string}
      */
     private function verify_credentials_oauth1(array $settings) {
+        if (!$this->has_usable_oauth1_credentials($settings)) {
+            return array(
+                'success' => false,
+                'error' => 'OAuth 1.0a の API Key / Secret / Access Token / Access Token Secret が未設定、または復号できません。',
+            );
+        }
+
         $endpoints = array(
-            'https://api.x.com/2/users/me',
-            'https://api.twitter.com/2/users/me',
+            'https://api.x.com/2/users/me?user.fields=username,name',
+            'https://api.twitter.com/2/users/me?user.fields=username,name',
         );
 
         $last_error = 'アカウント情報の取得に失敗しました。';
@@ -1183,27 +1287,39 @@ class News_Crawler_X_OAuth {
     }
 
     /**
-     * OAuth 1.0a Authorization ヘッダー
+     * OAuth 1.0a Authorization ヘッダー（資格情報指定）
      *
-     * @param string $method   HTTP メソッド
-     * @param string $url      URL
-     * @param array  $settings 設定
+     * @param string               $method          HTTP メソッド
+     * @param string               $url             URL
+     * @param array<string, mixed> $params          クエリパラメータ
+     * @param string               $consumer_key    API Key
+     * @param string               $consumer_secret API Secret
+     * @param string               $token           Access Token
+     * @param string               $token_secret    Access Token Secret
      * @return string
      */
-    private function build_oauth1_authorization_header($method, $url, $settings) {
+    private function build_oauth1_authorization_header_from_credentials(
+        $method,
+        $url,
+        array $params,
+        $consumer_key,
+        $consumer_secret,
+        $token,
+        $token_secret
+    ) {
         $parsed_url = wp_parse_url($url);
         $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . ($parsed_url['path'] ?? '');
 
         $oauth_params = array(
-            'oauth_consumer_key' => $settings['twitter_api_key'],
-            'oauth_nonce' => wp_generate_password(32, false),
+            'oauth_consumer_key' => $consumer_key,
+            'oauth_nonce' => wp_generate_password(32, false, false),
             'oauth_signature_method' => 'HMAC-SHA1',
             'oauth_timestamp' => (string) time(),
-            'oauth_token' => $settings['twitter_access_token'],
+            'oauth_token' => $token,
             'oauth_version' => '1.0',
         );
 
-        $signature_params = $oauth_params;
+        $signature_params = array_merge($params, $oauth_params);
         if (!empty($parsed_url['query'])) {
             parse_str($parsed_url['query'], $query_params);
             if (is_array($query_params)) {
@@ -1215,13 +1331,13 @@ class News_Crawler_X_OAuth {
             strtoupper($method),
             $base_url,
             $signature_params,
-            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_api_secret'] ?? '')),
-            News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_access_token_secret'] ?? ''))
+            $consumer_secret,
+            $token_secret
         );
 
         $auth_parts = array();
         foreach ($oauth_params as $key => $value) {
-            $auth_parts[] = rawurlencode($key) . '="' . rawurlencode($value) . '"';
+            $auth_parts[] = rawurlencode($key) . '="' . rawurlencode((string) $value) . '"';
         }
 
         return 'OAuth ' . implode(', ', $auth_parts);

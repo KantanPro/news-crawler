@@ -264,23 +264,31 @@ class NewsCrawlerCronSettings {
             <div class="nc-x-auth-panel nc-x-auth-oauth1" <?php echo ($auth_method !== 'oauth1') ? 'style="display:none;"' : ''; ?>>
                 <table class="form-table" role="presentation">
                     <tr>
-                        <th scope="row"><label for="nc-x-api-key">API Key</label></th>
-                        <td><input id="nc-x-api-key" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_api_key]" value="<?php echo esc_attr($settings['twitter_api_key'] ?? ''); ?>" autocomplete="off" /></td>
+                        <th scope="row">API Key</th>
+                        <td><input id="nc-x-api-key" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_api_key]" value="<?php echo esc_attr($settings['twitter_api_key'] ?? ''); ?>" autocomplete="off" />
+                            <p class="description">Developer Portal の「Consumer Keys」→ <strong>API Key</strong>（OAuth 2.0 Client ID ではありません）</p>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="nc-x-api-secret">API Secret</label></th>
-                        <td><input id="nc-x-api-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_api_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" /></td>
+                        <td><input id="nc-x-api-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_api_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" />
+                            <p class="description">Developer Portal の「Consumer Keys」→ <strong>API Secret</strong></p>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="nc-x-access-token">Access Token</label></th>
-                        <td><input id="nc-x-access-token" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_access_token]" value="<?php echo esc_attr($settings['twitter_access_token'] ?? ''); ?>" autocomplete="off" /></td>
+                        <td><input id="nc-x-access-token" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_access_token]" value="<?php echo esc_attr($settings['twitter_access_token'] ?? ''); ?>" autocomplete="off" />
+                            <p class="description">「Access Token and Secret」→ <strong>Access Token</strong>（Read and Write 権限）</p>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="nc-x-access-token-secret">Access Token Secret</label></th>
-                        <td><input id="nc-x-access-token-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_access_token_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" /></td>
+                        <td><input id="nc-x-access-token-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_access_token_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" />
+                            <p class="description">「Access Token and Secret」→ <strong>Access Token Secret</strong>（Regenerate した場合は必ず再入力）</p>
+                        </td>
                     </tr>
                 </table>
-                <p class="description">Developer Portal の Keys and Tokens から Read and Write 権限のトークンを生成してください。</p>
+                <p class="description">OAuth 1.0a の4項目すべてが必要です。OAuth 2.0 Client ID/Secret とは別の値です。</p>
             </div>
 
             <?php submit_button('設定を保存'); ?>
@@ -361,6 +369,40 @@ class NewsCrawlerCronSettings {
                         <th scope="row">認証方式</th>
                         <td><?php echo esc_html($connection_diagnostics['method']); ?></td>
                     </tr>
+                    <?php if ($auth_method === 'oauth1') : ?>
+                    <tr>
+                        <th scope="row">API Key</th>
+                        <td><?php echo !empty($connection_diagnostics['oauth1_api_key_saved']) ? '保存済み' : '<strong style="color:#b32d2e;">未保存</strong>'; ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">API Secret</th>
+                        <td>
+                            <?php if (!empty($connection_diagnostics['oauth1_api_secret_usable'])) : ?>
+                                保存済み（利用可能）
+                            <?php elseif (!empty($connection_diagnostics['oauth1_api_secret_saved'])) : ?>
+                                <strong style="color:#b32d2e;">保存済み（復号不可）</strong> — API Secret を再入力して「設定を保存」してください
+                            <?php else : ?>
+                                <strong style="color:#b32d2e;">未保存</strong>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Access Token</th>
+                        <td><?php echo !empty($connection_diagnostics['oauth1_access_token_saved']) ? '保存済み' : '<strong style="color:#b32d2e;">未保存</strong>'; ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Access Token Secret</th>
+                        <td>
+                            <?php if (!empty($connection_diagnostics['oauth1_access_token_secret_usable'])) : ?>
+                                保存済み（利用可能）
+                            <?php elseif (!empty($connection_diagnostics['oauth1_access_token_secret_saved'])) : ?>
+                                <strong style="color:#b32d2e;">保存済み（復号不可）</strong> — Access Token Secret を再入力して「設定を保存」してください
+                            <?php else : ?>
+                                <strong style="color:#b32d2e;">未保存</strong>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php else : ?>
                     <tr>
                         <th scope="row">Client ID</th>
                         <td><?php echo !empty($connection_diagnostics['client_id_saved']) ? '保存済み' : '未保存'; ?></td>
@@ -399,6 +441,7 @@ class NewsCrawlerCronSettings {
                         <th scope="row">Callback URL</th>
                         <td><code><?php echo esc_html($redirect_uri); ?></code></td>
                     </tr>
+                    <?php endif; ?>
                     <tr>
                         <th scope="row">接続判定</th>
                         <td><?php echo !empty($connection_diagnostics['connected']) ? '<strong style="color:#008a20;">接続済み</strong>' : '<strong style="color:#b32d2e;">未接続</strong>'; ?></td>
@@ -407,8 +450,15 @@ class NewsCrawlerCronSettings {
             </table>
             <?php if (empty($connection_diagnostics['connected'])) : ?>
                 <p class="description" style="margin-top:8px;">
-                    「設定を保存」だけでは接続は完了しません。<code>接続テスト投稿</code> は OAuth 2.0 Access Token が保存された後に表示されます。
-                    Client ID / Secret 保存後に <strong>X アカウントを接続</strong> → X の許可画面で <strong>許可する</strong> → WordPress に戻る、まで完了してください。
+                    <?php if ($auth_method === 'oauth1') : ?>
+                        OAuth 1.0a では API Key / API Secret / Access Token / Access Token Secret の4項目すべてが正しく必要です。OAuth 2.0 Client ID/Secret とは別の値です。
+                    <?php else : ?>
+                        「設定を保存」だけでは接続は完了しません。Client ID / Secret 保存後に <strong>X アカウントを接続</strong> → X の許可画面で <strong>許可する</strong> → WordPress に戻る、まで完了してください。
+                    <?php endif; ?>
+                </p>
+            <?php elseif ($auth_method === 'oauth1' && empty($connection_diagnostics['oauth1_credentials_usable'])) : ?>
+                <p class="description" style="margin-top:8px;color:#b32d2e;">
+                    接続判定は OK でも Secret の復号に失敗している可能性があります。API Secret / Access Token Secret を再入力して「設定を保存」してください。
                 </p>
             <?php endif; ?>
         </div>
