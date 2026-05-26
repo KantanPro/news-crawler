@@ -236,7 +236,8 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', '認可 URL を生成できませんでした。Client ID を確認してください。');
         }
 
-        wp_safe_redirect($auth_url);
+        // X 認可画面は外部 URL のため wp_redirect を使用（wp_safe_redirect は同一サイトのみ）
+        wp_redirect($auth_url);
         exit;
     }
 
