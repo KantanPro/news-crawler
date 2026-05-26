@@ -28,6 +28,7 @@ class News_Crawler_X_OAuth {
 
     private function __construct() {
         add_action('admin_init', array($this, 'handle_oauth_callback'));
+        add_action('admin_post_nc_x_connect', array($this, 'handle_connect'));
         add_action('admin_post_nc_x_disconnect', array($this, 'handle_disconnect'));
         add_action('admin_post_nc_x_test_tweet', array($this, 'handle_test_tweet'));
         add_action('admin_post_nc_x_clear_share_log', array($this, 'handle_clear_share_log'));
@@ -166,11 +167,27 @@ class News_Crawler_X_OAuth {
     }
 
     /**
-     * 認可 URL を生成
+     * OAuth 接続を開始できるか
+     *
+     * @param array|null $settings 設定
+     * @return bool
+     */
+    public function can_start_connect($settings = null) {
+        $settings = $settings ?: $this->get_settings();
+        if ($this->get_auth_method($settings) !== 'oauth2') {
+            return false;
+        }
+
+        return trim((string) ($settings['twitter_client_id'] ?? '')) !== ''
+            && $this->has_usable_client_secret($settings);
+    }
+
+    /**
+     * 認可 URL を生成（接続ボタン押下時のみ呼ぶ）
      *
      * @return string
      */
-    public function get_authorization_url() {
+    private function build_authorization_url() {
         $settings = $this->get_settings();
         $client_id = trim((string) ($settings['twitter_client_id'] ?? ''));
 
@@ -182,8 +199,8 @@ class News_Crawler_X_OAuth {
         $code_challenge = $this->generate_code_challenge($code_verifier);
         $state = wp_generate_password(32, false, false);
 
-        set_transient('nc_x_oauth_code_verifier', $code_verifier, 15 * MINUTE_IN_SECONDS);
-        set_transient('nc_x_oauth_state', $state, 15 * MINUTE_IN_SECONDS);
+        set_transient($this->get_oauth_transient_key('code_verifier'), $code_verifier, 15 * MINUTE_IN_SECONDS);
+        set_transient($this->get_oauth_transient_key('state'), $state, 15 * MINUTE_IN_SECONDS);
 
         $params = array(
             'response_type' => 'code',
@@ -196,6 +213,31 @@ class News_Crawler_X_OAuth {
         );
 
         return 'https://x.com/i/oauth2/authorize?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * X 接続開始ハンドラ
+     */
+    public function handle_connect() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        check_admin_referer('nc_x_connect');
+
+        if (!$this->can_start_connect()) {
+            $this->redirect_with_notice(
+                'error',
+                'Client ID / Client Secret を入力して「設定を保存」してから、もう一度「X アカウントを接続」をクリックしてください。'
+            );
+        }
+
+        $auth_url = $this->build_authorization_url();
+        if ($auth_url === '') {
+            $this->redirect_with_notice('error', '認可 URL を生成できませんでした。Client ID を確認してください。');
+        }
+
+        wp_safe_redirect($auth_url);
+        exit;
     }
 
     /**
@@ -226,11 +268,11 @@ class News_Crawler_X_OAuth {
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $state = isset($_GET['state']) ? sanitize_text_field(wp_unslash($_GET['state'])) : '';
-        $saved = get_transient('nc_x_oauth_state');
+        $saved = get_transient($this->get_oauth_transient_key('state'));
         if ($state === '' || $saved === false || !hash_equals((string) $saved, $state)) {
-            $this->redirect_with_notice('error', 'OAuth state が一致しません。もう一度お試しください。');
+            $this->redirect_with_notice('error', 'OAuth state が一致しません。もう一度「X アカウントを接続」からやり直してください。');
         }
-        delete_transient('nc_x_oauth_state');
+        delete_transient($this->get_oauth_transient_key('state'));
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $code = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
@@ -238,11 +280,11 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', '認可コードが取得できませんでした。');
         }
 
-        $code_verifier = get_transient('nc_x_oauth_code_verifier');
+        $code_verifier = get_transient($this->get_oauth_transient_key('code_verifier'));
         if ($code_verifier === false || $code_verifier === '') {
-            $this->redirect_with_notice('error', 'code_verifier の有効期限が切れました。');
+            $this->redirect_with_notice('error', 'code_verifier の有効期限が切れました。「X アカウントを接続」からやり直してください。');
         }
-        delete_transient('nc_x_oauth_code_verifier');
+        delete_transient($this->get_oauth_transient_key('code_verifier'));
 
         $result = $this->exchange_code_for_tokens($code, (string) $code_verifier);
         if (!$result['success']) {
@@ -258,7 +300,7 @@ class News_Crawler_X_OAuth {
             if ($verify_error !== '') {
                 error_log('News Crawler X OAuth: connected but username lookup failed - ' . $verify_error);
             }
-            $this->redirect_without_notice();
+            $this->redirect_with_notice('success', 'X アカウントに接続しました。');
         }
     }
 
@@ -827,6 +869,16 @@ class News_Crawler_X_OAuth {
      */
     private function get_notice_transient_key($user_id) {
         return 'nc_x_oauth_notice_' . intval($user_id);
+    }
+
+    /**
+     * OAuth 一時データ用トランジェントキー（ユーザー単位）
+     *
+     * @param string $suffix
+     * @return string
+     */
+    private function get_oauth_transient_key($suffix) {
+        return 'nc_x_oauth_' . sanitize_key($suffix) . '_' . get_current_user_id();
     }
 
     /**

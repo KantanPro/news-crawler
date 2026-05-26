@@ -179,7 +179,7 @@ class NewsCrawlerCronSettings {
         $connected_label = $connected ? $oauth->get_connected_display_label($settings) : '';
         $connected_username = $connected ? $oauth->get_connected_username($settings) : '';
         $connection_diagnostics = $oauth->get_connection_diagnostics($settings);
-        $auth_url = $oauth->get_authorization_url();
+        $can_connect = $oauth->can_start_connect($settings);
         $redirect_uri = $oauth->get_redirect_uri();
 
         $template = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : "%TITLE%\n%URL%";
@@ -297,8 +297,14 @@ class NewsCrawlerCronSettings {
             <p class="nc-x-connection-status"><strong>接続済み</strong>（アカウント名を未取得）</p>
         <?php endif; ?>
         <div class="nc-x-actions">
-            <?php if ($auth_method === 'oauth2' && $auth_url !== '') : ?>
-                <a class="button button-primary" href="<?php echo esc_url($auth_url); ?>">X アカウントを接続</a>
+            <?php if ($auth_method === 'oauth2' && $can_connect) : ?>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;">
+                    <?php wp_nonce_field('nc_x_connect'); ?>
+                    <input type="hidden" name="action" value="nc_x_connect" />
+                    <?php submit_button('X アカウントを接続', 'primary', 'submit', false); ?>
+                </form>
+            <?php elseif ($auth_method === 'oauth2') : ?>
+                <p class="description">Client ID / Client Secret を入力して「設定を保存」後、「X アカウントを接続」をクリックしてください。</p>
             <?php endif; ?>
 
             <?php if ($connected) : ?>
@@ -322,7 +328,7 @@ class NewsCrawlerCronSettings {
                     </form>
                 <?php endif; ?>
             <?php elseif ($auth_method === 'oauth2') : ?>
-                <p class="description">Client ID / Secret を保存後、「X アカウントを接続」をクリックしてください。</p>
+                <p class="description">Client ID / Client Secret を保存後、「X アカウントを接続」をクリックし、X の許可画面で「許可する」まで完了してください。</p>
             <?php endif; ?>
         </div>
 
@@ -382,6 +388,10 @@ class NewsCrawlerCronSettings {
                         <td><?php echo !empty($connection_diagnostics['oauth2_refresh_token_saved']) ? '保存済み' : '未保存'; ?></td>
                     </tr>
                     <tr>
+                        <th scope="row">Callback URL</th>
+                        <td><code><?php echo esc_html($redirect_uri); ?></code></td>
+                    </tr>
+                    <tr>
                         <th scope="row">接続判定</th>
                         <td><?php echo !empty($connection_diagnostics['connected']) ? '<strong style="color:#008a20;">接続済み</strong>' : '<strong style="color:#b32d2e;">未接続</strong>'; ?></td>
                     </tr>
@@ -389,8 +399,8 @@ class NewsCrawlerCronSettings {
             </table>
             <?php if (empty($connection_diagnostics['connected'])) : ?>
                 <p class="description" style="margin-top:8px;">
-                    <code>接続テスト投稿</code> は OAuth 2.0 Access Token が保存された後に表示されます。
-                    X の許可画面で「許可する」まで完了し、WordPress のコールバック URL に戻る必要があります。
+                    「設定を保存」だけでは接続は完了しません。<code>接続テスト投稿</code> は OAuth 2.0 Access Token が保存された後に表示されます。
+                    Client ID / Secret 保存後に <strong>X アカウントを接続</strong> → X の許可画面で <strong>許可する</strong> → WordPress に戻る、まで完了してください。
                 </p>
             <?php endif; ?>
         </div>
