@@ -156,9 +156,8 @@ class NewsCrawlerFeaturedImageGenerator {
                 return array('error' => '画像リソースの作成に失敗しました。');
             }
             
-            // 背景色設定（グラデーション）- デフォルト値を使用
-            $bg_color1 = '#4F46E5';
-            $bg_color2 = '#7C3AED';
+            // 背景色設定（グラデーション）- 投稿ごとに配色を変える
+            list($bg_color1, $bg_color2) = $this->get_template_color_palette($post_id, $title);
             
             $gradient_result = $this->create_gradient_background($image, $width, $height, $bg_color1, $bg_color2);
             if (!$gradient_result) {
@@ -171,8 +170,12 @@ class NewsCrawlerFeaturedImageGenerator {
             $text_color = '#FFFFFF';
             $font_size = 48;
             
-            // 日本語タイトルを生成（キーワード + ニュースまとめ + 日付）
-            $display_title = $this->create_japanese_title($title, $keywords);
+            // 表示タイトル（SEOタイトルがあれば優先、なければ従来ロジック）
+            if ($title !== '' && strpos($title, '以降はＡＩで生成') === false) {
+                $display_title = $title;
+            } else {
+                $display_title = $this->create_japanese_title($title, $keywords);
+            }
             error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
             
             // 日本語テキストを画像に描画
@@ -595,20 +598,52 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。');
         }
 
-        foreach ($data['results'] as $photo) {
-            if (empty($photo['urls']['regular'])) {
-                continue;
-            }
+        $results = array_values(array_filter($data['results'], function ($photo) {
+            return is_array($photo) && !empty($photo['urls']['regular']);
+        }));
+
+        if (empty($results)) {
+            return array('error' => 'キーワード「' . $search_query . '」に一致する画像が見つかりませんでした。');
+        }
+
+        $count = count($results);
+        $offset = abs(intval($post_id)) % $count;
+
+        for ($i = 0; $i < $count; $i++) {
+            $photo = $results[($offset + $i) % $count];
 
             $download_result = $this->download_and_attach_image($photo['urls']['regular'], $post_id, $title);
             if ($download_result && !is_array($download_result)) {
                 $this->track_unsplash_download($access_key, $photo);
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索画像取得成功 - クエリ: ' . $search_query);
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索画像取得成功 - クエリ: ' . $search_query . ', index: ' . (($offset + $i) % $count));
                 return $download_result;
             }
         }
 
         return array('error' => 'キーワード「' . $search_query . '」の候補画像をダウンロードできませんでした。');
+    }
+
+    /**
+     * テンプレート画像用の配色を投稿ごとに決定
+     *
+     * @param int    $post_id 投稿 ID
+     * @param string $title   タイトル
+     * @return array{0:string,1:string}
+     */
+    private function get_template_color_palette($post_id, $title) {
+        $palettes = array(
+            array('#4F46E5', '#7C3AED'),
+            array('#059669', '#0D9488'),
+            array('#DC2626', '#EA580C'),
+            array('#2563EB', '#0891B2'),
+            array('#7C3AED', '#DB2777'),
+            array('#B45309', '#CA8A04'),
+            array('#4338CA', '#6366F1'),
+            array('#BE123C', '#E11D48'),
+        );
+
+        $seed = abs(crc32((string) $post_id . '|' . (string) $title));
+        return $palettes[$seed % count($palettes)];
     }
 
     /**
@@ -729,6 +764,13 @@ class NewsCrawlerFeaturedImageGenerator {
 
         if (preg_match_all('/[a-zA-Z]{3,}/', (string) $title, $matches)) {
             $terms = array_merge($terms, array_slice($matches[0], 0, 2));
+        }
+
+        $title_text = (string) $title;
+        foreach ($dictionary as $jp => $en) {
+            if ($title_text !== '' && mb_strpos($title_text, $jp) !== false) {
+                $terms[] = $en;
+            }
         }
 
         return array_values(array_unique($terms));
@@ -2135,6 +2177,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $prompt .= ' related to ' . $keyword_text;
         }
         $prompt .= '. Style: ' . $style . '. Use rich colors, compelling composition, and realistic imagery. No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
+        $prompt .= ' Unique variation seed: ' . abs(crc32($title . '|' . implode(',', array_slice((array) $keywords, 0, 5))));
         
         return $prompt;
     }

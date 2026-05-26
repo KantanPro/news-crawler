@@ -30,6 +30,7 @@ class News_Crawler_X_Poster {
      */
     public function init() {
         add_action('transition_post_status', array($this, 'handle_post_status_change'), 10, 3);
+        add_action('news_crawler_share_to_x', array($this, 'auto_post_to_x'));
     }
 
     /**
@@ -46,7 +47,11 @@ class News_Crawler_X_Poster {
         if (!($post instanceof WP_Post)) {
             return;
         }
-        $this->auto_post_to_x($post->ID);
+
+        $post_id = (int) $post->ID;
+        add_action('shutdown', function () use ($post_id) {
+            $this->auto_post_to_x($post_id);
+        });
     }
 
     /**
@@ -59,7 +64,6 @@ class News_Crawler_X_Poster {
         if ($post_id <= 0 || isset(self::$processing[$post_id])) {
             return;
         }
-        self::$processing[$post_id] = true;
 
         if (!get_post_meta($post_id, '_news_crawler_created', true)) {
             return;
@@ -70,8 +74,12 @@ class News_Crawler_X_Poster {
 
         $settings = get_option('news_crawler_basic_settings', array());
         if (empty($settings['twitter_enabled'])) {
+            $this->log_share_skip($post_id, 'X 自動シェアが無効です。自動投稿設定で有効にしてください。');
             return;
         }
+
+        self::$processing[$post_id] = true;
+
         if (!$this->is_connected($settings)) {
             $post_title = get_the_title($post_id);
             News_Crawler_X_Share_Log::add(
@@ -86,6 +94,12 @@ class News_Crawler_X_Poster {
 
         $post = get_post($post_id);
         if (!$post || $post->post_status !== 'publish' || $post->post_type !== 'post') {
+            $reason = !$post
+                ? '投稿が見つかりません。'
+                : ($post->post_status !== 'publish'
+                    ? '投稿が公開状態ではありません（現在: ' . $post->post_status . '）。'
+                    : '投稿タイプが post ではありません。');
+            $this->log_share_skip($post_id, $reason);
             return;
         }
 
@@ -412,6 +426,26 @@ class News_Crawler_X_Poster {
             }
         }
         return '不明なエラー (HTTP ' . $response_code . ')';
+    }
+
+    /**
+     * シェアスキップをシェアログに記録
+     *
+     * @param int    $post_id 投稿 ID
+     * @param string $reason  理由
+     */
+    private function log_share_skip($post_id, $reason) {
+        if (!class_exists('News_Crawler_X_Share_Log')) {
+            return;
+        }
+
+        $title = get_the_title($post_id);
+        News_Crawler_X_Share_Log::add(
+            sprintf('「%s」の X シェアをスキップ', $title ?: ('投稿 ID ' . $post_id)),
+            'info',
+            array('post_id' => $post_id),
+            $reason
+        );
     }
 
     /**

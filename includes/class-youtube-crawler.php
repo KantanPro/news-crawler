@@ -1088,8 +1088,10 @@ class NewsCrawlerYouTubeCrawler {
             error_log('YouTubeCrawler: AI要約生成が無効のためスケジュールをスキップします (投稿ID: ' . $post_id . ')');
         }
         
-        // X（Twitter）自動シェア機能は削除済み
-        
+        if ($status === 'publish' && function_exists('news_crawler_trigger_x_share')) {
+            news_crawler_trigger_x_share($post_id);
+        }
+
         // 投稿作成完了をログに記録
         error_log('YouTubeCrawler: 投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
         

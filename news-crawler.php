@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.2.0
+ * Version: 3.2.1
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '3.2.0');
+define('NEWS_CRAWLER_VERSION', '3.2.1');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -479,6 +479,25 @@ add_action('news_crawler_ensure_meta', 'news_crawler_ensure_meta', 10, 1);
 
 // 投稿作成直後のXPoster用メタデータ設定を強化
 add_action('wp_insert_post', 'news_crawler_enhance_xposter_meta', 10, 3);
+
+/**
+ * News Crawler 投稿の X 自動シェアをトリガー（メタデータ保存後に呼ぶ）
+ *
+ * @param int $post_id 投稿 ID
+ */
+function news_crawler_trigger_x_share($post_id) {
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) {
+        return;
+    }
+
+    $post = get_post($post_id);
+    if (!$post || $post->post_status !== 'publish') {
+        return;
+    }
+
+    do_action('news_crawler_share_to_x', $post_id);
+}
 
 /**
  * 投稿作成後の評価値を復元
@@ -1848,11 +1867,16 @@ class NewsCrawler {
         }
 
         // アイキャッチ生成
-        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        $featured_keywords = $this->build_featured_image_keywords($keywords, $videos);
+        $featured_result = $this->maybe_generate_featured_image($post_id, get_the_title($post_id), $featured_keywords);
 
         // AI要約生成はclass-youtube-crawler.phpで非同期実行されるため、ここではスキップ
 
         error_log('NewsCrawler: YouTube投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
+
+        if ($status === 'publish') {
+            news_crawler_trigger_x_share($post_id);
+        }
 
         return $post_id;
     }
@@ -2137,12 +2161,53 @@ class NewsCrawler {
     }
     
     /**
+     * アイキャッチ生成用キーワードを組み立て（ジャンル設定＋記事/動画タイトル）
+     *
+     * @param array $base_keywords ジャンル設定のキーワード
+     * @param array $content_items   記事または動画の配列
+     * @return array
+     */
+    private function build_featured_image_keywords($base_keywords, $content_items) {
+        $keywords = is_array($base_keywords) ? $base_keywords : array();
+
+        foreach ((array) $content_items as $item) {
+            if (!is_array($item) || empty($item['title'])) {
+                continue;
+            }
+
+            $raw_title = wp_strip_all_tags((string) $item['title']);
+            if ($raw_title === '') {
+                continue;
+            }
+
+            $keywords[] = $raw_title;
+
+            $segments = preg_split('/[｜|\-–—:：]/u', $raw_title, 2);
+            if (!empty($segments[0])) {
+                $keywords[] = trim($segments[0]);
+            }
+        }
+
+        $keywords = array_map('trim', $keywords);
+        $keywords = array_filter($keywords, function ($keyword) {
+            return $keyword !== '';
+        });
+
+        return array_values(array_unique($keywords));
+    }
+
+    /**
      * アイキャッチ画像を生成
      */
     private function maybe_generate_featured_image($post_id, $title, $keywords) {
+        $resolved_title = get_the_title($post_id);
+        if ($resolved_title !== '' && strpos($resolved_title, '以降はＡＩで生成') === false) {
+            $title = $resolved_title;
+        }
+
         error_log('NewsCrawler: maybe_generate_featured_image called for post ' . $post_id);
         error_log('NewsCrawler: Title: ' . $title);
-        error_log('NewsCrawler: Keywords: ' . implode(', ', $keywords));
+        error_log('NewsCrawler: Keywords: ' . implode(', ', (array) $keywords));
         
         // ジャンル設定からの実行かどうかを確認
         $genre_setting = get_transient('news_crawler_current_genre_setting');
@@ -3655,7 +3720,8 @@ class NewsCrawler {
         }
 
         // アイキャッチ生成
-        $featured_result = $this->maybe_generate_featured_image($post_id, $post_title, $keywords);
+        $featured_keywords = $this->build_featured_image_keywords($keywords, $valid_articles);
+        $featured_result = $this->maybe_generate_featured_image($post_id, get_the_title($post_id), $featured_keywords);
 
         // AI要約生成
         if (class_exists('NewsCrawlerOpenAISummarizer')) {
@@ -3673,6 +3739,10 @@ class NewsCrawler {
         }
 
         error_log('NewsCrawler: 投稿を ' . $status . ' ステータスで正常に作成しました (ID: ' . $post_id . ')');
+
+        if ($status === 'publish') {
+            news_crawler_trigger_x_share($post_id);
+        }
         
         return $post_id;
     }
