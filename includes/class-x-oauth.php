@@ -166,6 +166,24 @@ class News_Crawler_X_OAuth {
     }
 
     /**
+     * 基本設定に OAuth 専用オプションをマージして返す
+     *
+     * @param array|null $settings news_crawler_basic_settings のみの配列、または null
+     * @return array
+     */
+    private function resolve_settings($settings = null) {
+        if ($settings === null) {
+            return $this->get_settings();
+        }
+
+        if (!is_array($settings)) {
+            $settings = array();
+        }
+
+        return array_merge($settings, $this->get_oauth_option_settings());
+    }
+
+    /**
      * 設定を保存
      *
      * @param array $settings 設定
@@ -205,7 +223,7 @@ class News_Crawler_X_OAuth {
      * @return bool
      */
     public function is_connected($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $method = $this->get_auth_method($settings);
 
         if ($method === 'oauth1') {
@@ -226,7 +244,7 @@ class News_Crawler_X_OAuth {
      * @return string
      */
     public function get_client_secret($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         return trim(News_Crawler_X_Crypto::decrypt((string) ($settings['twitter_client_secret'] ?? '')));
     }
 
@@ -237,7 +255,7 @@ class News_Crawler_X_OAuth {
      * @return bool
      */
     public function has_usable_client_secret($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         if (empty($settings['twitter_client_secret'])) {
             return false;
         }
@@ -252,7 +270,7 @@ class News_Crawler_X_OAuth {
      * @return array
      */
     public function get_connection_diagnostics($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $method = $this->get_auth_method($settings);
 
         $diagnostics = array(
@@ -286,7 +304,7 @@ class News_Crawler_X_OAuth {
      * @return string
      */
     public function get_auth_method($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $method = isset($settings['twitter_auth_method']) ? $settings['twitter_auth_method'] : '';
 
         if (in_array($method, array('oauth1', 'oauth2'), true)) {
@@ -307,7 +325,7 @@ class News_Crawler_X_OAuth {
      * @return bool
      */
     public function can_start_connect($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         if ($this->get_auth_method($settings) !== 'oauth2') {
             return false;
         }
@@ -620,7 +638,7 @@ class News_Crawler_X_OAuth {
             return '@' . $username;
         }
 
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $name = trim((string) ($settings['twitter_connected_name'] ?? ''));
         return $name;
     }
@@ -632,7 +650,7 @@ class News_Crawler_X_OAuth {
      * @return string
      */
     public function get_connected_username($settings = null) {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $username = trim((string) ($settings['twitter_connected_username'] ?? ''));
         if ($username !== '') {
             return $username;
@@ -677,7 +695,7 @@ class News_Crawler_X_OAuth {
      * @return array{success:bool,username?:string,name?:string,error?:string}
      */
     public function verify_credentials($settings = null, $access_token_override = '') {
-        $settings = $settings ?: $this->get_settings();
+        $settings = $this->resolve_settings($settings);
         $method = $this->get_auth_method($settings);
 
         if ($method === 'oauth1') {

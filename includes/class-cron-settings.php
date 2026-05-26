@@ -168,12 +168,8 @@ class NewsCrawlerCronSettings {
      * X 設定を描画（xLabo 風 UI）
      */
     private function render_x_settings() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        if (!is_array($settings)) {
-            $settings = array();
-        }
-
         $oauth = News_Crawler_X_OAuth::instance();
+        $settings = $oauth->get_settings();
         $auth_method = $oauth->get_auth_method($settings);
         $connected = $oauth->is_connected($settings);
         $connected_label = $connected ? $oauth->get_connected_display_label($settings) : '';
