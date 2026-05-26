@@ -313,6 +313,12 @@ class NewsCrawlerCronSettings {
                 </form>
 
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
+                    <?php wp_nonce_field('nc_x_retry_pending_shares'); ?>
+                    <input type="hidden" name="action" value="nc_x_retry_pending_shares" />
+                    <?php submit_button('未シェア投稿を再試行', 'secondary', 'submit', false); ?>
+                </form>
+
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
                     <?php wp_nonce_field('nc_x_refresh_profile'); ?>
                     <input type="hidden" name="action" value="nc_x_refresh_profile" />
                     <?php submit_button('アカウント名を再取得', 'secondary', 'submit', false); ?>
@@ -418,8 +424,14 @@ class NewsCrawlerCronSettings {
      */
     private function render_share_log_table() {
         $entries = News_Crawler_X_Share_Log::get_entries();
+        $pending_share_count = class_exists('News_Crawler_X_Poster')
+            ? count(News_Crawler_X_Poster::get_pending_post_ids(20))
+            : 0;
         ?>
         <h3>シェアログ</h3>
+        <?php if ($pending_share_count > 0) : ?>
+            <p class="description">未シェアの News Crawler 投稿が <?php echo esc_html((string) $pending_share_count); ?> 件あります。「未シェア投稿を再試行」ボタンで X シェアを実行できます。</p>
+        <?php endif; ?>
         <?php if (empty($entries)) : ?>
             <p>ログはまだありません。</p>
         <?php else : ?>

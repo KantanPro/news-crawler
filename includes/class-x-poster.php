@@ -50,8 +50,92 @@ class News_Crawler_X_Poster {
 
         $post_id = (int) $post->ID;
         add_action('shutdown', function () use ($post_id) {
-            $this->auto_post_to_x($post_id);
+            if (function_exists('news_crawler_trigger_x_share')) {
+                news_crawler_trigger_x_share($post_id);
+            } else {
+                self::share_post($post_id);
+            }
         });
+    }
+
+    /**
+     * 指定投稿を X にシェア
+     *
+     * @param int  $post_id 投稿 ID
+     * @param bool $force   既にシェア済みでも再試行する
+     */
+    public static function share_post($post_id, $force = false) {
+        $post_id = (int) $post_id;
+        if ($post_id <= 0) {
+            return;
+        }
+
+        if ($force) {
+            delete_post_meta($post_id, '_x_posted');
+            delete_post_meta($post_id, '_x_post_id');
+            delete_post_meta($post_id, '_x_posted_at');
+        }
+
+        static $poster = null;
+        if ($poster === null) {
+            $poster = new self();
+        }
+
+        $poster->auto_post_to_x($post_id);
+    }
+
+    /**
+     * 未シェアの News Crawler 投稿 ID 一覧
+     *
+     * @param int $limit 取得件数
+     * @return array<int, int>
+     */
+    public static function get_pending_post_ids($limit = 20) {
+        $query = new WP_Query(array(
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'posts_per_page' => max(1, min(50, (int) $limit)),
+            'fields' => 'ids',
+            'no_found_rows' => true,
+            'meta_query' => array(
+                'relation' => 'AND',
+                array(
+                    'key' => '_news_crawler_created',
+                    'value' => '1',
+                ),
+                array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => '_x_posted',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                    array(
+                        'key' => '_x_posted',
+                        'value' => '',
+                    ),
+                    array(
+                        'key' => '_x_posted',
+                        'value' => '0',
+                    ),
+                ),
+            ),
+        ));
+
+        return array_map('intval', $query->posts);
+    }
+
+    /**
+     * 設定を取得（OAuth 専用オプションを含む）
+     *
+     * @return array
+     */
+    private function get_x_settings() {
+        if (class_exists('News_Crawler_X_OAuth')) {
+            return News_Crawler_X_OAuth::instance()->get_settings();
+        }
+
+        $settings = get_option('news_crawler_basic_settings', array());
+        return is_array($settings) ? $settings : array();
     }
 
     /**
@@ -66,13 +150,15 @@ class News_Crawler_X_Poster {
         }
 
         if (!get_post_meta($post_id, '_news_crawler_created', true)) {
+            $this->log_share_skip($post_id, 'News Crawler 作成投稿ではないため X シェア対象外です。');
             return;
         }
         if (get_post_meta($post_id, '_x_posted', true)) {
+            $this->log_share_skip($post_id, 'この投稿は既に X シェア済みです。');
             return;
         }
 
-        $settings = get_option('news_crawler_basic_settings', array());
+        $settings = $this->get_x_settings();
         if (empty($settings['twitter_enabled'])) {
             $this->log_share_skip($post_id, 'X 自動シェアが無効です。自動投稿設定で有効にしてください。');
             return;
@@ -80,54 +166,58 @@ class News_Crawler_X_Poster {
 
         self::$processing[$post_id] = true;
 
-        if (!$this->is_connected($settings)) {
-            $post_title = get_the_title($post_id);
-            News_Crawler_X_Share_Log::add(
-                sprintf('「%s」の X シェアに失敗', $post_title ?: ('投稿 ID ' . $post_id)),
-                'error',
-                array('post_id' => $post_id),
-                'X アカウントが接続されていません。'
-            );
-            $this->log('X 投稿に必要な認証情報が不足しています', 'error');
-            return;
-        }
+        try {
+            if (!$this->is_connected($settings)) {
+                $post_title = get_the_title($post_id);
+                News_Crawler_X_Share_Log::add(
+                    sprintf('「%s」の X シェアに失敗', $post_title ?: ('投稿 ID ' . $post_id)),
+                    'error',
+                    array('post_id' => $post_id),
+                    'X アカウントが接続されていません。'
+                );
+                $this->log('X 投稿に必要な認証情報が不足しています', 'error');
+                return;
+            }
 
-        $post = get_post($post_id);
-        if (!$post || $post->post_status !== 'publish' || $post->post_type !== 'post') {
-            $reason = !$post
-                ? '投稿が見つかりません。'
-                : ($post->post_status !== 'publish'
-                    ? '投稿が公開状態ではありません（現在: ' . $post->post_status . '）。'
-                    : '投稿タイプが post ではありません。');
-            $this->log_share_skip($post_id, $reason);
-            return;
-        }
+            $post = get_post($post_id);
+            if (!$post || $post->post_status !== 'publish' || $post->post_type !== 'post') {
+                $reason = !$post
+                    ? '投稿が見つかりません。'
+                    : ($post->post_status !== 'publish'
+                        ? '投稿が公開状態ではありません（現在: ' . $post->post_status . '）。'
+                        : '投稿タイプが post ではありません。');
+                $this->log_share_skip($post_id, $reason);
+                return;
+            }
 
-        $message = $this->generate_post_message($post, $settings);
-        $result = $this->post_message($message, $settings);
+            $message = $this->generate_post_message($post, $settings);
+            $result = $this->post_message($message, $settings);
 
-        if ($result['success']) {
-            update_post_meta($post_id, '_x_posted', true);
-            update_post_meta($post_id, '_x_post_id', $result['tweet_id']);
-            update_post_meta($post_id, '_x_posted_at', current_time('mysql'));
-            News_Crawler_X_Share_Log::add(
-                sprintf('「%s」を X にシェアしました（Tweet ID: %s）', $post->post_title, $result['tweet_id']),
-                'success',
-                array(
-                    'post_id' => $post_id,
-                    'tweet_id' => $result['tweet_id'],
-                )
-            );
-            $this->log('X 投稿成功 - Post ID: ' . $post_id . ', Tweet ID: ' . $result['tweet_id'], 'info');
-        } else {
-            $error = $result['error'] ?? '不明なエラー';
-            News_Crawler_X_Share_Log::add(
-                sprintf('「%s」の X シェアに失敗', $post->post_title),
-                'error',
-                array('post_id' => $post_id),
-                $error
-            );
-            $this->log('X 投稿失敗 - Post ID: ' . $post_id . ', Error: ' . $error, 'error');
+            if ($result['success']) {
+                update_post_meta($post_id, '_x_posted', true);
+                update_post_meta($post_id, '_x_post_id', $result['tweet_id']);
+                update_post_meta($post_id, '_x_posted_at', current_time('mysql'));
+                News_Crawler_X_Share_Log::add(
+                    sprintf('「%s」を X にシェアしました（Tweet ID: %s）', $post->post_title, $result['tweet_id']),
+                    'success',
+                    array(
+                        'post_id' => $post_id,
+                        'tweet_id' => $result['tweet_id'],
+                    )
+                );
+                $this->log('X 投稿成功 - Post ID: ' . $post_id . ', Tweet ID: ' . $result['tweet_id'], 'info');
+            } else {
+                $error = $result['error'] ?? '不明なエラー';
+                News_Crawler_X_Share_Log::add(
+                    sprintf('「%s」の X シェアに失敗', $post->post_title),
+                    'error',
+                    array('post_id' => $post_id),
+                    $error
+                );
+                $this->log('X 投稿失敗 - Post ID: ' . $post_id . ', Error: ' . $error, 'error');
+            }
+        } finally {
+            unset(self::$processing[$post_id]);
         }
     }
 
@@ -138,7 +228,7 @@ class News_Crawler_X_Poster {
      * @return array{success:bool,tweet_id?:string,error?:string}
      */
     public function post_test_message($message) {
-        $settings = get_option('news_crawler_basic_settings', array());
+        $settings = $this->get_x_settings();
         if (!$this->is_connected($settings)) {
             return array('success' => false, 'error' => 'X アカウントが接続されていません。');
         }
@@ -472,9 +562,6 @@ class News_Crawler_X_Poster {
      */
     public function manual_test_x_post($post_id) {
         update_post_meta($post_id, '_news_crawler_created', true);
-        delete_post_meta($post_id, '_x_posted');
-        delete_post_meta($post_id, '_x_post_id');
-        delete_post_meta($post_id, '_x_posted_at');
-        $this->auto_post_to_x($post_id);
+        self::share_post($post_id, true);
     }
 }

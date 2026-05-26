@@ -11,7 +11,8 @@ if (!defined('ABSPATH')) {
 
 class News_Crawler_X_Share_Log {
 
-    const OPTION_KEY = 'twitter_share_log';
+    const OPTION_KEY = 'news_crawler_x_share_log';
+    const LEGACY_OPTION_KEY = 'twitter_share_log';
     const MAX_ENTRIES = 50;
 
     /**
@@ -23,12 +24,7 @@ class News_Crawler_X_Share_Log {
      * @param string $error   失敗原因
      */
     public static function add($message, $level = 'info', array $context = array(), $error = '') {
-        $settings = get_option('news_crawler_basic_settings', array());
-        if (!is_array($settings)) {
-            $settings = array();
-        }
-
-        $entries = self::get_entries_from_settings($settings);
+        $entries = self::get_entries();
         array_unshift(
             $entries,
             array(
@@ -40,9 +36,8 @@ class News_Crawler_X_Share_Log {
             )
         );
 
-        $settings[self::OPTION_KEY] = array_slice($entries, 0, self::MAX_ENTRIES);
-        update_option('news_crawler_basic_settings', $settings);
-        wp_cache_delete('news_crawler_basic_settings', 'options');
+        update_option(self::OPTION_KEY, array_slice($entries, 0, self::MAX_ENTRIES), false);
+        wp_cache_delete(self::OPTION_KEY, 'options');
     }
 
     /**
@@ -51,26 +46,20 @@ class News_Crawler_X_Share_Log {
      * @return array<int, array<string, mixed>>
      */
     public static function get_entries() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        if (!is_array($settings)) {
-            return array();
+        $entries = get_option(self::OPTION_KEY, null);
+        if (is_array($entries) && !empty($entries)) {
+            return $entries;
         }
 
-        return self::get_entries_from_settings($settings);
+        return self::migrate_legacy_entries();
     }
 
     /**
      * ログをクリア
      */
     public static function clear() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        if (!is_array($settings)) {
-            $settings = array();
-        }
-
-        $settings[self::OPTION_KEY] = array();
-        update_option('news_crawler_basic_settings', $settings);
-        wp_cache_delete('news_crawler_basic_settings', 'options');
+        update_option(self::OPTION_KEY, array(), false);
+        wp_cache_delete(self::OPTION_KEY, 'options');
     }
 
     /**
@@ -91,13 +80,24 @@ class News_Crawler_X_Share_Log {
     }
 
     /**
-     * 設定配列からログを取得
+     * 旧 basic_settings 内のログを専用オプションへ移行
      *
-     * @param array $settings 設定
      * @return array<int, array<string, mixed>>
      */
-    private static function get_entries_from_settings(array $settings) {
-        $entries = $settings[self::OPTION_KEY] ?? array();
-        return is_array($entries) ? $entries : array();
+    private static function migrate_legacy_entries() {
+        $basic = get_option('news_crawler_basic_settings', array());
+        if (!is_array($basic) || empty($basic[self::LEGACY_OPTION_KEY]) || !is_array($basic[self::LEGACY_OPTION_KEY])) {
+            return array();
+        }
+
+        $entries = array_values($basic[self::LEGACY_OPTION_KEY]);
+        update_option(self::OPTION_KEY, $entries, false);
+        wp_cache_delete(self::OPTION_KEY, 'options');
+
+        unset($basic[self::LEGACY_OPTION_KEY]);
+        update_option('news_crawler_basic_settings', $basic);
+        wp_cache_delete('news_crawler_basic_settings', 'options');
+
+        return $entries;
     }
 }

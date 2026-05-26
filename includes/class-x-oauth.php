@@ -36,6 +36,7 @@ class News_Crawler_X_OAuth {
         add_action('admin_post_nc_x_clear_share_log', array($this, 'handle_clear_share_log'));
         add_action('admin_post_nc_x_refresh_profile', array($this, 'handle_refresh_profile'));
         add_action('admin_post_nc_x_save_manual_username', array($this, 'handle_save_manual_username'));
+        add_action('admin_post_nc_x_retry_pending_shares', array($this, 'handle_retry_pending_shares'));
         add_action('admin_notices', array($this, 'render_admin_notices'));
     }
 
@@ -943,6 +944,34 @@ class News_Crawler_X_OAuth {
         $this->update_settings($settings);
 
         $this->redirect_with_notice('success', sprintf('アカウント名 @%s を登録しました。', $username));
+    }
+
+    /**
+     * 未シェア投稿の再試行ハンドラ
+     */
+    public function handle_retry_pending_shares() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        check_admin_referer('nc_x_retry_pending_shares');
+
+        if (!class_exists('News_Crawler_X_Poster')) {
+            $this->redirect_with_notice('error', 'X 投稿機能が利用できません。');
+        }
+
+        $post_ids = News_Crawler_X_Poster::get_pending_post_ids(20);
+        if (empty($post_ids)) {
+            $this->redirect_with_notice('info', '未シェアの News Crawler 投稿は見つかりませんでした。');
+        }
+
+        foreach ($post_ids as $post_id) {
+            News_Crawler_X_Poster::share_post($post_id, true);
+        }
+
+        $this->redirect_with_notice(
+            'success',
+            sprintf('未シェア投稿 %d 件の X シェアを再試行しました。シェアログを確認してください。', count($post_ids))
+        );
     }
 
     /**
