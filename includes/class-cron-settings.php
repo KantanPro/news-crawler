@@ -177,6 +177,7 @@ class NewsCrawlerCronSettings {
         $auth_method = $oauth->get_auth_method($settings);
         $connected = $oauth->is_connected($settings);
         $connected_label = $connected ? $oauth->get_connected_display_label($settings) : '';
+        $connected_username = $connected ? $oauth->get_connected_username($settings) : '';
         $auth_url = $oauth->get_authorization_url();
         $redirect_uri = $oauth->get_redirect_uri();
 
@@ -292,7 +293,7 @@ class NewsCrawlerCronSettings {
         <?php if ($connected && $connected_label !== '') : ?>
             <p class="nc-x-connection-status"><strong>接続中</strong> <?php echo esc_html($connected_label); ?></p>
         <?php elseif ($connected) : ?>
-            <p class="nc-x-connection-status"><strong>接続済み</strong></p>
+            <p class="nc-x-connection-status"><strong>接続済み</strong>（アカウント名を未取得）</p>
         <?php endif; ?>
         <div class="nc-x-actions">
             <?php if ($auth_method === 'oauth2' && $auth_url !== '') : ?>
@@ -306,6 +307,12 @@ class NewsCrawlerCronSettings {
                     <?php submit_button('接続テスト投稿', 'secondary', 'submit', false); ?>
                 </form>
 
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
+                    <?php wp_nonce_field('nc_x_refresh_profile'); ?>
+                    <input type="hidden" name="action" value="nc_x_refresh_profile" />
+                    <?php submit_button('アカウント名を再取得', 'secondary', 'submit', false); ?>
+                </form>
+
                 <?php if ($auth_method === 'oauth2') : ?>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
                         <?php wp_nonce_field('nc_x_disconnect'); ?>
@@ -317,6 +324,23 @@ class NewsCrawlerCronSettings {
                 <p class="description">Client ID / Secret を保存後、「X アカウントを接続」をクリックしてください。</p>
             <?php endif; ?>
         </div>
+
+        <?php if ($connected) : ?>
+            <div class="nc-x-manual-username" style="margin-top:16px;padding:12px;border:1px solid #ddd;border-radius:4px;background:#fafafa;">
+                <h4 style="margin-top:0;">アカウント名を手動で登録</h4>
+                <p class="description" style="margin-bottom:8px;">
+                    X API（<code>/2/users/me</code>）が呼び出せない場合（Free プラン・レート制限など）は、こちらに直接 <code>@username</code> を入力してください。
+                </p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php wp_nonce_field('nc_x_save_manual_username'); ?>
+                    <input type="hidden" name="action" value="nc_x_save_manual_username" />
+                    <label>
+                        @<input type="text" name="nc_x_manual_username" value="<?php echo esc_attr($connected_username); ?>" placeholder="your_username" pattern="[A-Za-z0-9_]{1,15}" maxlength="15" style="width:200px;" />
+                    </label>
+                    <?php submit_button('保存', 'secondary', 'submit', false); ?>
+                </form>
+            </div>
+        <?php endif; ?>
 
         <hr />
 

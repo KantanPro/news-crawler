@@ -31,6 +31,8 @@ class News_Crawler_X_OAuth {
         add_action('admin_post_nc_x_disconnect', array($this, 'handle_disconnect'));
         add_action('admin_post_nc_x_test_tweet', array($this, 'handle_test_tweet'));
         add_action('admin_post_nc_x_clear_share_log', array($this, 'handle_clear_share_log'));
+        add_action('admin_post_nc_x_refresh_profile', array($this, 'handle_refresh_profile'));
+        add_action('admin_post_nc_x_save_manual_username', array($this, 'handle_save_manual_username'));
         add_action('admin_notices', array($this, 'render_admin_notices'));
     }
 
@@ -188,14 +190,19 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', $result['error'] ?? 'トークン取得に失敗しました。');
         }
 
-        $username = $this->get_connected_username();
         $display_label = $this->get_connected_display_label();
         if ($display_label !== '') {
             $message = sprintf('X アカウント %s に接続しました。', $display_label);
-        } elseif ($username !== '') {
-            $message = sprintf('X アカウント @%s に接続しました。', $username);
         } else {
-            $message = 'X アカウントを接続しました。';
+            $verify_error = isset($result['verify_error']) ? (string) $result['verify_error'] : '';
+            if ($verify_error !== '') {
+                $message = sprintf(
+                    'X アカウントを接続しましたが、アカウント名の取得に失敗しました：%s（接続操作欄から手動で再取得できます）',
+                    $verify_error
+                );
+            } else {
+                $message = 'X アカウントを接続しました。アカウント名の自動取得に失敗したため、接続操作欄から「アカウント名を再取得」してください。';
+            }
         }
         $this->redirect_with_notice('success', $message);
     }
@@ -253,9 +260,18 @@ class News_Crawler_X_OAuth {
         $verify = $this->verify_credentials(null, (string) $data['access_token']);
         if ($verify['success']) {
             $this->save_connected_profile($verify);
+            return array('success' => true);
         }
 
-        return array('success' => true);
+        $error_message = isset($verify['error']) ? (string) $verify['error'] : '';
+        if ($error_message !== '') {
+            error_log('News Crawler X OAuth: verify_credentials failed after token exchange - ' . $error_message);
+        }
+
+        return array(
+            'success' => true,
+            'verify_error' => $error_message,
+        );
     }
 
     /**
@@ -435,8 +451,8 @@ class News_Crawler_X_OAuth {
      */
     private function fetch_oauth2_user_profile($access_token) {
         $endpoints = array(
-            'https://api.x.com/2/users/me',
-            'https://api.twitter.com/2/users/me',
+            'https://api.x.com/2/users/me?user.fields=username,name',
+            'https://api.twitter.com/2/users/me?user.fields=username,name',
         );
 
         $last_error = 'アカウント情報の取得に失敗しました。';
@@ -448,17 +464,21 @@ class News_Crawler_X_OAuth {
                     'timeout' => 20,
                     'headers' => array(
                         'Authorization' => 'Bearer ' . $access_token,
+                        'Accept' => 'application/json',
+                        'User-Agent' => 'NewsCrawler/' . (defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : '1.0') . '; ' . home_url(),
                     ),
                 )
             );
 
             if (is_wp_error($response)) {
                 $last_error = $response->get_error_message();
+                error_log('News Crawler X OAuth: users/me request error (' . $url . ') - ' . $last_error);
                 continue;
             }
 
             $code = (int) wp_remote_retrieve_response_code($response);
-            $data = json_decode((string) wp_remote_retrieve_body($response), true);
+            $body = (string) wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
 
             if ($code >= 200 && $code < 300 && is_array($data) && !empty($data['data']['username'])) {
                 return array(
@@ -469,6 +489,13 @@ class News_Crawler_X_OAuth {
             }
 
             $last_error = $this->extract_api_error_message($data, $code);
+            error_log(sprintf(
+                'News Crawler X OAuth: users/me failed (%s) HTTP %d - %s | body: %s',
+                $url,
+                $code,
+                $last_error,
+                substr($body, 0, 500)
+            ));
         }
 
         return array('success' => false, 'error' => $last_error);
@@ -581,6 +608,61 @@ class News_Crawler_X_OAuth {
             $error
         );
         $this->redirect_with_notice('error', $error);
+    }
+
+    /**
+     * アカウント名再取得ハンドラ
+     */
+    public function handle_refresh_profile() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        check_admin_referer('nc_x_refresh_profile');
+
+        if (!$this->is_connected()) {
+            $this->redirect_with_notice('error', 'X アカウントが接続されていません。');
+        }
+
+        $verify = $this->verify_credentials();
+        if ($verify['success']) {
+            $this->save_connected_profile($verify);
+            $label = $this->get_connected_display_label();
+            $message = $label !== ''
+                ? sprintf('アカウント名を取得しました：%s', $label)
+                : 'アカウント名を取得しました。';
+            $this->redirect_with_notice('success', $message);
+        }
+
+        $error = $verify['error'] ?? 'アカウント名の取得に失敗しました。';
+        $this->redirect_with_notice('error', $error . '（手動入力欄から @username を直接登録できます）');
+    }
+
+    /**
+     * アカウント名手動入力ハンドラ
+     */
+    public function handle_save_manual_username() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        check_admin_referer('nc_x_save_manual_username');
+
+        $username = isset($_POST['nc_x_manual_username'])
+            ? sanitize_text_field(wp_unslash($_POST['nc_x_manual_username']))
+            : '';
+        $username = ltrim(trim($username), '@');
+
+        if ($username === '' || !preg_match('/^[A-Za-z0-9_]{1,15}$/', $username)) {
+            $this->redirect_with_notice('error', '有効な X アカウント名（@username）を入力してください。');
+        }
+
+        $settings = $this->get_settings();
+        $settings['twitter_connected_username'] = $username;
+        if (empty($settings['twitter_connected_name'])) {
+            $settings['twitter_connected_name'] = $username;
+        }
+        $this->update_settings($settings);
+
+        $this->redirect_with_notice('success', sprintf('アカウント名 @%s を登録しました。', $username));
     }
 
     /**

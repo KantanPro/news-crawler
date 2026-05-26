@@ -82,7 +82,7 @@ class NewsCrawlerUpdater {
         if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
             return $transient;
         }
-        if ($transient === null) {
+        if ($transient === null || $transient === false) {
             $transient = new stdClass();
         }
         if (!isset($transient->checked)) {
@@ -97,7 +97,10 @@ class NewsCrawlerUpdater {
 
         $transient->checked[$this->plugin_basename] = $current_version;
 
-        $latest = $this->get_latest_version();
+        $force_refresh = $this->should_force_refresh()
+            || current_filter() === 'pre_set_site_transient_update_plugins'
+            || (defined('DOING_CRON') && DOING_CRON);
+        $latest = $this->get_latest_version($force_refresh);
         if (!$latest || empty($latest['version'])) {
             return $transient;
         }
@@ -345,6 +348,11 @@ class NewsCrawlerUpdater {
 
         $this->clear_version_cache();
         delete_site_transient('update_plugins');
+        delete_site_transient('update_plugins_checked');
+
+        if (function_exists('wp_update_plugins')) {
+            wp_update_plugins();
+        }
     }
 
     /**
@@ -387,7 +395,7 @@ class NewsCrawlerUpdater {
      * 設定画面向け更新状況
      */
     public function get_update_status() {
-        $latest = $this->get_latest_version();
+        $latest = $this->get_latest_version(true);
         if (!$latest) {
             return array(
                 'status'  => 'error',
@@ -488,8 +496,8 @@ class NewsCrawlerUpdater {
     /**
      * GitHub Releases API から最新版情報を取得
      */
-    private function get_latest_version() {
-        if (!$this->should_force_refresh()) {
+    private function get_latest_version($force_refresh = false) {
+        if (!$force_refresh && !$this->should_force_refresh()) {
             $cached = get_transient($this->key('latest_version'));
             if ($cached !== false && is_array($cached) && !empty($cached['version'])) {
                 return $cached;
@@ -553,8 +561,9 @@ class NewsCrawlerUpdater {
             return null;
         }
 
-        if (wp_remote_retrieve_response_code($response) !== 200) {
-            error_log('News Crawler Updater: GitHub latest release HTTP ' . wp_remote_retrieve_response_code($response));
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $this->log_github_api_failure('latest release', $status_code, $response);
             return null;
         }
 
@@ -577,8 +586,9 @@ class NewsCrawlerUpdater {
             return null;
         }
 
-        if (wp_remote_retrieve_response_code($response) !== 200) {
-            error_log('News Crawler Updater: GitHub releases list HTTP ' . wp_remote_retrieve_response_code($response));
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $this->log_github_api_failure('releases list', $status_code, $response);
             return null;
         }
 
@@ -688,7 +698,7 @@ class NewsCrawlerUpdater {
             }
 
             $fetched_at = isset($cached['fetched_at']) ? intval($cached['fetched_at']) : 0;
-            if ($fetched_at > 0 && (time() - $fetched_at) > DAY_IN_SECONDS) {
+            if ($fetched_at > 0 && (time() - $fetched_at) > (7 * DAY_IN_SECONDS)) {
                 continue;
             }
 
@@ -714,6 +724,21 @@ class NewsCrawlerUpdater {
             return trim($matches[1]);
         }
         return '';
+    }
+
+    private function log_github_api_failure($context, $status_code, $response) {
+        $message = 'News Crawler Updater: GitHub ' . $context . ' HTTP ' . $status_code;
+        if ((int) $status_code === 403) {
+            $message .= ' (rate limit or token issue — define KP_GITHUB_TOKEN in wp-config.php)';
+        }
+        $body = wp_remote_retrieve_body($response);
+        if (is_string($body) && $body !== '') {
+            $decoded = json_decode($body, true);
+            if (is_array($decoded) && !empty($decoded['message'])) {
+                $message .= ' - ' . $decoded['message'];
+            }
+        }
+        error_log($message);
     }
 
     private function get_github_token() {
