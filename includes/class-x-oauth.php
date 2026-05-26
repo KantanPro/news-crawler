@@ -679,7 +679,7 @@ class News_Crawler_X_OAuth {
     }
 
     /**
-     * 管理画面通知
+     * 管理画面通知（トランジェントから1回だけ表示）
      */
     public function render_admin_notices() {
         if (!is_admin() || !current_user_can('manage_options')) {
@@ -691,22 +691,70 @@ class News_Crawler_X_OAuth {
             return;
         }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-        $notice = isset($_GET['nc_x_notice']) ? sanitize_key(wp_unslash($_GET['nc_x_notice'])) : '';
-        if ($notice === '') {
-            return;
+        $user_id = get_current_user_id();
+        $key = $this->get_notice_transient_key($user_id);
+        $notice = get_transient($key);
+
+        // 旧バージョン互換: URL クエリ経由の通知も読む
+        if (!is_array($notice) || empty($notice['type'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $legacy_type = isset($_GET['nc_x_notice']) ? sanitize_key(wp_unslash($_GET['nc_x_notice'])) : '';
+            if ($legacy_type === '') {
+                return;
+            }
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $legacy_message = isset($_GET['nc_x_message']) ? rawurldecode(wp_unslash($_GET['nc_x_message'])) : '';
+            $notice = array(
+                'type' => $legacy_type,
+                'message' => $legacy_message,
+            );
+            // 旧クエリを消すための JS を出力
+            add_action('admin_footer', array($this, 'print_clear_legacy_notice_script'));
+        } else {
+            delete_transient($key);
         }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-        $message = isset($_GET['nc_x_message']) ? rawurldecode(wp_unslash($_GET['nc_x_message'])) : '';
-        $class = 'notice notice-info';
-        if ($notice === 'success') {
+        $type = (string) ($notice['type'] ?? 'info');
+        $message = (string) ($notice['message'] ?? '');
+
+        $class = 'notice notice-info is-dismissible';
+        if ($type === 'success') {
             $class = 'notice notice-success is-dismissible';
-        } elseif ($notice === 'error') {
-            $class = 'notice notice-error';
+        } elseif ($type === 'error') {
+            $class = 'notice notice-error is-dismissible';
         }
 
-        printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), esc_html($message));
+        printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), wp_kses_post($message));
+    }
+
+    /**
+     * 旧バージョン通知 URL を JS で消す
+     */
+    public function print_clear_legacy_notice_script() {
+        ?>
+        <script>
+        (function(){
+            if (window.history && window.history.replaceState) {
+                var url = new URL(window.location.href);
+                if (url.searchParams.has('nc_x_notice') || url.searchParams.has('nc_x_message')) {
+                    url.searchParams.delete('nc_x_notice');
+                    url.searchParams.delete('nc_x_message');
+                    window.history.replaceState({}, document.title, url.toString());
+                }
+            }
+        })();
+        </script>
+        <?php
+    }
+
+    /**
+     * 通知トランジェントキー
+     *
+     * @param int $user_id
+     * @return string
+     */
+    private function get_notice_transient_key($user_id) {
+        return 'nc_x_oauth_notice_' . intval($user_id);
     }
 
     /**
@@ -840,13 +888,21 @@ class News_Crawler_X_OAuth {
      * @param string $message メッセージ
      */
     private function redirect_with_notice($type, $message) {
+        $user_id = get_current_user_id();
+        if ($user_id > 0) {
+            set_transient(
+                $this->get_notice_transient_key($user_id),
+                array(
+                    'type' => (string) $type,
+                    'message' => (string) $message,
+                ),
+                5 * MINUTE_IN_SECONDS
+            );
+        }
+
         wp_safe_redirect(
             add_query_arg(
-                array(
-                    'page' => 'news-crawler-cron-settings',
-                    'nc_x_notice' => $type,
-                    'nc_x_message' => rawurlencode($message),
-                ),
+                array('page' => 'news-crawler-cron-settings'),
                 admin_url('admin.php')
             )
         );
