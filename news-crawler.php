@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.1.8
+ * Version: 3.1.9
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義
-define('NEWS_CRAWLER_VERSION', '3.1.8');
+define('NEWS_CRAWLER_VERSION', '3.1.9');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -45,6 +45,8 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-crypto.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-oauth.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 
@@ -318,20 +320,11 @@ function news_crawler_init_components() {
     }
     
     // X（Twitter）投稿クラス（常時初期化）
+    if (class_exists('News_Crawler_X_OAuth')) {
+        News_Crawler_X_OAuth::instance();
+    }
     if (class_exists('News_Crawler_X_Poster')) {
-        $x_poster = new News_Crawler_X_Poster();
-        
-        // 直接フックを登録（確実性を高める）
-        add_action('publish_post', array($x_poster, 'auto_post_to_x'), 10, 1);
-        add_action('transition_post_status', array($x_poster, 'handle_post_status_change'), 10, 3);
-        add_action('wp_insert_post', array($x_poster, 'handle_wp_insert_post'), 10, 3);
-        add_action('save_post', array($x_poster, 'handle_save_post'), 10, 3);
-        
-        error_log('News Crawler: X Posterクラスを初期化し、フックを直接登録しました');
-        error_log('News Crawler: publish_post フックを登録しました');
-        error_log('News Crawler: transition_post_status フックを登録しました');
-        error_log('News Crawler: wp_insert_post フックを登録しました');
-        error_log('News Crawler: save_post フックを登録しました');
+        new News_Crawler_X_Poster();
     }
     
     // 更新チェッククラスは早期初期化で処理済み

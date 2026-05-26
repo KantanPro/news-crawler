@@ -25,6 +25,7 @@ class NewsCrawlerSettingsManager {
         add_action('wp_ajax_reset_plugin_settings', array($this, 'reset_plugin_settings'));
         // オプション保存時の権限を緩和
         add_filter('option_page_capability_' . $this->option_name, array($this, 'resolve_settings_capability'));
+        add_filter('option_page_capability_news_crawler_cron_settings', array($this, 'resolve_settings_capability'));
 
         // 旧オプションから新オプション名へ自動移行（読み出し側と統一）
         $old_settings = get_option('news_crawler_settings', array());
@@ -120,18 +121,16 @@ class NewsCrawlerSettingsManager {
      * 設定を初期化
      */
     public function admin_init() {
-        // WordPress 5.5+ では配列形式で sanitize_callback を渡すのが推奨/安全
-        register_setting(
-            $this->option_name,
-            $this->option_name,
-            array(
-                'sanitize_callback' => array($this, 'sanitize_settings'),
-                'type' => 'array',
-                'default' => array(),
-                'show_in_rest' => false,
-                'capability' => $this->resolve_settings_capability()
-            )
+        $register_args = array(
+            'sanitize_callback' => array($this, 'sanitize_settings'),
+            'type' => 'array',
+            'default' => array(),
+            'show_in_rest' => false,
+            'capability' => 'manage_options',
         );
+
+        register_setting($this->option_name, $this->option_name, $register_args);
+        register_setting('news_crawler_cron_settings', $this->option_name, $register_args);
         
         // API設定セクション（APIタブ用スラッグ）
         add_settings_section(
@@ -978,10 +977,50 @@ class NewsCrawlerSettingsManager {
         }
         
         // X（Twitter）設定
-        $twitter_fields = array('twitter_bearer_token', 'twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_token_secret', 'twitter_hashtags');
-        foreach ($twitter_fields as $field) {
+        $twitter_text_fields = array(
+            'twitter_bearer_token',
+            'twitter_api_key',
+            'twitter_access_token',
+            'twitter_hashtags',
+            'twitter_client_id',
+        );
+        foreach ($twitter_text_fields as $field) {
             if (array_key_exists($field, $input)) {
                 $sanitized[$field] = sanitize_text_field($input[$field]);
+            }
+        }
+
+        if (array_key_exists('twitter_auth_method', $input)) {
+            $method = sanitize_key($input['twitter_auth_method']);
+            $sanitized['twitter_auth_method'] = in_array($method, array('oauth1', 'oauth2'), true) ? $method : 'oauth2';
+        }
+
+        $encrypted_secret_fields = array(
+            'twitter_client_secret',
+            'twitter_api_secret',
+            'twitter_access_token_secret',
+        );
+        foreach ($encrypted_secret_fields as $field) {
+            if (!array_key_exists($field, $input)) {
+                continue;
+            }
+            $value = trim((string) $input[$field]);
+            if ($value !== '') {
+                $sanitized[$field] = class_exists('News_Crawler_X_Crypto')
+                    ? News_Crawler_X_Crypto::encrypt($value)
+                    : sanitize_text_field($value);
+            }
+        }
+
+        $oauth_preserve_keys = array(
+            'twitter_oauth2_access_token',
+            'twitter_oauth2_refresh_token',
+            'twitter_oauth2_token_expires',
+            'twitter_connected_username',
+        );
+        foreach ($oauth_preserve_keys as $key) {
+            if (!array_key_exists($key, $input) && array_key_exists($key, $existing_options)) {
+                $sanitized[$key] = $existing_options[$key];
             }
         }
         

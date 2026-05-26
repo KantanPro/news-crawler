@@ -188,8 +188,7 @@ class NewsCrawlerGenreSettings {
     }
     
     public function admin_init() {
-        register_setting('news_crawler_basic_settings', 'news_crawler_basic_settings', array($this, 'sanitize_basic_settings'));
-        
+        // news_crawler_basic_settings の保存は NewsCrawlerSettingsManager に統一
         add_settings_section(
             'basic_settings_main',
             '基本設定',
@@ -492,7 +491,7 @@ class NewsCrawlerGenreSettings {
     
     public function twitter_access_token_secret_callback() {
         $options = get_option('news_crawler_basic_settings', array());
-        $access_token_secret = isset($options['twitter_api_secret']) ? $options['twitter_api_secret'] : '';
+        $access_token_secret = isset($options['twitter_access_token_secret']) ? $options['twitter_access_token_secret'] : '';
         echo '<input type="password" name="news_crawler_basic_settings[twitter_access_token_secret]" value="' . esc_attr($access_token_secret) . '" size="50" />';
         echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
     }

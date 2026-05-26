@@ -36,115 +36,26 @@ class NewsCrawlerCronSettings {
      * 管理画面の初期化
      */
     public function admin_init() {
-        // X（Twitter）設定セクション
-        add_settings_section(
-            'twitter_settings',
-            'X（旧Twitter）自動シェア設定',
-            array($this, 'twitter_section_callback'),
-            'news-crawler-cron-settings'
-        );
-        
-        add_settings_field(
-            'twitter_enabled',
-            'X（Twitter）への自動シェアを有効にする',
-            array($this, 'twitter_enabled_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_bearer_token',
-            'Bearer Token',
-            array($this, 'twitter_bearer_token_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_key',
-            'API Key（Consumer Key）',
-            array($this, 'twitter_api_key_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_api_secret',
-            'API Secret（Consumer Secret）',
-            array($this, 'twitter_api_secret_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_access_token',
-            'Access Token',
-            array($this, 'twitter_access_token_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_access_token_secret',
-            'Access Token Secret',
-            array($this, 'twitter_access_token_secret_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_hashtags',
-            'ハッシュタグ',
-            array($this, 'twitter_hashtags_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_include_url',
-            'URLを含める',
-            array($this, 'twitter_include_url_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_max_length',
-            '最大文字数',
-            array($this, 'twitter_max_length_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_message_template',
-            'メッセージテンプレート',
-            array($this, 'twitter_message_template_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        add_settings_field(
-            'twitter_include_link',
-            '投稿へのリンクを含める',
-            array($this, 'twitter_include_link_callback'),
-            'news-crawler-cron-settings',
-            'twitter_settings'
-        );
-        
-        // 設定の登録
-        register_setting('news_crawler_cron_settings', 'news_crawler_basic_settings');
+        // news_crawler_basic_settings の保存は NewsCrawlerSettingsManager に統一
     }
     
     /**
      * 管理画面用スクリプトの読み込み
      */
     public function enqueue_admin_scripts($hook) {
-        if ($hook !== 'news-crawler_page_news-crawler-cron-settings') {
+        if ($hook !== 'news-crawler_page_news-crawler-cron-settings'
+            && $hook !== 'news-crawler-main_page_news-crawler-cron-settings') {
             return;
         }
         
-        wp_enqueue_style('ktp-admin-style', plugin_dir_url(__FILE__) . '../assets/css/auto-posting-admin.css', array(), '1.0.0');
+        wp_enqueue_style('ktp-admin-style', plugin_dir_url(__FILE__) . '../assets/css/auto-posting-admin.css', array(), NEWS_CRAWLER_VERSION);
+        wp_enqueue_script(
+            'nc-x-settings-admin',
+            plugin_dir_url(__FILE__) . '../assets/js/x-settings-admin.js',
+            array('jquery'),
+            NEWS_CRAWLER_VERSION,
+            true
+        );
     }
     
     /**
@@ -181,13 +92,7 @@ class NewsCrawlerCronSettings {
                         </h2>
                     </div>
                     <div class="ktp-card-content">
-                        <form method="post" action="options.php">
-                            <?php 
-                            settings_fields('news_crawler_cron_settings');
-                            do_settings_sections('news-crawler-cron-settings');
-                            ?>
-                            <?php submit_button('X設定を保存'); ?>
-                        </form>
+                        <?php $this->render_x_settings(); ?>
                     </div>
                 </div>
             </div>
@@ -260,121 +165,156 @@ class NewsCrawlerCronSettings {
     
     
     /**
-     * X（Twitter）設定のコールバック関数
+     * X 設定を描画（xLabo 風 UI）
      */
-    public function twitter_section_callback() {
-        echo '<p>X（旧Twitter）への自動投稿に関する設定です。投稿作成後に自動的にXにシェアされます。</p>';
-        echo '<p><button type="button" id="test-x-connection" class="button button-secondary">接続テスト</button></p>';
-        wp_nonce_field('twitter_connection_test_nonce', 'twitter_connection_test_nonce');
-    }
-    
-    public function twitter_enabled_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_enabled']) ? $settings['twitter_enabled'] : false;
-        echo '<input type="hidden" name="news_crawler_basic_settings[twitter_enabled]" value="0" />';
-        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_enabled]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">投稿作成後に自動的にXにシェアされます。</p>';
-    }
-    
-    public function twitter_bearer_token_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_bearer_token']) ? $settings['twitter_bearer_token'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_bearer_token]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したBearer Tokenを入力してください。</p>';
-    }
-    
-    public function twitter_api_key_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_api_key']) ? $settings['twitter_api_key'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_api_key]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Key（Consumer Key）を入力してください。</p>';
-    }
-    
-    public function twitter_api_secret_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_api_secret']) ? $settings['twitter_api_secret'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_api_secret]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Secret（Consumer Secret）を入力してください。</p>';
-    }
-    
-    public function twitter_access_token_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_access_token']) ? $settings['twitter_access_token'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_access_token]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Tokenを入力してください。</p>';
-    }
-    
-    public function twitter_access_token_secret_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_access_token_secret']) ? $settings['twitter_access_token_secret'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_access_token_secret]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
-    }
-    
-    public function twitter_hashtags_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_hashtags']) ? $settings['twitter_hashtags'] : '';
-        echo '<input type="text" name="news_crawler_basic_settings[twitter_hashtags]" value="' . esc_attr($value) . '" size="50" />';
-        echo '<p class="description">投稿に追加するハッシュタグを入力してください（例：#ニュース #自動投稿）。</p>';
-    }
-    
-    public function twitter_include_url_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_include_url']) ? $settings['twitter_include_url'] : true;
-        echo '<input type="hidden" name="news_crawler_basic_settings[twitter_include_url]" value="0" />';
-        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_include_url]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">投稿にURLを含めるかどうかを設定します。</p>';
-    }
-    
-    public function twitter_max_length_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_max_length']) ? $settings['twitter_max_length'] : 280;
-        echo '<input type="number" name="news_crawler_basic_settings[twitter_max_length]" value="' . esc_attr($value) . '" min="1" max="280" />';
-        echo '<p class="description">投稿の最大文字数を設定します（1-280文字）。</p>';
-    }
-    
-    public function twitter_message_template_callback() {
+    private function render_x_settings() {
         $settings = get_option('news_crawler_basic_settings', array());
         if (!is_array($settings)) {
             $settings = array();
         }
-        $value = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : '%TITLE%';
-        
-        // 旧形式の{title}を%TITLE%に自動変換
-        if ($value === '{title}') {
-            $value = '%TITLE%';
-            // 設定を更新
-            $settings['twitter_message_template'] = $value;
-            update_option('news_crawler_basic_settings', $settings);
+
+        $oauth = News_Crawler_X_OAuth::instance();
+        $auth_method = $oauth->get_auth_method($settings);
+        $connected = $oauth->is_connected($settings);
+        $auth_url = $oauth->get_authorization_url();
+        $redirect_uri = $oauth->get_redirect_uri();
+
+        $template = isset($settings['twitter_message_template']) ? $settings['twitter_message_template'] : "%TITLE%\n%URL%";
+        if ($template === '{title}' || $template === '%TITLE%') {
+            $template = "%TITLE%\n%URL%";
         }
-        
-        echo '<textarea name="news_crawler_basic_settings[twitter_message_template]" rows="3" cols="50">' . esc_textarea($value) . '</textarea>';
-        echo '<p class="description">X投稿用のメッセージテンプレートを入力してください。以下のプレースホルダーが使用できます：</p>';
-        echo '<div class="description" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 5px; margin: 10px 0;">';
-        echo '<div><strong>%TITLE%</strong> - 投稿タイトル</div>';
-        echo '<div><strong>%URL%</strong> - 投稿URL</div>';
-        echo '<div><strong>%SURL%</strong> - 短縮URL</div>';
-        echo '<div><strong>%IMG%</strong> - アイキャッチ画像URL</div>';
-        echo '<div><strong>%EXCERPT%</strong> - 抜粋（処理済み）</div>';
-        echo '<div><strong>%RAWEXCERPT%</strong> - 抜粋（生）</div>';
-        echo '<div><strong>%ANNOUNCE%</strong> - アナウンス文</div>';
-        echo '<div><strong>%FULLTEXT%</strong> - 本文（処理済み）</div>';
-        echo '<div><strong>%RAWTEXT%</strong> - 本文（生）</div>';
-        echo '<div><strong>%TAGS%</strong> - タグ</div>';
-        echo '<div><strong>%CATS%</strong> - カテゴリー</div>';
-        echo '<div><strong>%HTAGS%</strong> - タグ（ハッシュタグ）</div>';
-        echo '<div><strong>%HCATS%</strong> - カテゴリー（ハッシュタグ）</div>';
-        echo '<div><strong>%AUTHORNAME%</strong> - 投稿者名</div>';
-        echo '<div><strong>%SITENAME%</strong> - サイト名</div>';
-        echo '</div>';
-    }
-    
-    public function twitter_include_link_callback() {
-        $settings = get_option('news_crawler_basic_settings', array());
-        $value = isset($settings['twitter_include_link']) ? $settings['twitter_include_link'] : true;
-        echo '<input type="hidden" name="news_crawler_basic_settings[twitter_include_link]" value="0" />';
-        echo '<input type="checkbox" name="news_crawler_basic_settings[twitter_include_link]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">X投稿に投稿へのリンクを含めます。</p>';
+        ?>
+        <p>News Crawler が作成した投稿を公開すると、X へ自動シェアします。</p>
+
+        <form method="post" action="options.php">
+            <?php settings_fields('news_crawler_basic_settings'); ?>
+
+            <h3 class="title">一般設定</h3>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">自動シェア</th>
+                    <td>
+                        <label>
+                            <input type="hidden" name="news_crawler_basic_settings[twitter_enabled]" value="0" />
+                            <input type="checkbox" name="news_crawler_basic_settings[twitter_enabled]" value="1" <?php checked(!empty($settings['twitter_enabled'])); ?> />
+                            投稿公開時に X へ自動シェアする
+                        </label>
+                    </td>
+                </tr>
+            </table>
+
+            <h3 class="title">投稿テンプレート</h3>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><label for="nc-x-template">ツイート本文</label></th>
+                    <td>
+                        <textarea id="nc-x-template" name="news_crawler_basic_settings[twitter_message_template]" rows="4" class="large-text code"><?php echo esc_textarea($template); ?></textarea>
+                        <p class="description">利用可能: %TITLE%, %URL%, %EXCERPT%, %SITENAME%, %AUTHORNAME%</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="nc-x-hashtags">固定ハッシュタグ</label></th>
+                    <td>
+                        <input id="nc-x-hashtags" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_hashtags]" value="<?php echo esc_attr($settings['twitter_hashtags'] ?? ''); ?>" placeholder="#ニュース #自動投稿" />
+                    </td>
+                </tr>
+            </table>
+
+            <h3 class="title">X API 認証</h3>
+            <p class="description">
+                <a href="https://developer.x.com/" target="_blank" rel="noopener noreferrer">X Developer Portal</a>
+                でアプリを作成し、Callback URL に以下を登録してください。
+            </p>
+            <p><code><?php echo esc_html($redirect_uri); ?></code></p>
+
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">認証方式</th>
+                    <td>
+                        <label style="margin-right:16px;">
+                            <input type="radio" name="news_crawler_basic_settings[twitter_auth_method]" value="oauth2" class="nc-x-auth-method" <?php checked('oauth2', $auth_method); ?> />
+                            OAuth 2.0（推奨）
+                        </label>
+                        <label>
+                            <input type="radio" name="news_crawler_basic_settings[twitter_auth_method]" value="oauth1" class="nc-x-auth-method" <?php checked('oauth1', $auth_method); ?> />
+                            OAuth 1.0a
+                        </label>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="nc-x-auth-panel nc-x-auth-oauth2" <?php echo ($auth_method === 'oauth1') ? 'style="display:none;"' : ''; ?>>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="nc-x-client-id">Client ID</label></th>
+                        <td>
+                            <input id="nc-x-client-id" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_client_id]" value="<?php echo esc_attr($settings['twitter_client_id'] ?? ''); ?>" autocomplete="off" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="nc-x-client-secret">Client Secret</label></th>
+                        <td>
+                            <input id="nc-x-client-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_client_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" />
+                        </td>
+                    </tr>
+                </table>
+                <?php if ($connected && $auth_method === 'oauth2' && !empty($settings['twitter_connected_username'])) : ?>
+                    <p><strong>接続済み</strong> @<?php echo esc_html($settings['twitter_connected_username']); ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="nc-x-auth-panel nc-x-auth-oauth1" <?php echo ($auth_method !== 'oauth1') ? 'style="display:none;"' : ''; ?>>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="nc-x-api-key">API Key</label></th>
+                        <td><input id="nc-x-api-key" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_api_key]" value="<?php echo esc_attr($settings['twitter_api_key'] ?? ''); ?>" autocomplete="off" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="nc-x-api-secret">API Secret</label></th>
+                        <td><input id="nc-x-api-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_api_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="nc-x-access-token">Access Token</label></th>
+                        <td><input id="nc-x-access-token" type="text" class="regular-text" name="news_crawler_basic_settings[twitter_access_token]" value="<?php echo esc_attr($settings['twitter_access_token'] ?? ''); ?>" autocomplete="off" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="nc-x-access-token-secret">Access Token Secret</label></th>
+                        <td><input id="nc-x-access-token-secret" type="password" class="regular-text" name="news_crawler_basic_settings[twitter_access_token_secret]" value="" autocomplete="new-password" placeholder="変更する場合のみ入力" /></td>
+                    </tr>
+                </table>
+                <p class="description">Developer Portal の Keys and Tokens から Read and Write 権限のトークンを生成してください。</p>
+            </div>
+
+            <?php submit_button('設定を保存'); ?>
+        </form>
+
+        <hr />
+
+        <h3>接続操作</h3>
+        <div class="nc-x-actions">
+            <?php if ($auth_method === 'oauth2' && $auth_url !== '') : ?>
+                <a class="button button-primary" href="<?php echo esc_url($auth_url); ?>">X アカウントを接続</a>
+            <?php endif; ?>
+
+            <?php if ($connected) : ?>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
+                    <?php wp_nonce_field('nc_x_test_tweet'); ?>
+                    <input type="hidden" name="action" value="nc_x_test_tweet" />
+                    <?php submit_button('接続テスト投稿', 'secondary', 'submit', false); ?>
+                </form>
+
+                <?php if ($auth_method === 'oauth2') : ?>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-left:8px;">
+                        <?php wp_nonce_field('nc_x_disconnect'); ?>
+                        <input type="hidden" name="action" value="nc_x_disconnect" />
+                        <?php submit_button('接続を解除', 'delete', 'submit', false); ?>
+                    </form>
+                <?php endif; ?>
+            <?php elseif ($auth_method === 'oauth2') : ?>
+                <p class="description">Client ID / Secret を保存後、「X アカウントを接続」をクリックしてください。</p>
+            <?php endif; ?>
+        </div>
+        <?php
     }
     
     /**
