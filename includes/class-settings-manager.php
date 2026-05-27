@@ -179,6 +179,14 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings-features',
             'feature_settings'
         );
+
+        add_settings_field(
+            'featured_image_model',
+            'アイキャッチAIモデル',
+            array($this, 'featured_image_model_callback'),
+            'news-crawler-settings-features',
+            'feature_settings'
+        );
         
         // 更新情報セクション（更新情報タブ用スラッグ）
         add_settings_section(
@@ -706,6 +714,7 @@ class NewsCrawlerSettingsManager {
         $labels = array(
             'auto_featured_image' => 'アイキャッチ自動生成',
             'featured_image_method' => 'アイキャッチ生成方法',
+            'featured_image_model' => 'アイキャッチAIモデル',
             'auto_summary_generation' => 'AI要約自動生成',
             'summary_generation_model' => '要約生成モデル',
             'duplicate_check_strictness' => '重複チェック厳密度',
@@ -724,6 +733,7 @@ class NewsCrawlerSettingsManager {
         $descriptions = array(
             'auto_featured_image' => '投稿作成時に自動でアイキャッチ画像を生成します',
             'featured_image_method' => 'アイキャッチ画像の生成方法を選択します',
+            'featured_image_model' => 'AI生成時に使用するOpenAI画像モデルを選択します',
             'auto_summary_generation' => '投稿作成時に自動でAI要約を生成します',
             'summary_generation_model' => 'AI要約に使用するモデルを選択します',
             'duplicate_check_strictness' => '重複記事のチェック厳密度を設定します',
@@ -851,6 +861,23 @@ class NewsCrawlerSettingsManager {
         echo '</select>';
         echo '<p class="description">アイキャッチ画像の生成方法を選択してください。</p>';
     }
+
+    public function featured_image_model_callback() {
+        $settings = get_option($this->option_name, array());
+        $value = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'dall-e-3';
+        $options = class_exists('NewsCrawlerFeaturedImageGenerator')
+            ? NewsCrawlerFeaturedImageGenerator::get_featured_image_model_choices()
+            : array(
+                'dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）',
+                'dall-e-2' => 'DALL-E 2（1024x1024）',
+            );
+        echo '<select name="' . $this->option_name . '[featured_image_model]">';
+        foreach ($options as $key => $label) {
+            echo '<option value="' . esc_attr($key) . '" ' . selected($key, $value, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">AI生成を選択した場合に使用するOpenAI画像モデルを指定します。</p>';
+    }
     
     public function auto_summary_generation_callback() {
         $settings = get_option($this->option_name, array());
@@ -946,7 +973,7 @@ class NewsCrawlerSettingsManager {
         }
 
         // セレクトボックス
-        $selects = array('featured_image_method', 'summary_generation_model', 'duplicate_check_strictness');
+        $selects = array('featured_image_method', 'featured_image_model', 'summary_generation_model', 'duplicate_check_strictness');
         foreach ($selects as $select) {
             if (array_key_exists($select, $input)) {
                 $value = sanitize_text_field($input[$select]);
@@ -962,6 +989,11 @@ class NewsCrawlerSettingsManager {
                     );
                     if (isset($aliases[$value])) {
                         $value = $aliases[$value];
+                    }
+                } elseif ($select === 'featured_image_model') {
+                    $allowed_models = array('dall-e-3', 'dall-e-2');
+                    if (!in_array($value, $allowed_models, true)) {
+                        $value = 'dall-e-3';
                     }
                 }
                 $sanitized[$select] = $value;
@@ -1146,6 +1178,7 @@ class NewsCrawlerSettingsManager {
             'openai_api_key' => '',
             'auto_featured_image' => true,
             'featured_image_method' => 'ai',
+            'featured_image_model' => 'dall-e-3',
             'auto_summary_generation' => true,
             'summary_generation_model' => 'gpt-3.5-turbo',
             'duplicate_check_strictness' => 'medium',

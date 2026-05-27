@@ -1134,7 +1134,8 @@ class NewsCrawlerYouTubeCrawler {
             // 基本設定から設定を作成
             $genre_setting = array(
                 'auto_featured_image' => true,
-                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai'
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai',
+                'featured_image_model' => isset($basic_settings['featured_image_model']) ? $basic_settings['featured_image_model'] : 'dall-e-3',
             );
             error_log('YouTubeCrawler: Using basic settings for featured image generation');
         }
@@ -1152,6 +1153,7 @@ class NewsCrawlerYouTubeCrawler {
         error_log('YouTubeCrawler: Creating featured image generator instance');
         $generator = new NewsCrawlerFeaturedImageGenerator();
         $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'ai';
+        $ai_model = isset($genre_setting['featured_image_model']) ? $genre_setting['featured_image_model'] : '';
         
         error_log('YouTubeCrawler: Generating featured image with method: ' . $method);
         
@@ -1159,7 +1161,7 @@ class NewsCrawlerYouTubeCrawler {
             // タイムアウト設定（60秒に延長）
             set_time_limit(60);
             
-            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method, false, $ai_model);
             
             if ($result && !is_array($result)) {
                 error_log('YouTubeCrawler: Featured image generation result: Success (ID: ' . $result . ')');

@@ -251,6 +251,14 @@ class NewsCrawlerGenreSettings {
             'news-crawler-basic',
             'featured_image_settings'
         );
+
+        add_settings_field(
+            'featured_image_model',
+            'アイキャッチAIモデル',
+            array($this, 'featured_image_model_callback'),
+            'news-crawler-basic',
+            'featured_image_settings'
+        );
         
 
         
@@ -621,6 +629,24 @@ class NewsCrawlerGenreSettings {
         echo '</select>';
         echo '<p class="description">デフォルトのアイキャッチ生成方法を選択してください。</p>';
     }
+
+    public function featured_image_model_callback() {
+        $options = get_option('news_crawler_basic_settings', array());
+        $model = isset($options['featured_image_model']) ? $options['featured_image_model'] : 'dall-e-3';
+        $models = class_exists('NewsCrawlerFeaturedImageGenerator')
+            ? NewsCrawlerFeaturedImageGenerator::get_featured_image_model_choices()
+            : array(
+                'dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）',
+                'dall-e-2' => 'DALL-E 2（1024x1024）',
+            );
+
+        echo '<select name="news_crawler_basic_settings[featured_image_model]">';
+        foreach ($models as $value => $label) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($value, $model, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">AI生成を選択した場合に使用するOpenAI画像モデルを指定します。</p>';
+    }
     public function sanitize_basic_settings($input) {
         $sanitized = array();
         
@@ -648,6 +674,12 @@ class NewsCrawlerGenreSettings {
             $allowed_methods = array('ai', 'unsplash', 'template');
             $method = sanitize_text_field($input['featured_image_method']);
             $sanitized['featured_image_method'] = in_array($method, $allowed_methods) ? $method : 'ai';
+        }
+
+        if (isset($input['featured_image_model'])) {
+            $allowed_models = array('dall-e-3', 'dall-e-2');
+            $model = sanitize_text_field($input['featured_image_model']);
+            $sanitized['featured_image_model'] = in_array($model, $allowed_models) ? $model : 'dall-e-3';
         }
         
         if (isset($input['auto_summary_generation'])) {
@@ -1277,6 +1309,20 @@ class NewsCrawlerGenreSettings {
                                             <option value="unsplash">Unsplash画像取得</option>
                                         </select>
                                         <p class="description">アイキャッチの生成方法を選択してください。</p>
+                                        <div id="featured-image-model-settings" style="margin-top: 10px;">
+                                            <label for="featured-image-model" style="display: block; margin-bottom: 5px;">AIモデル</label>
+                                            <select id="featured-image-model" name="featured_image_model">
+                                                <?php
+                                                $model_choices = class_exists('NewsCrawlerFeaturedImageGenerator')
+                                                    ? NewsCrawlerFeaturedImageGenerator::get_featured_image_model_choices()
+                                                    : array('dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）', 'dall-e-2' => 'DALL-E 2（1024x1024）');
+                                                foreach ($model_choices as $model_value => $model_label) :
+                                                ?>
+                                                    <option value="<?php echo esc_attr($model_value); ?>" <?php selected('dall-e-3', $model_value); ?>><?php echo esc_html($model_label); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <p class="description">AI生成時に使用するOpenAI画像モデルを選択してください。</p>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -1425,6 +1471,17 @@ $('#content-type').change(function() {
                     $('#featured-image-settings').hide();
                 }
             });
+
+            function toggleGenreFeaturedImageModelSelect() {
+                if ($('#featured-image-method').val() === 'ai') {
+                    $('#featured-image-model-settings').show();
+                } else {
+                    $('#featured-image-model-settings').hide();
+                }
+            }
+
+            $('#featured-image-method').on('change', toggleGenreFeaturedImageModelSelect);
+            toggleGenreFeaturedImageModelSelect();
             
             // 自動投稿チェックボックス変更時の設定表示切り替え
             $('#auto-posting').change(function() {
@@ -1478,6 +1535,7 @@ $('#content-type').trigger('change');
                     post_status: $('#post-status').val(),
                     auto_featured_image: autoFeaturedImage,
                     featured_image_method: $('#featured-image-method').val(),
+                    featured_image_model: $('#featured-image-model').val(),
                     auto_posting: autoPosting,
                     max_posts_per_execution: $('#max-posts-per-execution').val()
                 };
@@ -1727,7 +1785,8 @@ $('#cancel-edit').click(function() {
                         jQuery('#post-categories').val(setting.post_categories ? setting.post_categories.join('\n') : 'blog');
                         jQuery('#post-status').val(setting.post_status || 'draft');
                         jQuery('#auto-featured-image').prop('checked', setting.auto_featured_image == 1).trigger('change');
-                        jQuery('#featured-image-method').val(setting.featured_image_method || 'ai');
+                        jQuery('#featured-image-method').val(setting.featured_image_method || 'ai').trigger('change');
+                        jQuery('#featured-image-model').val(setting.featured_image_model || 'dall-e-3');
                         jQuery('#auto-posting').prop('checked', setting.auto_posting == 1).trigger('change');
                         jQuery('#posting-frequency').val(setting.posting_frequency || 'daily').trigger('change');
                         jQuery('#custom-frequency-days').val(setting.custom_frequency_days || 7);
@@ -2332,6 +2391,12 @@ $('#cancel-edit').click(function() {
         
         // next_execution_displayの値をクリーンアップ
         
+        $featured_image_method = sanitize_text_field($_POST['featured_image_method'] ?? 'ai');
+        $featured_image_model = sanitize_text_field($_POST['featured_image_model'] ?? 'dall-e-3');
+        if (!in_array($featured_image_model, array('dall-e-3', 'dall-e-2'), true)) {
+            $featured_image_model = 'dall-e-3';
+        }
+
         $setting = array(
             'genre_name' => $genre_name,
             'content_type' => $content_type,
@@ -2339,7 +2404,8 @@ $('#cancel-edit').click(function() {
             'post_categories' => $post_categories,
             'post_status' => sanitize_text_field($_POST['post_status']),
             'auto_featured_image' => isset($_POST['auto_featured_image']) ? 1 : 0,
-            'featured_image_method' => sanitize_text_field($_POST['featured_image_method'] ?? 'ai'),
+            'featured_image_method' => $featured_image_method,
+            'featured_image_model' => $featured_image_model,
             'auto_posting' => $auto_posting,
             'max_posts_per_execution' => intval($_POST['max_posts_per_execution'] ?? 3),
             'created_at' => current_time('mysql'),
@@ -2710,8 +2776,9 @@ $('#cancel-edit').click(function() {
         
         $generator = new NewsCrawlerFeaturedImageGenerator();
         $method = isset($setting['featured_image_method']) ? $setting['featured_image_method'] : 'ai';
+        $ai_model = isset($setting['featured_image_model']) ? $setting['featured_image_model'] : '';
         
-        return $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+        return $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method, false, $ai_model);
     }
     
     private function execute_news_crawling($setting) {

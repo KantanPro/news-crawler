@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.2.22
+ * Version: 3.2.23
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -2242,7 +2242,8 @@ class NewsCrawler {
             // 基本設定から設定を作成
             $genre_setting = array(
                 'auto_featured_image' => true,
-                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai'
+                'featured_image_method' => isset($basic_settings['featured_image_method']) ? $basic_settings['featured_image_method'] : 'ai',
+                'featured_image_model' => isset($basic_settings['featured_image_model']) ? $basic_settings['featured_image_model'] : 'dall-e-3',
             );
             error_log('NewsCrawler: Using basic settings for featured image generation');
         }
@@ -2260,6 +2261,7 @@ class NewsCrawler {
         error_log('NewsCrawler: Creating featured image generator instance');
         $generator = new NewsCrawlerFeaturedImageGenerator();
         $method = isset($genre_setting['featured_image_method']) ? $genre_setting['featured_image_method'] : 'ai';
+        $ai_model = isset($genre_setting['featured_image_model']) ? $genre_setting['featured_image_model'] : '';
         
         error_log('NewsCrawler: Generating featured image with method: ' . $method);
         
@@ -2267,7 +2269,7 @@ class NewsCrawler {
             // DALL-E生成のためタイムアウトを延長（最大3分）
             set_time_limit(300);
             
-            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method);
+            $result = $generator->generate_and_set_featured_image($post_id, $title, $keywords, $method, false, $ai_model);
             
             if ($result && !is_array($result)) {
                 error_log('NewsCrawler: Featured image generation result: Success (ID: ' . $result . ')');

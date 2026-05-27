@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 
 class NewsCrawlerFeaturedImageGenerator {
     private $option_name = 'news_crawler_featured_image_settings';
+    private $ai_model_override = '';
     
     public function __construct() {
         add_action('admin_init', array($this, 'admin_init'));
@@ -38,10 +39,12 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $method 生成方法 ('ai', 'template', 'unsplash')
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
-    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false) {
+    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false, $ai_model = '') {
         $requested_method = $this->normalize_featured_image_method($method);
         $method = $requested_method;
         $actual_method = $requested_method;
+        $previous_model_override = $this->ai_model_override;
+        $this->ai_model_override = is_string($ai_model) ? sanitize_text_field($ai_model) : '';
 
         if ($force_regenerate) {
             error_log('NewsCrawlerFeaturedImageGenerator: 再生成モード - 投稿ID: ' . $post_id);
@@ -51,6 +54,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $current_categories = wp_get_post_categories($post_id);
         $post = get_post($post_id);
         if (empty($current_categories) && $post && $post->post_type === 'post') {
+            $this->ai_model_override = $previous_model_override;
             return array('error' => 'カテゴリーを設定してください');
         }
         
@@ -125,8 +129,86 @@ class NewsCrawlerFeaturedImageGenerator {
                 error_log('NewsCrawlerFeaturedImageGenerator: カテゴリーを復元しました。投稿ID: ' . $post_id);
             }
         }
+
+        $this->ai_model_override = $previous_model_override;
         
         return $result;
+    }
+
+    /**
+     * 利用可能なアイキャッチAIモデル一覧
+     *
+     * @return array<string,string>
+     */
+    public static function get_featured_image_model_choices() {
+        return array(
+            'dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）',
+            'dall-e-2' => 'DALL-E 2（1024x1024）',
+        );
+    }
+
+    /**
+     * アイキャッチAIモデルを正規化
+     *
+     * @param string $model モデル名
+     * @return string
+     */
+    private function normalize_featured_image_model($model) {
+        $model = sanitize_text_field((string) $model);
+        $choices = self::get_featured_image_model_choices();
+        return array_key_exists($model, $choices) ? $model : 'dall-e-3';
+    }
+
+    /**
+     * 使用するアイキャッチAIモデルを解決
+     *
+     * @param array $settings アイキャッチ設定
+     * @return string
+     */
+    private function get_featured_image_model($settings) {
+        if ($this->ai_model_override !== '') {
+            return $this->normalize_featured_image_model($this->ai_model_override);
+        }
+
+        if (!empty($settings['featured_image_model'])) {
+            return $this->normalize_featured_image_model($settings['featured_image_model']);
+        }
+
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        if (!empty($basic_settings['featured_image_model'])) {
+            return $this->normalize_featured_image_model($basic_settings['featured_image_model']);
+        }
+
+        return 'dall-e-3';
+    }
+
+    /**
+     * DALL-E API リクエストボディを構築
+     *
+     * @param string $model  モデル名
+     * @param string $prompt プロンプト
+     * @return array<string,mixed>
+     */
+    private function build_dalle_api_request_body($model, $prompt) {
+        $body = array(
+            'model' => $model,
+            'prompt' => $prompt,
+            'n' => 1,
+            'response_format' => 'url',
+        );
+
+        if ($model === 'dall-e-3') {
+            $body['size'] = '1792x1024';
+            $body['quality'] = 'hd';
+            $body['style'] = 'vivid';
+        } else {
+            $body['size'] = '1024x1024';
+            if (strlen($body['prompt']) > 1000) {
+                $body['prompt'] = substr($body['prompt'], 0, 997) . '...';
+            }
+        }
+
+        return $body;
     }
     
     /**
@@ -266,6 +348,8 @@ class NewsCrawlerFeaturedImageGenerator {
 
         // プロンプト生成（毎回ユニークなクリエイティブ指示を付与）
         $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, 1, $force_regenerate);
+        $model = $this->get_featured_image_model($settings);
+        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E model: ' . $model);
 
         // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
         $max_retries = 3;
@@ -299,15 +383,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     'Authorization' => 'Bearer ' . $api_key,
                     'Content-Type' => 'application/json',
                 ),
-                'body' => json_encode(array(
-                    'model' => 'dall-e-3',
-                    'prompt' => $prompt,
-                    'n' => 1,
-                    'size' => '1792x1024',
-                    'quality' => 'hd',
-                    'style' => 'vivid',
-                    'response_format' => 'url'
-                )),
+                'body' => json_encode($this->build_dalle_api_request_body($model, $prompt)),
                 'timeout' => $timeout,
                 'redirection' => 5,
                 'httpversion' => '1.1',
@@ -2518,6 +2594,9 @@ class NewsCrawlerFeaturedImageGenerator {
 
         $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
         $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a premium professional hero featured image for a news/media automation blog post about';
+        if (isset($input['featured_image_model'])) {
+            $sanitized['featured_image_model'] = $this->normalize_featured_image_model($input['featured_image_model']);
+        }
         
         // Unsplash設定
         $sanitized['unsplash_access_key'] = isset($input['unsplash_access_key']) ? sanitize_text_field($input['unsplash_access_key']) : '';
@@ -2552,6 +2631,20 @@ class NewsCrawlerFeaturedImageGenerator {
             <div id="ai-settings" class="method-settings" style="display: none;">
                 <h4>AI画像生成設定</h4>
                 <table class="form-table">
+                    <tr>
+                        <th scope="row">AIモデル</th>
+                        <td>
+                            <select name="<?php echo $this->option_name; ?>[featured_image_model]">
+                                <?php
+                                $selected_model = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'dall-e-3';
+                                foreach (self::get_featured_image_model_choices() as $model_value => $model_label) :
+                                ?>
+                                    <option value="<?php echo esc_attr($model_value); ?>" <?php selected($selected_model, $model_value); ?>><?php echo esc_html($model_label); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">AI画像生成に使用するOpenAIモデルを選択してください。</p>
+                        </td>
+                    </tr>
                     <tr>
                         <th scope="row">画像スタイル</th>
                         <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality'); ?>" size="50" />
@@ -2620,6 +2713,13 @@ class NewsCrawlerFeaturedImageGenerator {
         if ($generation_method === '') {
             $generation_method = 'ai';
         }
+        $featured_image_model = isset($featured_image_settings['featured_image_model']) ? $featured_image_settings['featured_image_model'] : '';
+        if ($featured_image_model === '' && isset($basic_settings['featured_image_model'])) {
+            $featured_image_model = $basic_settings['featured_image_model'];
+        }
+        if ($featured_image_model === '') {
+            $featured_image_model = 'dall-e-3';
+        }
         
         // 既にアイキャッチ画像が設定されているかチェック
         $has_featured_image = has_post_thumbnail($post->ID);
@@ -2667,6 +2767,15 @@ class NewsCrawlerFeaturedImageGenerator {
         echo '<option value="template"' . ($generation_method === 'template' ? ' selected' : '') . '>テンプレート生成（グラデーション＋文字）</option>';
         echo '</select>';
         echo '</div>';
+
+        echo '<div id="featured-image-model-wrap" style="margin-bottom: 15px;' . ($generation_method === 'ai' ? '' : ' display: none;') . '">';
+        echo '<label for="featured-image-model" style="display: block; margin-bottom: 5px; font-weight: bold;">AIモデル:</label>';
+        echo '<select id="featured-image-model" style="width: 100%;">';
+        foreach (self::get_featured_image_model_choices() as $model_value => $model_label) {
+            echo '<option value="' . esc_attr($model_value) . '"' . selected($featured_image_model, $model_value, false) . '>' . esc_html($model_label) . '</option>';
+        }
+        echo '</select>';
+        echo '</div>';
         
         // キーワード入力
         echo '<div style="margin-bottom: 15px;">';
@@ -2689,12 +2798,24 @@ class NewsCrawlerFeaturedImageGenerator {
                 ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
             }
 
+            function toggleFeaturedImageModelSelect() {
+                if ($('#featured-image-method').val() === 'ai') {
+                    $('#featured-image-model-wrap').show();
+                } else {
+                    $('#featured-image-model-wrap').hide();
+                }
+            }
+
+            $('#featured-image-method').on('change', toggleFeaturedImageModelSelect);
+            toggleFeaturedImageModelSelect();
+
             // アイキャッチ生成
             $('#generate-featured-image').click(function() {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured-image-method').val();
                 var keywords = $('#featured-image-keywords').val();
+                var featuredImageModel = $('#featured-image-model').val();
 
                 button.prop('disabled', true).text('生成中...');
                 statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を生成中です...</div>').show();
@@ -2709,7 +2830,8 @@ class NewsCrawlerFeaturedImageGenerator {
                         nonce: '<?php echo wp_create_nonce('generate_featured_image_nonce'); ?>',
                         post_id: <?php echo $post->ID; ?>,
                         method: method,
-                        keywords: keywords
+                        keywords: keywords,
+                        featured_image_model: featuredImageModel
                     },
                     success: function(response) {
                         if (response.success) {
@@ -2784,6 +2906,7 @@ class NewsCrawlerFeaturedImageGenerator {
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured-image-method').val();
                 var keywords = $('#featured-image-keywords').val();
+                var featuredImageModel = $('#featured-image-model').val();
 
                 button.prop('disabled', true).text('再生成中...');
                 statusDiv.html('<div style="color: #0073aa;">🔄 アイキャッチ画像を再生成中です...</div>').show();
@@ -2798,7 +2921,8 @@ class NewsCrawlerFeaturedImageGenerator {
                         nonce: '<?php echo wp_create_nonce('regenerate_featured_image_nonce'); ?>',
                         post_id: <?php echo $post->ID; ?>,
                         method: method,
-                        keywords: keywords
+                        keywords: keywords,
+                        featured_image_model: featuredImageModel
                     },
                     success: function(response) {
                         if (response.success) {
@@ -2884,6 +3008,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $post_id = intval($_POST['post_id']);
         $method = sanitize_text_field($_POST['method']);
         $keywords = sanitize_text_field($_POST['keywords']);
+        $ai_model = sanitize_text_field($_POST['featured_image_model'] ?? '');
         
         $post = get_post($post_id);
         if (!$post || !in_array($post->post_type, array('post', 'page'))) {
@@ -2902,7 +3027,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
         
         // アイキャッチ画像を生成
-        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
+        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method, false, $ai_model);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
@@ -2941,6 +3066,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $post_id = intval($_POST['post_id']);
         $method = sanitize_text_field($_POST['method']);
         $keywords = sanitize_text_field($_POST['keywords']);
+        $ai_model = sanitize_text_field($_POST['featured_image_model'] ?? '');
         
         $post = get_post($post_id);
         if (!$post || !in_array($post->post_type, array('post', 'page'))) {
@@ -2962,7 +3088,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         // 新しいアイキャッチ画像を生成（再生成フラグ付き）
-        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true);
+        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true, $ai_model);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
