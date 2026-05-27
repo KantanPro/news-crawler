@@ -71,22 +71,14 @@ class NewsCrawlerFeaturedImageGenerator {
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
-                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート画像生成へフォールバックします');
-                    $actual_method = 'template';
-                    $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings);
-                    if (is_array($template_result) && isset($template_result['error'])) {
-                        error_log('NewsCrawlerFeaturedImageGenerator: テンプレートフォールバックも失敗 - ' . $template_result['error']);
-                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします');
-                        $actual_method = 'unsplash';
-                        $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                        if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
-                            error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
-                            $result = false;
-                        } else {
-                            $result = $unsplash_result;
-                        }
+                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします（テンプレートは使用しません）');
+                    $actual_method = 'unsplash';
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
+                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
+                        $result = false;
                     } else {
-                        $result = $template_result;
+                        $result = $unsplash_result;
                     }
                 }
                 break;
@@ -99,15 +91,9 @@ class NewsCrawlerFeaturedImageGenerator {
             default:
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
-                    $actual_method = 'template';
-                    $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings);
-                    if (is_array($template_result) && isset($template_result['error'])) {
-                        $actual_method = 'unsplash';
-                        $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                        $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
-                    } else {
-                        $result = $template_result;
-                    }
+                    $actual_method = 'unsplash';
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
                 }
                 break;
         }
@@ -242,8 +228,8 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'OpenAI APIキーの形式が無効です。正しいAPIキーを設定してください。');
         }
 
-        // プロンプト生成
-        $prompt = $this->create_ai_prompt($title, $keywords, $settings);
+        // プロンプト生成（投稿ごとにシーン・ムードを変えて多様性を確保）
+        $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings);
 
         // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
         $max_retries = 3;
@@ -756,6 +742,25 @@ class NewsCrawlerFeaturedImageGenerator {
             '科学' => 'science',
             '最新' => 'news',
             'まとめ' => 'news',
+            '金融' => 'finance',
+            '株' => 'stock market',
+            '株式' => 'stock market',
+            'IT' => 'information technology',
+            'セキュリティ' => 'cybersecurity',
+            '環境' => 'environment',
+            'エネルギー' => 'energy',
+            '医療' => 'healthcare',
+            '教育' => 'education',
+            '国際' => 'international news',
+            '社会' => 'society',
+            '芸能' => 'entertainment',
+            'エンタメ' => 'entertainment',
+            'ゲーム' => 'gaming',
+            '自動車' => 'automotive',
+            '不動産' => 'real estate',
+            'スタートアップ' => 'startup',
+            'YouTube' => 'online video',
+            '動画' => 'online video',
         );
 
         $sources = is_array($keywords) ? $keywords : array();
@@ -2234,25 +2239,98 @@ class NewsCrawlerFeaturedImageGenerator {
     }
 
     /**
-     * AI画像生成用のプロンプトを作成
+     * AI画像生成用の被写体（英語）を組み立てる
+     *
+     * @param string $title    投稿タイトル
+     * @param array  $keywords キーワード配列
+     * @return string
      */
-    private function create_ai_prompt($title, $keywords, $settings) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'vivid, cinematic, photorealistic, editorial photography, high detail';
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a visually striking, professional blog featured image about';
-
+    private function build_ai_subject_line($title, $keywords) {
         $topic_keywords = $this->select_topic_keywords($keywords, 5);
         $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
 
-        $subject = !empty($english_terms)
-            ? implode(', ', array_slice($english_terms, 0, 4))
-            : $this->extract_english_words_from_text($title);
-
-        if ($subject === '') {
-            $subject = 'news and current events';
+        if (!empty($english_terms)) {
+            return implode(', ', array_slice(array_unique($english_terms), 0, 4));
         }
 
-        $prompt = $base_prompt . ' ' . $subject;
-        $prompt .= '. Style: ' . $style . '. Use rich colors, compelling composition, and realistic imagery. No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
+        $title_head = (string) $title;
+        if ($title_head !== '' && strpos($title_head, '以降はＡＩで生成') === false) {
+            $segments = preg_split('/[｜|\-–—:：]/u', $title_head, 2);
+            $title_head = trim($segments[0]);
+            if (mb_strlen($title_head) > 50) {
+                $title_head = mb_substr($title_head, 0, 50);
+            }
+            $from_title = $this->map_keywords_to_english_search_terms(array($title_head), $title);
+            if (!empty($from_title)) {
+                return implode(', ', array_slice(array_unique($from_title), 0, 3));
+            }
+        }
+
+        $english_from_title = $this->extract_english_words_from_text($title);
+        if ($english_from_title !== '') {
+            return $english_from_title;
+        }
+
+        return 'contemporary news and current affairs';
+    }
+
+    /**
+     * 投稿ごとに異なるビジュアルバリエーションを生成
+     *
+     * @param int    $post_id  投稿 ID
+     * @param string $title    タイトル
+     * @param array  $keywords キーワード
+     * @return array{scene:string,mood:string,seed:int}
+     */
+    private function get_ai_visual_variation($post_id, $title, $keywords) {
+        $scenes = array(
+            'modern newsroom with floor-to-ceiling windows and abundant daylight',
+            'bright outdoor urban scene under clear blue sky',
+            'clean minimalist studio with soft natural light and white backdrop',
+            'contemporary office with panoramic city view and warm sunlight',
+            'tech workspace with colorful accents and well-lit environment',
+            'professional conference hall with bright ambient lighting',
+            'dynamic cityscape at golden hour with vivid colors',
+            'editorial photo studio with high-key lighting and crisp details',
+        );
+        $moods = array('optimistic', 'energetic', 'professional', 'dynamic', 'fresh', 'engaging', 'uplifting');
+
+        $seed_source = (string) $post_id . '|' . (string) $title . '|' . implode(',', array_slice((array) $keywords, 0, 5));
+        $seed = abs(crc32($seed_source));
+
+        return array(
+            'scene' => $scenes[$seed % count($scenes)],
+            'mood' => $moods[$seed % count($moods)],
+            'seed' => $seed,
+        );
+    }
+
+    /**
+     * AI画像生成用のプロンプトを作成
+     */
+    private function create_ai_prompt($post_id, $title, $keywords, $settings) {
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
+        // 旧設定の cinematic / dark 系は暗い画像になりやすいため明るいスタイルへ正規化
+        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key)\b/i', $style)) {
+            $style = 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
+        }
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a visually striking, professional blog featured image about';
+
+        $subject = $this->build_ai_subject_line($title, $keywords);
+        $topic_keywords = $this->select_topic_keywords($keywords, 3);
+        $keyword_text = !empty($topic_keywords) ? implode(', ', $topic_keywords) : '';
+        $variation = $this->get_ai_visual_variation($post_id, $title, $keywords);
+
+        $prompt = $base_prompt . ' "' . $subject . '"';
+        if ($keyword_text !== '') {
+            $prompt .= ' related to ' . $keyword_text;
+        }
+        $prompt .= '. Scene: ' . $variation['scene'] . '. Mood: ' . $variation['mood'] . '.';
+        $prompt .= ' Style: ' . $style . '.';
+        $prompt .= ' Use rich, saturated colors, compelling composition, and realistic imagery.';
+        $prompt .= ' Bright natural lighting, colorful atmosphere, avoid dark, moody, or underexposed look.';
+        $prompt .= ' No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
+        $prompt .= ' Unique concept ID: ' . $variation['seed'];
 
         error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt: ' . $prompt);
 
@@ -2277,7 +2355,7 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'modern, clean, professional, engaging';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
         $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create an attractive and engaging featured image for a blog post about';
         
         // Unsplash設定
@@ -2315,8 +2393,8 @@ class NewsCrawlerFeaturedImageGenerator {
                 <table class="form-table">
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'modern, clean, professional, engaging'); ?>" size="50" />
-                        <p class="description">画像のスタイルを指定してください（例：modern, clean, professional, engaging, vibrant, minimalist）</p></td>
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight'); ?>" size="50" />
+                        <p class="description">画像のスタイルを指定してください（例：bright, vibrant, well-lit, photorealistic, editorial photography）</p></td>
                     </tr>
                     <tr>
                         <th scope="row">ベースプロンプト</th>
