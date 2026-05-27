@@ -2354,32 +2354,32 @@ class NewsCrawlerFeaturedImageGenerator {
             'miniature isometric diorama representing the news topic',
         );
         $palettes = array(
-            'warm coral, amber, and golden sunlight tones',
-            'fresh mint, teal, and sky blue palette',
-            'bold magenta, electric blue, and violet accents',
-            'sunlit yellow, orange, and crisp white highlights',
-            'emerald green, lime, and bright cyan combination',
-            'soft peach, rose, and lavender pastels with high brightness',
-            'rich sapphire, turquoise, and silver metallic sheen',
-            'vibrant red, tangerine, and sunny gold contrast',
+            'hyper-saturated coral, hot pink, and electric orange',
+            'vivid mint, teal, cyan, and bright sky blue',
+            'bold magenta, neon purple, and electric blue gradient',
+            'sunburst yellow, tangerine, and cherry red pop colors',
+            'neon lime, emerald green, and bright aqua',
+            'rainbow gradient with red, orange, yellow, green, blue, and violet',
+            'hot pink, violet, and ultraviolet with glowing accents',
+            'crimson red, gold, and vibrant cobalt blue contrast',
         );
         $art_directions = array(
-            'modern digital illustration for a tech blog header',
-            'stylized 3D render with clean non-photorealistic materials',
-            'flat design vector art with subtle gradients and depth',
-            'minimalist conceptual poster art with bold graphic shapes',
-            'contemporary motion-graphics inspired still frame',
-            'cel-shaded digital painting with crisp outlines',
-            'infographic-inspired artistic composition with icons',
-            'futuristic UI concept art with neon accents',
+            'colorful pop-art inspired digital illustration for a blog header',
+            'stylized 3D render with bold saturated non-photorealistic colors',
+            'flat design vector art with vivid multi-color gradients',
+            'minimalist poster art with explosive bold graphic color blocks',
+            'motion-graphics still frame with neon gradient color bursts',
+            'cel-shaded digital painting with intensely colorful outlines',
+            'infographic-inspired composition with bright icon colors',
+            'futuristic UI concept art with neon rainbow accents',
         );
         $lightings = array(
-            'bright stylized glow with soft gradient highlights',
-            'clean ambient light with vivid color washes',
-            'luminous backlight with saturated graphic tones',
-            'even flat lighting with punchy contrast',
-            'soft gradient lighting across a digital canvas',
-            'high-key illustrated lighting with cheerful brightness',
+            'radiant stylized glow with saturated rainbow gradient highlights',
+            'vivid ambient light with bold multi-color washes',
+            'luminous neon backlight with intensely saturated tones',
+            'high-contrast flat lighting with punchy complementary colors',
+            'bright gradient lighting with full-spectrum color transitions',
+            'high-key illustrated lighting with maximum color vibrancy',
         );
 
         $entropy_source = implode('|', array(
@@ -2406,11 +2406,11 @@ class NewsCrawlerFeaturedImageGenerator {
      * AI画像生成用のプロンプトを作成
      */
     private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'digital art, stylized illustration, vivid colors, clean shapes, well-lit, ultra detailed, original concept';
-        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|photorealistic|photo-real|editorial photography|realistic photo|stock photo)\b/i', $style)) {
-            $style = 'digital art, stylized illustration, vivid colors, clean shapes, well-lit, ultra detailed, original concept';
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'digital art, stylized illustration, hyper colorful, vivid saturated colors, bold multi-color palette, clean shapes, well-lit, ultra detailed';
+        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|photorealistic|photo-real|editorial photography|realistic photo|stock photo|monochrome|muted|desaturated|grayscale|pastel only)\b/i', $style)) {
+            $style = 'digital art, stylized illustration, hyper colorful, vivid saturated colors, bold multi-color palette, clean shapes, well-lit, ultra detailed';
         }
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a completely unique digital art featured image illustration about';
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a completely unique, highly colorful digital art featured image illustration about';
 
         $subject = $this->build_ai_subject_line($title, $keywords);
         $topic_keywords = $this->select_topic_keywords($keywords, 3);
@@ -2426,12 +2426,13 @@ class NewsCrawlerFeaturedImageGenerator {
         $prompt .= ' Composition: ' . $creative['composition'] . '.';
         $prompt .= ' Color palette: ' . $creative['palette'] . '.';
         $prompt .= ' Lighting: ' . $creative['lighting'] . '.';
-        $prompt .= ' Mood: optimistic, fresh, engaging, uplifting.';
+        $prompt .= ' Mood: vibrant, colorful, energetic, uplifting, and eye-catching.';
         $prompt .= ' Style: ' . $style . '.';
         $prompt .= ' Render as digital art or stylized illustration, not a photograph.';
         $prompt .= ' Avoid photorealism, live-action look, camera lens effects, stock photo aesthetics, and realistic human skin texture.';
         $prompt .= ' Prefer illustrated, graphic, or painterly digital aesthetics with bold clean design.';
-        $prompt .= ' Bright, colorful, high-energy atmosphere; avoid dark, moody, or repetitive looks.';
+        $prompt .= ' Use maximum color saturation and a bold multi-color palette; make the image vividly colorful and visually striking.';
+        $prompt .= ' Avoid muted, desaturated, monochrome, gray-dominant, or dull color schemes.';
         $prompt .= ' No text, no letters, no watermark. Landscape orientation for a news blog header.';
         $prompt .= ' Unique generation ID: ' . $creative['seed'];
 
@@ -2458,8 +2459,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'digital art, stylized illustration, vivid colors, clean shapes, well-lit, ultra detailed, original concept';
-        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a completely unique digital art featured image illustration about';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'digital art, stylized illustration, hyper colorful, vivid saturated colors, bold multi-color palette, clean shapes, well-lit, ultra detailed';
+        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a completely unique, highly colorful digital art featured image illustration about';
         
         // Unsplash設定
         $sanitized['unsplash_access_key'] = isset($input['unsplash_access_key']) ? sanitize_text_field($input['unsplash_access_key']) : '';
@@ -2496,12 +2497,12 @@ class NewsCrawlerFeaturedImageGenerator {
                 <table class="form-table">
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'digital art, stylized illustration, vivid colors, clean shapes, well-lit, ultra detailed, original concept'); ?>" size="50" />
-                        <p class="description">画像のスタイルを指定してください（例：digital art, stylized illustration, flat design, vivid colors）</p></td>
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'digital art, stylized illustration, hyper colorful, vivid saturated colors, bold multi-color palette, clean shapes, well-lit, ultra detailed'); ?>" size="50" />
+                        <p class="description">画像のスタイルを指定してください（例：hyper colorful, vivid saturated colors, bold multi-color palette, digital art）</p></td>
                     </tr>
                     <tr>
                         <th scope="row">ベースプロンプト</th>
-                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create a completely unique digital art featured image illustration about'); ?></textarea>
+                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create a completely unique, highly colorful digital art featured image illustration about'); ?></textarea>
                         <p class="description">AI画像生成の基本となるプロンプトを指定してください。タイトルは自動で追加されます。</p></td>
                     </tr>
                 </table>
