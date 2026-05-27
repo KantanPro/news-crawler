@@ -71,14 +71,22 @@ class NewsCrawlerFeaturedImageGenerator {
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします');
-                    $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                    if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
-                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
-                        $result = false;
+                    error_log('NewsCrawlerFeaturedImageGenerator: テンプレート画像生成へフォールバックします');
+                    $actual_method = 'template';
+                    $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                    if (is_array($template_result) && isset($template_result['error'])) {
+                        error_log('NewsCrawlerFeaturedImageGenerator: テンプレートフォールバックも失敗 - ' . $template_result['error']);
+                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします');
+                        $actual_method = 'unsplash';
+                        $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                        if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
+                            error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
+                            $result = false;
+                        } else {
+                            $result = $unsplash_result;
+                        }
                     } else {
-                        $result = $unsplash_result;
+                        $result = $template_result;
                     }
                 }
                 break;
@@ -91,9 +99,15 @@ class NewsCrawlerFeaturedImageGenerator {
             default:
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
                 if (is_array($result) && isset($result['error'])) {
-                    $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
-                    $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
+                    $actual_method = 'template';
+                    $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                    if (is_array($template_result) && isset($template_result['error'])) {
+                        $actual_method = 'unsplash';
+                        $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                        $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
+                    } else {
+                        $result = $template_result;
+                    }
                 }
                 break;
         }
@@ -170,12 +184,9 @@ class NewsCrawlerFeaturedImageGenerator {
             $text_color = '#FFFFFF';
             $font_size = 48;
             
-            // 表示タイトル（SEOタイトルがあれば優先、なければ従来ロジック）
-            if ($title !== '' && strpos($title, '以降はＡＩで生成') === false) {
-                $display_title = $title;
-            } else {
-                $display_title = $this->create_japanese_title($title, $keywords);
-            }
+            // 表示タイトル（短い定型レイアウト。長いSEOタイトルは折り返し・はみ出しの原因になる）
+            $topic_keywords = $this->select_topic_keywords($keywords, 5);
+            $display_title = $this->create_japanese_title($title, $topic_keywords);
             error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
             
             // 日本語テキストを画像に描画
@@ -187,8 +198,8 @@ class NewsCrawlerFeaturedImageGenerator {
             }
             
             // キーワードタグを追加
-            if (!empty($keywords)) {
-                $keywords_result = $this->draw_keywords_on_image($image, $keywords, $width, $height, $text_color);
+            if (!empty($topic_keywords)) {
+                $keywords_result = $this->draw_keywords_on_image($image, $topic_keywords, $width, $height, $text_color);
                 if (!$keywords_result) {
                     error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw keywords');
                     // キーワードの描画失敗は致命的ではないので続行
@@ -607,15 +618,18 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         $count = count($results);
-        $offset = abs(intval($post_id)) % $count;
+        // 関連度の高い上位候補から選び、投稿ごとにバリエーションを付ける
+        $top_n = min(5, $count);
+        $offset = abs(crc32((string) $post_id . '|' . $search_query)) % $top_n;
 
-        for ($i = 0; $i < $count; $i++) {
-            $photo = $results[($offset + $i) % $count];
+        for ($i = 0; $i < $top_n; $i++) {
+            $index = ($offset + $i) % $top_n;
+            $photo = $results[$index];
 
             $download_result = $this->download_and_attach_image($photo['urls']['regular'], $post_id, $title);
             if ($download_result && !is_array($download_result)) {
                 $this->track_unsplash_download($access_key, $photo);
-                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索画像取得成功 - クエリ: ' . $search_query . ', index: ' . (($offset + $i) % $count));
+                error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索画像取得成功 - クエリ: ' . $search_query . ', index: ' . $index);
                 return $download_result;
             }
         }
@@ -2164,21 +2178,84 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
+     * アイキャッチ生成用に短いトピックキーワードを選ぶ（記事タイトル全文は除外）
+     *
+     * @param array $keywords キーワード配列
+     * @param int   $max      最大件数
+     * @return array
+     */
+    private function select_topic_keywords($keywords, $max = 3) {
+        $short = array();
+        $long_heads = array();
+
+        foreach ((array) $keywords as $keyword) {
+            $keyword = trim((string) $keyword);
+            if ($keyword === '') {
+                continue;
+            }
+
+            if (mb_strlen($keyword) <= 24) {
+                $short[] = $keyword;
+                continue;
+            }
+
+            $segments = preg_split('/[｜|\-–—:：]/u', $keyword, 2);
+            $head = trim($segments[0]);
+            if ($head !== '' && mb_strlen($head) <= 40) {
+                $long_heads[] = $head;
+            }
+        }
+
+        $selected = array_slice($short, 0, $max);
+        foreach ($long_heads as $head) {
+            if (count($selected) >= $max) {
+                break;
+            }
+            if (!in_array($head, $selected, true)) {
+                $selected[] = $head;
+            }
+        }
+
+        return array_values(array_unique($selected));
+    }
+
+    /**
+     * テキストから DALL-E 向け英語語句を抽出
+     *
+     * @param string $text 入力テキスト
+     * @return string
+     */
+    private function extract_english_words_from_text($text) {
+        if (!preg_match_all('/[a-zA-Z]{3,}/', (string) $text, $matches)) {
+            return '';
+        }
+
+        return implode(', ', array_slice(array_unique($matches[0]), 0, 4));
+    }
+
+    /**
      * AI画像生成用のプロンプトを作成
      */
     private function create_ai_prompt($title, $keywords, $settings) {
         $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'vivid, cinematic, photorealistic, editorial photography, high detail';
         $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a visually striking, professional blog featured image about';
-        
-        $keyword_text = !empty($keywords) ? implode(', ', array_slice($keywords, 0, 3)) : '';
-        
-        $prompt = $base_prompt . ' "' . $title . '"';
-        if (!empty($keyword_text)) {
-            $prompt .= ' related to ' . $keyword_text;
+
+        $topic_keywords = $this->select_topic_keywords($keywords, 5);
+        $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
+
+        $subject = !empty($english_terms)
+            ? implode(', ', array_slice($english_terms, 0, 4))
+            : $this->extract_english_words_from_text($title);
+
+        if ($subject === '') {
+            $subject = 'news and current events';
         }
+
+        $prompt = $base_prompt . ' ' . $subject;
         $prompt .= '. Style: ' . $style . '. Use rich colors, compelling composition, and realistic imagery. No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
-        $prompt .= ' Unique variation seed: ' . abs(crc32($title . '|' . implode(',', array_slice((array) $keywords, 0, 5))));
-        
+
+        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt: ' . $prompt);
+
         return $prompt;
     }
     
