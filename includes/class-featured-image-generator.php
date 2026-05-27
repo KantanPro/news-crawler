@@ -13,6 +13,7 @@ if (!defined('ABSPATH')) {
 class NewsCrawlerFeaturedImageGenerator {
     private $option_name = 'news_crawler_featured_image_settings';
     private $ai_model_override = '';
+    private $keyword_focus = false;
     
     public function __construct() {
         add_action('admin_init', array($this, 'admin_init'));
@@ -39,15 +40,20 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $method 生成方法 ('ai', 'template', 'unsplash')
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
-    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false, $ai_model = '') {
+    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false, $ai_model = '', $keyword_focus = false) {
         $requested_method = $this->normalize_featured_image_method($method);
         $method = $requested_method;
         $actual_method = $requested_method;
         $previous_model_override = $this->ai_model_override;
+        $previous_keyword_focus = $this->keyword_focus;
         $this->ai_model_override = is_string($ai_model) ? sanitize_text_field($ai_model) : '';
+        $this->keyword_focus = (bool) $keyword_focus;
 
         if ($force_regenerate) {
             error_log('NewsCrawlerFeaturedImageGenerator: 再生成モード - 投稿ID: ' . $post_id);
+        }
+        if ($this->keyword_focus && !empty($keywords)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: キーワード優先モード - ' . implode(', ', (array) $keywords));
         }
 
         // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
@@ -55,6 +61,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $post = get_post($post_id);
         if (empty($current_categories) && $post && $post->post_type === 'post') {
             $this->ai_model_override = $previous_model_override;
+            $this->keyword_focus = $previous_keyword_focus;
             return array('error' => 'カテゴリーを設定してください');
         }
         
@@ -110,6 +117,9 @@ class NewsCrawlerFeaturedImageGenerator {
         if ($result && !is_array($result)) {
             update_post_meta($post_id, '_news_crawler_featured_image_requested_method', $requested_method);
             update_post_meta($post_id, '_news_crawler_featured_image_method', $actual_method);
+            if ($this->keyword_focus && !empty($keywords)) {
+                update_post_meta($post_id, '_news_crawler_featured_image_keywords', implode(', ', $this->parse_featured_image_keywords($keywords)));
+            }
             error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ生成完了 - 要求: ' . $requested_method . ', 実際: ' . $actual_method . ', 投稿ID: ' . $post_id);
         } elseif (is_array($result) && isset($result['error'])) {
             error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ生成失敗 - 要求: ' . $requested_method . ', エラー: ' . $result['error']);
@@ -131,8 +141,31 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         $this->ai_model_override = $previous_model_override;
+        $this->keyword_focus = $previous_keyword_focus;
         
         return $result;
+    }
+
+    /**
+     * キーワード文字列または配列を正規化
+     *
+     * @param array|string $keywords キーワード
+     * @return array
+     */
+    private function parse_featured_image_keywords($keywords) {
+        if (is_array($keywords)) {
+            $items = $keywords;
+        } else {
+            $normalized = preg_replace('/[、，]/u', ',', (string) $keywords);
+            $items = explode(',', $normalized);
+        }
+
+        $items = array_map('trim', $items);
+        $items = array_filter($items, function ($keyword) {
+            return $keyword !== '';
+        });
+
+        return array_values(array_unique($items));
     }
 
     /**
@@ -290,7 +323,11 @@ class NewsCrawlerFeaturedImageGenerator {
             
             // 表示タイトル（短い定型レイアウト。長いSEOタイトルは折り返し・はみ出しの原因になる）
             $topic_keywords = $this->select_topic_keywords($keywords, 5);
-            $display_title = $this->create_japanese_title($title, $topic_keywords);
+            if ($this->keyword_focus && !empty($topic_keywords)) {
+                $display_title = implode(' / ', array_slice($topic_keywords, 0, 2));
+            } else {
+                $display_title = $this->create_japanese_title($title, $topic_keywords);
+            }
             error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
             
             // 日本語テキストを画像に描画
@@ -819,6 +856,27 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function build_unsplash_search_queries($title, $keywords) {
         $queries = array();
+
+        if ($this->keyword_focus && !empty($keywords)) {
+            $topic_keywords = $this->select_topic_keywords($keywords, 5);
+            $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
+
+            foreach ($topic_keywords as $keyword) {
+                $queries[] = $keyword;
+            }
+            foreach ($english_terms as $term) {
+                $queries[] = $term;
+                if (strpos($term, ' ') === false) {
+                    $queries[] = $term . ' news';
+                }
+            }
+
+            $queries = array_values(array_unique(array_filter(array_map('trim', $queries))));
+            if (!empty($queries)) {
+                return $queries;
+            }
+        }
+
         $english_terms = $this->map_keywords_to_english_search_terms($keywords, $title);
 
         foreach ($english_terms as $term) {
@@ -2408,6 +2466,20 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function build_ai_subject_line($title, $keywords) {
         $topic_keywords = $this->select_topic_keywords($keywords, 5);
+
+        if ($this->keyword_focus && !empty($topic_keywords)) {
+            $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
+            $parts = array();
+
+            if (!empty($english_terms)) {
+                $parts[] = implode(', ', array_slice(array_unique($english_terms), 0, 5));
+            }
+
+            $parts[] = 'topic context: "' . implode(', ', $topic_keywords) . '"';
+
+            return implode(' — ', array_values(array_unique(array_filter($parts))));
+        }
+
         $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
         $title_phrase = $this->extract_title_topic_phrase($title);
 
@@ -2447,8 +2519,13 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return string
      */
     private function build_ai_ui_elements_hint($title, $keywords) {
-        $topic_keywords = $this->select_topic_keywords($keywords, 5);
+        $topic_keywords = $this->select_topic_keywords($keywords, $this->keyword_focus ? 5 : 5);
         $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
+
+        if ($this->keyword_focus && !empty($english_terms)) {
+            $keyword_hint = implode(', ', array_slice(array_unique($english_terms), 0, 4));
+            return 'UI visuals related to ' . $keyword_hint . ', plus colorful news article cards, analytics charts, and automation workflow icons';
+        }
 
         $elements = array(
             'colorful news article cards and headline preview blocks',
@@ -2523,6 +2600,17 @@ class NewsCrawlerFeaturedImageGenerator {
         )), $force_regenerate);
         $seed = abs(crc32($entropy_source));
 
+        if ($this->keyword_focus && !empty($keywords)) {
+            $topic_keywords = $this->select_topic_keywords($keywords, 3);
+            $keyword_label = implode(', ', $topic_keywords);
+            return array(
+                'scene' => 'a colorful hero illustration visually centered on "' . $keyword_label . '" with relevant icons, charts, UI panels, and conceptual imagery that clearly represents the topic',
+                'palette' => $palettes[($seed >> 6) % count($palettes)],
+                'lighting' => $lightings[($seed >> 12) % count($lightings)],
+                'seed' => $seed,
+            );
+        }
+
         return array(
             'scene' => $scenes[$seed % count($scenes)],
             'palette' => $palettes[($seed >> 6) % count($palettes)],
@@ -2542,14 +2630,20 @@ class NewsCrawlerFeaturedImageGenerator {
         $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a premium professional hero featured image for a news/media automation blog post about';
 
         $subject = $this->build_ai_subject_line($title, $keywords);
-        $topic_keywords = $this->select_topic_keywords($keywords, 3);
+        $topic_keywords = $this->select_topic_keywords($keywords, 5);
         $keyword_text = !empty($topic_keywords) ? implode(', ', $topic_keywords) : '';
         $ui_elements = $this->build_ai_ui_elements_hint($title, $keywords);
         $creative = $this->get_ai_creative_context($post_id, $title, $keywords, $attempt, $force_regenerate);
 
-        $prompt = $base_prompt . ' "' . $subject . '"';
-        if ($keyword_text !== '') {
-            $prompt .= ' inspired by ' . $keyword_text;
+        if ($this->keyword_focus && $keyword_text !== '') {
+            $prompt = $base_prompt . ' the following user-specified topics: "' . $keyword_text . '"';
+            $prompt .= '. The image must clearly visualize and represent these topics: ' . $keyword_text . '.';
+            $prompt .= ' Primary subject focus: "' . $subject . '".';
+        } else {
+            $prompt = $base_prompt . ' "' . $subject . '"';
+            if ($keyword_text !== '') {
+                $prompt .= ' inspired by ' . $keyword_text;
+            }
         }
         $prompt .= '. Scene: ' . $creative['scene'] . '.';
         $prompt .= ' Include UI elements such as ' . $ui_elements . '.';
@@ -2720,6 +2814,10 @@ class NewsCrawlerFeaturedImageGenerator {
         if ($featured_image_model === '') {
             $featured_image_model = 'dall-e-3';
         }
+        $saved_keywords = get_post_meta($post->ID, '_news_crawler_featured_image_keywords', true);
+        if (!is_string($saved_keywords)) {
+            $saved_keywords = '';
+        }
         
         // 既にアイキャッチ画像が設定されているかチェック
         $has_featured_image = has_post_thumbnail($post->ID);
@@ -2780,8 +2878,8 @@ class NewsCrawlerFeaturedImageGenerator {
         // キーワード入力
         echo '<div style="margin-bottom: 15px;">';
         echo '<label for="featured-image-keywords" style="display: block; margin-bottom: 5px; font-weight: bold;">キーワード (オプション):</label>';
-        echo '<input type="text" id="featured-image-keywords" placeholder="カンマ区切りで入力" style="width: 100%;" />';
-        echo '<p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">画像生成の参考に使用されます</p>';
+        echo '<input type="text" id="featured-image-keywords" placeholder="カンマ区切りで入力" style="width: 100%;" value="' . esc_attr($saved_keywords) . '" />';
+        echo '<p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">再生成時はここに入力したキーワードを優先して画像を生成します</p>';
         echo '</div>';
         
         // ステータス表示エリア
@@ -3021,13 +3119,11 @@ class NewsCrawlerFeaturedImageGenerator {
         }
         
         // キーワードを配列に変換
-        $keywords_array = array();
-        if (!empty($keywords)) {
-            $keywords_array = array_map('trim', explode(',', $keywords));
-        }
+        $keywords_array = $this->parse_featured_image_keywords($keywords);
+        $keyword_focus = !empty($keywords_array);
         
         // アイキャッチ画像を生成
-        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method, false, $ai_model);
+        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method, false, $ai_model, $keyword_focus);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
@@ -3077,10 +3173,8 @@ class NewsCrawlerFeaturedImageGenerator {
         $this->clear_existing_featured_image($post_id);
 
         // キーワードを配列に変換
-        $keywords_array = array();
-        if (!empty($keywords)) {
-            $keywords_array = array_map('trim', explode(',', $keywords));
-        }
+        $keywords_array = $this->parse_featured_image_keywords($keywords);
+        $keyword_focus = !empty($keywords_array);
 
         $title = get_the_title($post_id);
         if ($title === '' || strpos($title, '以降はＡＩで生成') !== false) {
@@ -3088,7 +3182,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         // 新しいアイキャッチ画像を生成（再生成フラグ付き）
-        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true, $ai_model);
+        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true, $ai_model, $keyword_focus);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
