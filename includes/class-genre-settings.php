@@ -1191,8 +1191,12 @@ class NewsCrawlerGenreSettings {
             
             <div id="genre-settings-container">
                 <!-- ジャンル設定フォーム -->
-                <div class="card" style="max-width: none;">
-                    <h2>投稿設定の追加・編集</h2>
+                <div class="card nc-genre-form-card" style="max-width: none;">
+                    <button type="button" id="genre-form-toggle" class="nc-toggle-header" aria-expanded="false" aria-controls="genre-form-panel">
+                        <span class="nc-toggle-icon dashicons dashicons-arrow-right-alt2" aria-hidden="true"></span>
+                        <span class="nc-toggle-title">投稿設定の追加・編集</span>
+                    </button>
+                    <div id="genre-form-panel" class="nc-toggle-panel" hidden>
                     <form id="genre-settings-form">
                         <input type="hidden" id="genre-id" name="genre_id" value="">
                         
@@ -1354,6 +1358,7 @@ class NewsCrawlerGenreSettings {
                             <button type="button" id="cancel-edit" class="button" style="display: none;">キャンセル</button>
                         </p>
                     </form>
+                    </div>
                 </div>
                 
                 <!-- ジャンル設定リスト -->
@@ -1407,7 +1412,40 @@ class NewsCrawlerGenreSettings {
         </div>
         
         <script>
+        function setGenreFormPanelExpanded(expanded, animate) {
+            var $panel = jQuery('#genre-form-panel');
+            var $toggle = jQuery('#genre-form-toggle');
+            var $icon = $toggle.find('.nc-toggle-icon');
+
+            if (expanded) {
+                $panel.prop('hidden', false);
+                if (animate) {
+                    $panel.stop(true, true).slideDown(200);
+                } else {
+                    $panel.show();
+                }
+                $toggle.attr('aria-expanded', 'true');
+                $icon.removeClass('dashicons-arrow-right-alt2').addClass('dashicons-arrow-down-alt2');
+                $toggle.closest('.nc-genre-form-card').addClass('is-expanded');
+            } else {
+                if (animate) {
+                    $panel.stop(true, true).slideUp(200, function() {
+                        $panel.prop('hidden', true);
+                    });
+                } else {
+                    $panel.hide().prop('hidden', true);
+                }
+                $toggle.attr('aria-expanded', 'false');
+                $icon.removeClass('dashicons-arrow-down-alt2').addClass('dashicons-arrow-right-alt2');
+                $toggle.closest('.nc-genre-form-card').removeClass('is-expanded');
+            }
+        }
+
         jQuery(document).ready(function($) {
+            $('#genre-form-toggle').on('click', function() {
+                setGenreFormPanelExpanded($(this).attr('aria-expanded') !== 'true', true);
+            });
+
             // デバッグ情報の表示
             function showDebugInfo() {
                 var debugInfo = [];
@@ -1600,6 +1638,7 @@ $('#cancel-edit').click(function() {
     $('#genre-id').val('');
     $('#cancel-edit').hide();
     $('#youtube-settings').hide();
+    setGenreFormPanelExpanded(false, true);
     // デフォルトのコンテンツタイプをニュース記事に戻す
     $('#content-type').val('news').trigger('change');
                 
@@ -1793,10 +1832,11 @@ $('#cancel-edit').click(function() {
                         jQuery('#max-posts-per-execution').val(setting.max_posts_per_execution || 3);
                         jQuery('#start-execution-time').val(setting.start_execution_time || '');
                         jQuery('#cancel-edit').show();
-                        
+                        setGenreFormPanelExpanded(true, true);
+
                         // フォームまでスクロール
                         jQuery('html, body').animate({
-                            scrollTop: jQuery('#genre-settings-form').offset().top - 50
+                            scrollTop: jQuery('#genre-form-toggle').offset().top - 50
                         }, 500);
                     } else {
                         alert('設定の読み込みに失敗しました: ' + response.data);
@@ -2184,6 +2224,44 @@ $('#cancel-edit').click(function() {
         </script>
         
         <style>
+        .nc-genre-form-card {
+            padding: 0;
+        }
+        .nc-genre-form-card .nc-toggle-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            margin: 0;
+            padding: 12px 20px;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+            box-sizing: border-box;
+        }
+        .nc-genre-form-card .nc-toggle-header:hover,
+        .nc-genre-form-card .nc-toggle-header:focus {
+            background: #f6f7f7;
+            outline: none;
+        }
+        .nc-genre-form-card .nc-toggle-header:focus-visible {
+            outline: 2px solid #2271b1;
+            outline-offset: -2px;
+        }
+        .nc-genre-form-card .nc-toggle-icon {
+            color: #50575e;
+            flex-shrink: 0;
+        }
+        .nc-genre-form-card .nc-toggle-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            line-height: 1.4;
+            color: #1d2327;
+        }
+        .nc-genre-form-card .nc-toggle-panel {
+            padding: 0 20px 20px;
+        }
         .genre-settings-table {
             width: 100%;
             border-collapse: collapse;
