@@ -228,8 +228,8 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'OpenAI APIキーの形式が無効です。正しいAPIキーを設定してください。');
         }
 
-        // プロンプト生成（投稿ごとにシーン・ムードを変えて多様性を確保）
-        $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings);
+        // プロンプト生成（毎回ユニークなクリエイティブ指示を付与）
+        $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, 1);
 
         // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
         $max_retries = 3;
@@ -249,6 +249,11 @@ class NewsCrawlerFeaturedImageGenerator {
                 usleep($total_delay * 1000000);
             }
 
+            // リトライごとにプロンプトを変えて同じ画像の連続生成を避ける
+            if ($attempt > 1) {
+                $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, $attempt);
+            }
+
             // タイムアウトを動的に設定
             $timeout = 60 + ($attempt * 15); // 60秒から開始、試行ごとに15秒延ばす
             $timeout = min($timeout, 180); // 最大180秒
@@ -264,6 +269,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     'n' => 1,
                     'size' => '1792x1024',
                     'quality' => 'hd',
+                    'style' => 'vivid',
                     'response_format' => 'url'
                 )),
                 'timeout' => $timeout,
@@ -718,7 +724,25 @@ class NewsCrawlerFeaturedImageGenerator {
         $queries[] = 'technology';
 
         $queries = array_values(array_unique(array_filter(array_map('trim', $queries))));
-        return $queries;
+
+        // 汎用クエリは最後に回し、投稿ごとに検索順をシャッフルして同じ画像の連発を防ぐ
+        $generic = array('news media', 'business office', 'technology');
+        $specific = array_values(array_diff($queries, $generic));
+        $generic_present = array_values(array_intersect($queries, $generic));
+
+        if (empty($specific)) {
+            $specific = $generic_present;
+            $generic_present = array();
+        }
+
+        $seed = abs(crc32((string) $title . '|' . implode(',', array_slice((array) $keywords, 0, 3))));
+        if (count($specific) > 1) {
+            usort($specific, function ($a, $b) use ($seed) {
+                return (abs(crc32($a . $seed)) % 1000) <=> (abs(crc32($b . $seed)) % 1000);
+            });
+        }
+
+        return array_merge($specific, $generic_present);
     }
 
     /**
@@ -1928,7 +1952,7 @@ class NewsCrawlerFeaturedImageGenerator {
     private function save_image_as_attachment($image, $post_id, $title) {
         // 一時ファイル作成
         $upload_dir = wp_upload_dir();
-        $filename = 'featured-image-' . $post_id . '-' . time() . '.png';
+        $filename = 'featured-image-' . $post_id . '-' . uniqid('', true) . '.png';
         $filepath = $upload_dir['path'] . '/' . $filename;
         
         // PNG形式で保存
@@ -2118,7 +2142,7 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'アップロードディレクトリの作成に失敗しました。権限を確認してください。');
         }
 
-        $filename = 'featured-image-' . $post_id . '-' . time() . '.' . $extension;
+        $filename = 'featured-image-' . $post_id . '-' . uniqid('', true) . '.' . $extension;
         $filepath = $upload_dir['path'] . '/' . $filename;
 
         // ファイル書き込みのエラーハンドリング
@@ -2239,6 +2263,27 @@ class NewsCrawlerFeaturedImageGenerator {
     }
 
     /**
+     * タイトルから画像生成用の話題フレーズを抽出
+     *
+     * @param string $title 投稿タイトル
+     * @return string
+     */
+    private function extract_title_topic_phrase($title) {
+        $title_head = trim((string) $title);
+        if ($title_head === '' || strpos($title_head, '以降はＡＩで生成') !== false) {
+            return '';
+        }
+
+        $segments = preg_split('/[｜|\-–—:：]/u', $title_head, 2);
+        $title_head = trim($segments[0]);
+        if (mb_strlen($title_head) > 60) {
+            $title_head = mb_substr($title_head, 0, 60);
+        }
+
+        return $title_head;
+    }
+
+    /**
      * AI画像生成用の被写体（英語）を組み立てる
      *
      * @param string $title    投稿タイトル
@@ -2248,59 +2293,111 @@ class NewsCrawlerFeaturedImageGenerator {
     private function build_ai_subject_line($title, $keywords) {
         $topic_keywords = $this->select_topic_keywords($keywords, 5);
         $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, $title);
+        $title_phrase = $this->extract_title_topic_phrase($title);
 
+        $parts = array();
         if (!empty($english_terms)) {
-            return implode(', ', array_slice(array_unique($english_terms), 0, 4));
+            $parts[] = implode(', ', array_slice(array_unique($english_terms), 0, 4));
         }
 
-        $title_head = (string) $title;
-        if ($title_head !== '' && strpos($title_head, '以降はＡＩで生成') === false) {
-            $segments = preg_split('/[｜|\-–—:：]/u', $title_head, 2);
-            $title_head = trim($segments[0]);
-            if (mb_strlen($title_head) > 50) {
-                $title_head = mb_substr($title_head, 0, 50);
-            }
-            $from_title = $this->map_keywords_to_english_search_terms(array($title_head), $title);
+        if ($title_phrase !== '') {
+            $from_title = $this->map_keywords_to_english_search_terms(array($title_phrase), $title);
             if (!empty($from_title)) {
-                return implode(', ', array_slice(array_unique($from_title), 0, 3));
+                $parts[] = implode(', ', array_slice(array_unique($from_title), 0, 3));
+            } else {
+                // 日本語タイトルも話題の具体性として渡す（DALL-E 3 は日本語コンテキストを理解できる）
+                $parts[] = 'topic context: "' . $title_phrase . '"';
             }
         }
 
         $english_from_title = $this->extract_english_words_from_text($title);
         if ($english_from_title !== '') {
-            return $english_from_title;
+            $parts[] = $english_from_title;
+        }
+
+        $parts = array_values(array_unique(array_filter($parts)));
+        if (!empty($parts)) {
+            return implode(' — ', array_slice($parts, 0, 3));
         }
 
         return 'contemporary news and current affairs';
     }
 
     /**
-     * 投稿ごとに異なるビジュアルバリエーションを生成
+     * 毎回異なるクリエイティブ指示を生成
      *
      * @param int    $post_id  投稿 ID
      * @param string $title    タイトル
      * @param array  $keywords キーワード
-     * @return array{scene:string,mood:string,seed:int}
+     * @param int    $attempt  API 試行回数
+     * @return array{composition:string,metaphor:string,palette:string,art_direction:string,lighting:string,seed:int}
      */
-    private function get_ai_visual_variation($post_id, $title, $keywords) {
-        $scenes = array(
-            'modern newsroom with floor-to-ceiling windows and abundant daylight',
-            'bright outdoor urban scene under clear blue sky',
-            'clean minimalist studio with soft natural light and white backdrop',
-            'contemporary office with panoramic city view and warm sunlight',
-            'tech workspace with colorful accents and well-lit environment',
-            'professional conference hall with bright ambient lighting',
-            'dynamic cityscape at golden hour with vivid colors',
-            'editorial photo studio with high-key lighting and crisp details',
+    private function get_ai_creative_context($post_id, $title, $keywords, $attempt = 1) {
+        $compositions = array(
+            'dynamic diagonal composition with a bold hero subject',
+            'symmetrical centered subject with vivid layered background',
+            'wide cinematic framing with strong depth and leading lines',
+            'close-up detail shot with soft contextual bokeh',
+            'aerial perspective revealing patterns and scale',
+            'conceptual split layout juxtaposing two related visual ideas',
+            'floating elements arranged in playful 3D space',
+            'macro texture study blended with symbolic objects',
         );
-        $moods = array('optimistic', 'energetic', 'professional', 'dynamic', 'fresh', 'engaging', 'uplifting');
+        $metaphors = array(
+            'visual metaphor using symbolic objects instead of literal depiction',
+            'abstract geometric forms expressing the core idea',
+            'human hands interacting with futuristic interface elements',
+            'collage of topic-relevant objects in unexpected arrangement',
+            'silhouette figure before a colorful data visualization backdrop',
+            'nature elements merged with technology motifs',
+            'light rays and particles forming the shape of the main concept',
+            'miniature diorama scene representing the news topic',
+        );
+        $palettes = array(
+            'warm coral, amber, and golden sunlight tones',
+            'fresh mint, teal, and sky blue palette',
+            'bold magenta, electric blue, and violet accents',
+            'sunlit yellow, orange, and crisp white highlights',
+            'emerald green, lime, and bright cyan combination',
+            'soft peach, rose, and lavender pastels with high brightness',
+            'rich sapphire, turquoise, and silver metallic sheen',
+            'vibrant red, tangerine, and sunny gold contrast',
+        );
+        $art_directions = array(
+            'award-winning magazine cover editorial photography',
+            'modern 3D render with photorealistic materials',
+            'mixed-media digital illustration with photo-real elements',
+            'minimalist conceptual poster art with bold shapes',
+            'high-end advertising campaign visual quality',
+            'contemporary editorial illustration with photographic realism',
+            'innovative infographic-inspired artistic composition',
+            'cutting-edge design studio hero image aesthetic',
+        );
+        $lightings = array(
+            'bright high-key studio lighting',
+            'golden hour natural sunlight',
+            'soft diffused daylight through large windows',
+            'clean rim light with luminous background glow',
+            'bright overcast outdoor light with vivid colors',
+            'well-lit interior with warm ambient fill light',
+        );
 
-        $seed_source = (string) $post_id . '|' . (string) $title . '|' . implode(',', array_slice((array) $keywords, 0, 5));
-        $seed = abs(crc32($seed_source));
+        $entropy_source = implode('|', array(
+            (string) $post_id,
+            (string) $title,
+            implode(',', array_slice((array) $keywords, 0, 5)),
+            (string) microtime(true),
+            (string) wp_rand(100000, 999999),
+            (string) $attempt,
+        ));
+        $seed = abs(crc32($entropy_source));
 
         return array(
-            'scene' => $scenes[$seed % count($scenes)],
-            'mood' => $moods[$seed % count($moods)],
+            'composition' => $compositions[$seed % count($compositions)],
+            'metaphor' => $metaphors[($seed >> 3) % count($metaphors)],
+            'palette' => $palettes[($seed >> 6) % count($palettes)],
+            'art_direction' => $art_directions[($seed >> 9) % count($art_directions)],
+            'lighting' => $lightings[($seed >> 12) % count($lightings)],
             'seed' => $seed,
         );
     }
@@ -2308,31 +2405,35 @@ class NewsCrawlerFeaturedImageGenerator {
     /**
      * AI画像生成用のプロンプトを作成
      */
-    private function create_ai_prompt($post_id, $title, $keywords, $settings) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
-        // 旧設定の cinematic / dark 系は暗い画像になりやすいため明るいスタイルへ正規化
+    private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1) {
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'vivid, creative, imaginative, editorial, bold colors, well-lit, ultra detailed, original concept';
         if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key)\b/i', $style)) {
-            $style = 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
+            $style = 'vivid, creative, imaginative, editorial, bold colors, well-lit, ultra detailed, original concept';
         }
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a visually striking, professional blog featured image about';
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a completely unique, original, and creative featured image concept about';
 
         $subject = $this->build_ai_subject_line($title, $keywords);
         $topic_keywords = $this->select_topic_keywords($keywords, 3);
         $keyword_text = !empty($topic_keywords) ? implode(', ', $topic_keywords) : '';
-        $variation = $this->get_ai_visual_variation($post_id, $title, $keywords);
+        $creative = $this->get_ai_creative_context($post_id, $title, $keywords, $attempt);
 
         $prompt = $base_prompt . ' "' . $subject . '"';
         if ($keyword_text !== '') {
-            $prompt .= ' related to ' . $keyword_text;
+            $prompt .= ' inspired by ' . $keyword_text;
         }
-        $prompt .= '. Scene: ' . $variation['scene'] . '. Mood: ' . $variation['mood'] . '.';
+        $prompt .= '. Creative direction: ' . $creative['art_direction'] . '.';
+        $prompt .= ' Visual approach: ' . $creative['metaphor'] . '.';
+        $prompt .= ' Composition: ' . $creative['composition'] . '.';
+        $prompt .= ' Color palette: ' . $creative['palette'] . '.';
+        $prompt .= ' Lighting: ' . $creative['lighting'] . '.';
+        $prompt .= ' Mood: optimistic, fresh, engaging, uplifting.';
         $prompt .= ' Style: ' . $style . '.';
-        $prompt .= ' Use rich, saturated colors, compelling composition, and realistic imagery.';
-        $prompt .= ' Bright natural lighting, colorful atmosphere, avoid dark, moody, or underexposed look.';
-        $prompt .= ' No text, no letters, no watermark. Landscape orientation suitable for a news blog header.';
-        $prompt .= ' Unique concept ID: ' . $variation['seed'];
+        $prompt .= ' Make it visually surprising and never look like a generic stock photo.';
+        $prompt .= ' Bright, colorful, high-energy atmosphere; avoid dark, moody, or repetitive looks.';
+        $prompt .= ' No text, no letters, no watermark. Landscape orientation for a news blog header.';
+        $prompt .= ' Unique generation ID: ' . $creative['seed'];
 
-        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt: ' . $prompt);
+        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt (attempt ' . $attempt . '): ' . $prompt);
 
         return $prompt;
     }
@@ -2355,8 +2456,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight';
-        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create an attractive and engaging featured image for a blog post about';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'vivid, creative, imaginative, editorial, bold colors, well-lit, ultra detailed, original concept';
+        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a completely unique, original, and creative featured image concept about';
         
         // Unsplash設定
         $sanitized['unsplash_access_key'] = isset($input['unsplash_access_key']) ? sanitize_text_field($input['unsplash_access_key']) : '';
@@ -2393,12 +2494,12 @@ class NewsCrawlerFeaturedImageGenerator {
                 <table class="form-table">
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'bright, vibrant, well-lit, photorealistic, editorial photography, high detail, natural daylight'); ?>" size="50" />
-                        <p class="description">画像のスタイルを指定してください（例：bright, vibrant, well-lit, photorealistic, editorial photography）</p></td>
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'vivid, creative, imaginative, editorial, bold colors, well-lit, ultra detailed, original concept'); ?>" size="50" />
+                        <p class="description">画像のスタイルを指定してください（例：vivid, creative, editorial, bold colors, well-lit, original concept）</p></td>
                     </tr>
                     <tr>
                         <th scope="row">ベースプロンプト</th>
-                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create an attractive and engaging featured image for a blog post about'); ?></textarea>
+                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create a completely unique, original, and creative featured image concept about'); ?></textarea>
                         <p class="description">AI画像生成の基本となるプロンプトを指定してください。タイトルは自動で追加されます。</p></td>
                     </tr>
                 </table>
