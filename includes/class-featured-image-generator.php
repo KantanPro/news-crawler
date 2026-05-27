@@ -38,10 +38,14 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $method 生成方法 ('ai', 'template', 'unsplash')
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
-    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai') {
+    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false) {
         $requested_method = $this->normalize_featured_image_method($method);
         $method = $requested_method;
         $actual_method = $requested_method;
+
+        if ($force_regenerate) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 再生成モード - 投稿ID: ' . $post_id);
+        }
 
         // 投稿にカテゴリーが設定されているかチェック（固定ページの場合はスキップ）
         $current_categories = wp_get_post_categories($post_id);
@@ -68,12 +72,12 @@ class NewsCrawlerFeaturedImageGenerator {
         
         switch ($method) {
             case 'ai':
-                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
+                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings, $force_regenerate);
                 if (is_array($result) && isset($result['error'])) {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
                     error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします（テンプレートは使用しません）');
                     $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate);
                     if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
                         error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
                         $result = false;
@@ -83,16 +87,16 @@ class NewsCrawlerFeaturedImageGenerator {
                 }
                 break;
             case 'unsplash':
-                $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                $result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate);
                 break;
             case 'template':
-                $result = $this->generate_template_image($post_id, $title, $keywords, $settings);
+                $result = $this->generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate);
                 break;
             default:
-                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings);
+                $result = $this->generate_ai_image($post_id, $title, $keywords, $settings, $force_regenerate);
                 if (is_array($result) && isset($result['error'])) {
                     $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings);
+                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate);
                     $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
                 }
                 break;
@@ -126,9 +130,41 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
+     * 既存のアイキャッチと関連メタを削除（再生成用）
+     *
+     * @param int $post_id 投稿 ID
+     */
+    private function clear_existing_featured_image($post_id) {
+        delete_post_meta($post_id, '_news_crawler_generated_image_id');
+
+        $old_thumbnail_id = (int) get_post_thumbnail_id($post_id);
+        if ($old_thumbnail_id > 0) {
+            delete_post_thumbnail($post_id);
+            wp_delete_attachment($old_thumbnail_id, true);
+            error_log('NewsCrawlerFeaturedImageGenerator: 旧アイキャッチを削除 - 投稿ID: ' . $post_id . ', 添付ID: ' . $old_thumbnail_id);
+        }
+    }
+
+    /**
+     * 再生成時などにバリエーション seed を付与
+     *
+     * @param int    $post_id          投稿 ID
+     * @param string $context          seed 文脈
+     * @param bool   $force_regenerate 再生成フラグ
+     * @return string
+     */
+    private function build_variation_seed($post_id, $context, $force_regenerate = false) {
+        $seed = (string) $post_id . '|' . (string) $context;
+        if ($force_regenerate) {
+            $seed .= '|regen|' . microtime(true) . '|' . wp_rand(100000, 999999);
+        }
+        return $seed;
+    }
+
+    /**
      * テンプレートベースの画像生成
      */
-    private function generate_template_image($post_id, $title, $keywords, $settings) {
+    private function generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate = false) {
         // GD拡張の確認
         if (!extension_loaded('gd')) {
             error_log('NewsCrawlerFeaturedImageGenerator: GD extension not loaded');
@@ -157,7 +193,7 @@ class NewsCrawlerFeaturedImageGenerator {
             }
             
             // 背景色設定（グラデーション）- 投稿ごとに配色を変える
-            list($bg_color1, $bg_color2) = $this->get_template_color_palette($post_id, $title);
+            list($bg_color1, $bg_color2) = $this->get_template_color_palette($post_id, $title, $force_regenerate);
             
             $gradient_result = $this->create_gradient_background($image, $width, $height, $bg_color1, $bg_color2);
             if (!$gradient_result) {
@@ -214,7 +250,7 @@ class NewsCrawlerFeaturedImageGenerator {
     /**
      * AI画像生成（OpenAI DALL-E使用）- 強化版通信エラーハンドリング
      */
-    private function generate_ai_image($post_id, $title, $keywords, $settings) {
+    private function generate_ai_image($post_id, $title, $keywords, $settings, $force_regenerate = false) {
         // 基本設定からAPIキーを取得
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
@@ -229,7 +265,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         // プロンプト生成（毎回ユニークなクリエイティブ指示を付与）
-        $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, 1);
+        $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, 1, $force_regenerate);
 
         // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
         $max_retries = 3;
@@ -251,7 +287,7 @@ class NewsCrawlerFeaturedImageGenerator {
 
             // リトライごとにプロンプトを変えて同じ画像の連続生成を避ける
             if ($attempt > 1) {
-                $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, $attempt);
+                $prompt = $this->create_ai_prompt($post_id, $title, $keywords, $settings, $attempt, $force_regenerate);
             }
 
             // タイムアウトを動的に設定
@@ -411,7 +447,7 @@ class NewsCrawlerFeaturedImageGenerator {
     /**
      * Unsplash画像取得 - 複数クエリ・複数候補・ランダムAPIフォールバック対応
      */
-    private function fetch_unsplash_image($post_id, $title, $keywords, $settings) {
+    private function fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate = false) {
         $access_key = $this->get_unsplash_access_key($settings);
         if (is_array($access_key)) {
             return $access_key;
@@ -422,7 +458,7 @@ class NewsCrawlerFeaturedImageGenerator {
 
         foreach ($search_queries as $search_query) {
             error_log('NewsCrawlerFeaturedImageGenerator: Unsplash検索クエリ: ' . $search_query);
-            $search_result = $this->search_unsplash_photos($access_key, $search_query, $post_id, $title);
+            $search_result = $this->search_unsplash_photos($access_key, $search_query, $post_id, $title, $force_regenerate);
 
             if ($search_result && !is_array($search_result)) {
                 return $search_result;
@@ -584,7 +620,7 @@ class NewsCrawlerFeaturedImageGenerator {
     /**
      * Unsplash検索APIで複数候補から画像を取得
      */
-    private function search_unsplash_photos($access_key, $search_query, $post_id, $title) {
+    private function search_unsplash_photos($access_key, $search_query, $post_id, $title, $force_regenerate = false) {
         $api_url = 'https://api.unsplash.com/search/photos?' . http_build_query(array(
             'query' => $search_query,
             'per_page' => 10,
@@ -612,7 +648,11 @@ class NewsCrawlerFeaturedImageGenerator {
         $count = count($results);
         // 関連度の高い上位候補から選び、投稿ごとにバリエーションを付ける
         $top_n = min(5, $count);
-        $offset = abs(crc32((string) $post_id . '|' . $search_query)) % $top_n;
+        if ($force_regenerate) {
+            $offset = wp_rand(0, max(0, $top_n - 1));
+        } else {
+            $offset = abs(crc32($this->build_variation_seed($post_id, $search_query, false))) % $top_n;
+        }
 
         for ($i = 0; $i < $top_n; $i++) {
             $index = ($offset + $i) % $top_n;
@@ -636,7 +676,7 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $title   タイトル
      * @return array{0:string,1:string}
      */
-    private function get_template_color_palette($post_id, $title) {
+    private function get_template_color_palette($post_id, $title, $force_regenerate = false) {
         $palettes = array(
             array('#4F46E5', '#7C3AED'),
             array('#059669', '#0D9488'),
@@ -648,7 +688,7 @@ class NewsCrawlerFeaturedImageGenerator {
             array('#BE123C', '#E11D48'),
         );
 
-        $seed = abs(crc32((string) $post_id . '|' . (string) $title));
+        $seed = abs(crc32($this->build_variation_seed($post_id, $title, $force_regenerate)));
         return $palettes[$seed % count($palettes)];
     }
 
@@ -2368,7 +2408,7 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param int    $attempt  API 試行回数
      * @return array{scene:string,palette:string,lighting:string,seed:int}
      */
-    private function get_ai_creative_context($post_id, $title, $keywords, $attempt = 1) {
+    private function get_ai_creative_context($post_id, $title, $keywords, $attempt = 1, $force_regenerate = false) {
         $scenes = array(
             'premium multi-device mockup on a clean modern desk: large desktop monitor and smartphone side by side, both showing a colorful news/media management dashboard with article cards, charts, and navigation sidebar; subtle desk props like a small plant and coffee mug; polished 3D digital illustration on a soft light-blue studio background',
             'tech keynote demo atmosphere: laptop and smartphone on a desk displaying glowing news analytics UI, small holographic floating icon above the desk, blurred presentation stage with a large colorful screen in the background and soft audience silhouettes',
@@ -2398,14 +2438,13 @@ class NewsCrawlerFeaturedImageGenerator {
             'keynote stage glow mixing cool blue ambient light and warm accent highlights',
         );
 
-        $entropy_source = implode('|', array(
-            (string) $post_id,
+        $entropy_source = $this->build_variation_seed($post_id, implode('|', array(
             (string) $title,
             implode(',', array_slice((array) $keywords, 0, 5)),
             (string) microtime(true),
             (string) wp_rand(100000, 999999),
             (string) $attempt,
-        ));
+        )), $force_regenerate);
         $seed = abs(crc32($entropy_source));
 
         return array(
@@ -2419,7 +2458,7 @@ class NewsCrawlerFeaturedImageGenerator {
     /**
      * AI画像生成用のプロンプトを作成
      */
-    private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1) {
+    private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1, $force_regenerate = false) {
         $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
         if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|photorealistic|photo-real|editorial photography|realistic photo|stock photo|monochrome|muted|desaturated|grayscale|pastel only)\b/i', $style)) {
             $style = 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
@@ -2430,7 +2469,7 @@ class NewsCrawlerFeaturedImageGenerator {
         $topic_keywords = $this->select_topic_keywords($keywords, 3);
         $keyword_text = !empty($topic_keywords) ? implode(', ', $topic_keywords) : '';
         $ui_elements = $this->build_ai_ui_elements_hint($title, $keywords);
-        $creative = $this->get_ai_creative_context($post_id, $title, $keywords, $attempt);
+        $creative = $this->get_ai_creative_context($post_id, $title, $keywords, $attempt, $force_regenerate);
 
         $prompt = $base_prompt . ' "' . $subject . '"';
         if ($keyword_text !== '') {
@@ -2449,6 +2488,9 @@ class NewsCrawlerFeaturedImageGenerator {
         $prompt .= ' Use abstract placeholder bars, icons, charts, and colored UI blocks instead of readable text or letters.';
         $prompt .= ' Use maximum color saturation and bold multi-color UI accents; avoid muted, desaturated, or gray-dominant schemes.';
         $prompt .= ' No readable text, no letters, no watermark, no logo text. Landscape orientation for a news blog header.';
+        if ($force_regenerate) {
+            $prompt .= ' Regeneration request ID: ' . uniqid('regen_', true) . '.';
+        }
         $prompt .= ' Unique generation ID: ' . $creative['seed'];
 
         error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt (attempt ' . $attempt . '): ' . $prompt);
@@ -2905,22 +2947,22 @@ class NewsCrawlerFeaturedImageGenerator {
             wp_send_json_error('投稿が見つかりません');
         }
         
-        // 既存のアイキャッチ画像を削除
-        $old_thumbnail_id = get_post_thumbnail_id($post_id);
-        if ($old_thumbnail_id) {
-            delete_post_thumbnail($post_id);
-            // 古い添付ファイルも削除（オプション）
-            wp_delete_attachment($old_thumbnail_id, true);
-        }
-        
+        // 既存のアイキャッチを完全に削除してから新規生成
+        $this->clear_existing_featured_image($post_id);
+
         // キーワードを配列に変換
         $keywords_array = array();
         if (!empty($keywords)) {
             $keywords_array = array_map('trim', explode(',', $keywords));
         }
-        
-        // 新しいアイキャッチ画像を生成
-        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method);
+
+        $title = get_the_title($post_id);
+        if ($title === '' || strpos($title, '以降はＡＩで生成') !== false) {
+            $title = $post->post_title;
+        }
+
+        // 新しいアイキャッチ画像を生成（再生成フラグ付き）
+        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
