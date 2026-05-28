@@ -328,160 +328,196 @@ class NewsCrawlerSEOTitleGenerator {
     }
     
     /**
+     * SEO設定のターゲットキーワード向け指示（内容と関連する場合のみ・任意）
+     *
+     * @return string
+     */
+    private function build_optional_target_keyword_instructions() {
+        if (!class_exists('NewsCrawlerSeoSettings')) {
+            return '';
+        }
+
+        $seo_settings = get_option('news_crawler_seo_settings', array());
+        $keyword_optimization_enabled = !empty($seo_settings['keyword_optimization_enabled']);
+        $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
+
+        if (!$keyword_optimization_enabled || $target_keywords === '') {
+            return '';
+        }
+
+        $keywords = array_filter(array_map('trim', preg_split('/[,\n\r]+/', $target_keywords)));
+        if (empty($keywords)) {
+            return '';
+        }
+
+        $keyword_list = implode('、', $keywords);
+
+        return "
+
+【参考キーワード（任意・内容と関連する場合のみ）】
+ターゲットキーワード：{$keyword_list}
+
+- 共有した記事・動画の内容と明確に関連する場合のみ、自然に含めてください
+- 内容と無関係なキーワード（記事にその話題がないのに「見積書作成」など）は絶対に含めないでください
+- キーワードの無理な挿入より、共有コンテンツの話題を最優先してください";
+    }
+
+    /**
+     * 要約ソースから共有記事・動画のタイトルを抽出
+     *
+     * @param string   $content 要約ソース本文
+     * @param int|null $post_id 投稿 ID
+     * @return array
+     */
+    private function extract_shared_source_titles($content, $post_id = null) {
+        $titles = array();
+        $segments = preg_split('/\n\n---\n\n/', (string) $content);
+
+        foreach ($segments as $segment) {
+            $segment = trim($segment);
+            if ($segment === '') {
+                continue;
+            }
+
+            $lines = preg_split('/\r\n|\r|\n/', $segment);
+            $first_line = isset($lines[0]) ? trim($lines[0]) : '';
+
+            if ($first_line === '') {
+                continue;
+            }
+
+            if (preg_match('/^タイトル:\s*(.+)$/u', $first_line, $matches)) {
+                $first_line = trim($matches[1]);
+            }
+
+            if (preg_match('/^要約:\s*/u', $first_line)) {
+                continue;
+            }
+
+            if (mb_strlen($first_line) > 120) {
+                $first_line = mb_substr($first_line, 0, 120);
+            }
+
+            if ($first_line !== '') {
+                $titles[] = $first_line;
+            }
+        }
+
+        $titles = array_values(array_unique($titles));
+
+        return array_slice($titles, 0, 5);
+    }
+
+    /**
+     * 共有ソースタイトルセクションをプロンプト用に整形
+     *
+     * @param string   $content 要約ソース
+     * @param int|null $post_id 投稿 ID
+     * @return string
+     */
+    private function build_shared_source_titles_section($content, $post_id = null) {
+        $titles = $this->extract_shared_source_titles($content, $post_id);
+        if (empty($titles)) {
+            return '';
+        }
+
+        $section = "\n\n【共有した記事・動画のタイトル（タイトル生成の最優先材料）】\n";
+        foreach ($titles as $title) {
+            $section .= '- ' . $title . "\n";
+        }
+
+        return $section;
+    }
+
+    /**
+     * コンテンツ重視の共通生成ルール
+     *
+     * @return string
+     */
+    private function get_content_first_title_rules() {
+        return "
+【最重要ルール】
+1. 共有した記事・動画のタイトルと要約内容に沿った見出しにすること
+2. 記事・動画に登場しない話題やサービス名（見積書作成・自社サービス名など）を無理に入れないこと
+3. 30文字以内の簡潔で分かりやすい日本語（【】やジャンル名プレフィックスは付けない）
+4. 読者が中身を想像できる具体的な話題を反映すること
+5. 「最新最新」などの重複表現や不自然な SEO 詰め込みは避けること";
+    }
+
+    /**
      * SEOタイトル生成用のプロンプトを作成（キーワード最適化対応）
      */
     private function create_seo_title_prompt($content, $excerpt, $genre_name, $post_id = null) {
-        // キーワード最適化の設定を取得
-        $keyword_instructions = '';
-        if ($post_id && class_exists('NewsCrawlerSeoSettings')) {
-            $seo_settings = get_option('news_crawler_seo_settings', array());
-            $keyword_optimization_enabled = isset($seo_settings['keyword_optimization_enabled']) ? $seo_settings['keyword_optimization_enabled'] : false;
-            $target_keywords = isset($seo_settings['target_keywords']) ? trim($seo_settings['target_keywords']) : '';
-            
-            if ($keyword_optimization_enabled && !empty($target_keywords)) {
-                // キーワードを配列に変換
-                $keywords = array_map('trim', preg_split('/[,\n\r]+/', $target_keywords));
-                $keywords = array_filter($keywords); // 空の要素を除去
-                
-                if (!empty($keywords)) {
-                    $keyword_list = implode('、', $keywords);
-                    
-                    // 投稿タイプに応じた特別なキーワード指示を使用
-                    if ($post_id) {
-                        $is_news_summary = get_post_meta($post_id, '_news_summary', true);
-                        $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-                        
-                        if ($is_news_summary) {
-                            $keyword_instructions = "
+        $keyword_instructions = $this->build_optional_target_keyword_instructions();
+        $source_titles_section = $this->build_shared_source_titles_section($content, $post_id);
+        $content_first_rules = $this->get_content_first_title_rules();
 
-【重要】以下のキーワードを必ずタイトルに含めてください：
-ターゲットキーワード：{$keyword_list}
-
-ニュース記事のキーワード活用ルール：
-- 指定されたキーワードをニュースの要約内容と関連付けて使用してください
-- キーワードはニュースの内容と関連性がある場合のみ使用してください
-- ニュースの要約内容を最優先し、キーワードは自然に組み込んでください
-- 見出しの読みやすさと魅力的さを保ってください
-- 「ニュース」「まとめ」「要約」などのキーワードも適切に含めてください";
-                        } elseif ($is_youtube_summary) {
-                            $keyword_instructions = "
-
-【重要】以下のキーワードを必ずタイトルに含めてください：
-ターゲットキーワード：{$keyword_list}
-
-YouTube動画まとめ記事のキーワード活用ルール：
-- 指定されたキーワードを動画の要約内容と関連付けて使用してください
-- キーワードは動画の内容と関連性がある場合のみ使用してください
-- 動画の要約内容を最優先し、キーワードは自然に組み込んでください
-- 見出しの読みやすさと魅力的さを保ってください
-- 「動画まとめ」「YouTube」「要約」などのキーワードも適切に含めてください";
-                        } else {
-                            $keyword_instructions = "
-
-【重要】以下のキーワードを必ずタイトルに含めてください：
-ターゲットキーワード：{$keyword_list}
-
-注意事項：
-- 指定されたキーワードを自然に見出しに組み込んでください
-- キーワードは記事の内容と関連性がある場合のみ使用してください
-- 見出しの読みやすさと魅力的さを保ってください";
-                        }
-                    } else {
-                        $keyword_instructions = "
-
-【重要】以下のキーワードを必ずタイトルに含めてください：
-ターゲットキーワード：{$keyword_list}
-
-注意事項：
-- 指定されたキーワードを自然に見出しに組み込んでください
-- キーワードは記事の内容と関連性がある場合のみ使用してください
-- 見出しの読みやすさと魅力的さを保ってください";
-                    }
-                }
-            }
-        }
-        
-        // 投稿タイプに応じた追加情報を取得
         $additional_context = '';
         if ($post_id) {
             $is_news_summary = get_post_meta($post_id, '_news_summary', true);
             $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-            
+
             if ($is_news_summary) {
-                $additional_context = "\n\n【記事の特徴】\n- ニュース記事の要約記事です\n- 複数のニュースソースから厳選された情報をまとめています\n- 最新の情報を分かりやすく整理しています\n- ニュースの要約内容を基にSEOタイトルを生成してください";
+                $additional_context = "\n\n【記事の特徴】\n- 複数のニュース記事をまとめた投稿です\n- 各記事のタイトルと要約が共有コンテンツの根拠です";
             } elseif ($is_youtube_summary) {
                 $video_count = get_post_meta($post_id, '_youtube_videos_count', true);
-                $additional_context = "\n\n【記事の特徴】\n- YouTube動画のまとめ記事です\n- " . ($video_count ? $video_count . "本" : "複数本") . "の動画を厳選して紹介しています\n- 動画の要点を分かりやすくまとめています\n- 動画の要約内容を基にSEOタイトルを生成してください";
+                $additional_context = "\n\n【記事の特徴】\n- " . ($video_count ? $video_count . '本' : '複数本') . "のYouTube動画をまとめた投稿です\n- 各動画のタイトルと説明が共有コンテンツの根拠です";
             }
         }
 
-        // 投稿タイプに応じた特別なプロンプトを使用
         if ($post_id) {
             $is_news_summary = get_post_meta($post_id, '_news_summary', true);
             $is_youtube_summary = get_post_meta($post_id, '_youtube_summary', true);
-            
+
             if ($is_news_summary) {
-                return "以下のニュース記事の要約内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
+                return "以下のニュースまとめ記事について、共有した記事の内容に沿った魅力的なタイトルを1つ生成してください。{$keyword_instructions}{$source_titles_section}
 
-記事のジャンル: {$genre_name}
+記事のジャンル（参考・タイトル本文には含めない）: {$genre_name}
 
-ニュースの要約内容:
+ニュースの要約・ソース内容:
 {$content}
 
 記事の要約:
 {$excerpt}{$additional_context}
+{$content_first_rules}
 
-【ニュース記事の生成ルール】
-1. ニュースの要約内容を最優先で参考にしてください
-2. 30文字以内の簡潔で分かりやすい見出し
-3. ニュースの内容を正確に表現し、検索されやすいキーワードを含める
-4. 読者の興味を引く魅力的な表現
-5. 日本語で自然な表現
-6. 「ニュース」「まとめ」「要約」などのキーワードを適切に含める
-7. ニュースの具体的な内容や話題を反映した見出し
+【ニュースまとめ向けの補足】
+- まとめているニュースの主題・出来事・トピックを見出しに反映してください
+- 「ニュース」「まとめ」は自然な範囲で使ってよいが、内容より優先しないでください
 
 タイトルのみを返してください。説明や装飾は不要です。";
-            } elseif ($is_youtube_summary) {
-                return "以下のYouTube動画まとめ記事の要約内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
+            }
 
-記事のジャンル: {$genre_name}
+            if ($is_youtube_summary) {
+                return "以下のYouTube動画まとめ記事について、共有した動画の内容に沿った魅力的なタイトルを1つ生成してください。{$keyword_instructions}{$source_titles_section}
 
-動画の要約内容:
+記事のジャンル（参考・タイトル本文には含めない）: {$genre_name}
+
+動画の要約・ソース内容:
 {$content}
 
 記事の要約:
 {$excerpt}{$additional_context}
+{$content_first_rules}
 
-【YouTube動画まとめ記事の生成ルール】
-1. 動画の要約内容を最優先で参考にしてください
-2. 30文字以内の簡潔で分かりやすい見出し
-3. 動画の内容を正確に表現し、検索されやすいキーワードを含める
-4. 読者の興味を引く魅力的な表現
-5. 日本語で自然な表現
-6. 「動画まとめ」「YouTube」「要約」などのキーワードを適切に含める
-7. 動画の具体的な内容や話題を反映した見出し
+【YouTubeまとめ向けの補足】
+- 紹介している動画の主題・内容を見出しに反映してください
+- 「動画まとめ」「YouTube」は自然な範囲で使ってよいが、内容より優先しないでください
 
 タイトルのみを返してください。説明や装飾は不要です。";
             }
         }
 
-        return "以下の記事内容を基に、SEOに最適化された魅力的なタイトルを生成してください。{$keyword_instructions}
+        return "以下の記事について、共有コンテンツの内容に沿った魅力的なタイトルを1つ生成してください。{$keyword_instructions}{$source_titles_section}
 
-記事のジャンル: {$genre_name}
+記事のジャンル（参考・タイトル本文には含めない）: {$genre_name}
 
 記事の内容:
 {$content}
 
 記事の要約:
 {$excerpt}{$additional_context}
-
-要求事項:
-1. 30文字以内の簡潔で分かりやすい見出し
-2. 検索エンジンで検索されそうなキーワードを含める
-3. 読者の興味を引く魅力的な表現
-4. 記事の内容を正確に表現
-5. 日本語で自然な表現
-6. 記事の特徴（ニュースまとめ/動画まとめなど）を適切に反映
+{$content_first_rules}
 
 タイトルのみを返してください。説明や装飾は不要です。";
     }
@@ -501,7 +537,7 @@ YouTube動画まとめ記事のキーワード活用ルール：
             'messages' => array(
                 array(
                     'role' => 'system',
-                    'content' => 'あなたはSEOに精通したWebライターです。記事の内容を基に、検索エンジン最適化された魅力的なタイトルを生成してください。'
+                    'content' => 'あなたは日本語のWeb編集者です。共有した記事や動画の内容に忠実なタイトルを作成します。内容と無関係なキーワード（見積書作成など）を無理に入れず、要約ソースと元タイトルに沿った見出しだけを返してください。'
                 ),
                 array(
                     'role' => 'user',

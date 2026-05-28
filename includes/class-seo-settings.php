@@ -259,7 +259,7 @@ class NewsCrawlerSeoSettings {
         $settings = get_option($this->option_name, array());
         $value = isset($settings['target_keywords']) ? $settings['target_keywords'] : '';
         echo '<textarea name="' . $this->option_name . '[target_keywords]" rows="3" cols="50" style="width: 100%; max-width: 500px;">' . esc_textarea($value) . '</textarea>';
-        echo '<p class="description">投稿作成時に最適化するキーワードを入力してください。複数のキーワードは改行またはカンマで区切ってください。</p>';
+        echo '<p class="description">投稿作成時に参考にするキーワードを入力してください。記事・動画の内容と関連する場合のみ自然に反映され、無関係な話題は含めません。複数は改行またはカンマで区切ってください。</p>';
     }
     
     /**
@@ -270,7 +270,7 @@ class NewsCrawlerSeoSettings {
         $value = isset($settings['keyword_optimization_enabled']) ? $settings['keyword_optimization_enabled'] : true;
         echo '<input type="hidden" name="' . $this->option_name . '[keyword_optimization_enabled]" value="0" />';
         echo '<input type="checkbox" name="' . $this->option_name . '[keyword_optimization_enabled]" value="1" ' . checked(1, $value, false) . ' />';
-        echo '<p class="description">AI要約生成時にターゲットキーワードを考慮した最適化を行います。</p>';
+        echo '<p class="description">AI要約・タイトル生成時にターゲットキーワードを参考にします（内容と関連する場合のみ反映）。</p>';
     }
     
     /**
