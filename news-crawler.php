@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.2.28
+ * Version: 3.2.29
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -1350,6 +1350,11 @@ class NewsCrawler {
         foreach ($matched_articles as $article) {
             $debug_info[] = "  - 記事: " . $article['title'];
             
+            if ($this->is_invalid_or_error_news_article($article)) {
+                $debug_info[] = "    → 404/エラーページのためスキップ";
+                continue;
+            }
+
             if ($this->is_duplicate_news($article)) {
                 $duplicates_skipped++;
                 $debug_info[] = "    → 重複のためスキップ";
@@ -1446,6 +1451,11 @@ class NewsCrawler {
         foreach ($matched_articles as $article) {
             $debug_info[] = "  - 記事: " . $article['title'];
             
+            if ($this->is_invalid_or_error_news_article($article)) {
+                $debug_info[] = "    → 404/エラーページのためスキップ";
+                continue;
+            }
+
             if ($this->is_duplicate_news($article)) {
                 $duplicates_skipped++;
                 $debug_info[] = "    → 重複のためスキップ";
@@ -2677,6 +2687,12 @@ class NewsCrawler {
             error_log('NewsCrawler: 記事取得エラー: ' . $response->get_error_message() . ' - ' . $article_url);
             return null;
         }
+
+        $http_code = (int) wp_remote_retrieve_response_code($response);
+        if ($this->is_http_status_error($http_code)) {
+            error_log('NewsCrawler: HTTP ' . $http_code . ' のため記事を除外: ' . $article_url);
+            return null;
+        }
         
         $body = wp_remote_retrieve_body($response);
         
@@ -2698,7 +2714,7 @@ class NewsCrawler {
         // カテゴリ情報を取得
         $categories = $this->extract_categories($body);
         
-        return array(
+        $article_data = array(
             'title' => $title,
             'content' => $content,
             'description' => $description,
@@ -2710,6 +2726,13 @@ class NewsCrawler {
             'guid' => md5($article_url),
             'excerpt' => wp_trim_words(strip_tags($content), 100, '...')
         );
+
+        if ($this->is_invalid_or_error_news_article($article_data, $http_code, $body)) {
+            error_log('NewsCrawler: エラーページのため記事を除外: ' . $article_url);
+            return null;
+        }
+
+        return $article_data;
     }
     
     /**
@@ -2990,11 +3013,20 @@ class NewsCrawler {
                 'excerpt' => $item->get_description() ? wp_trim_words(strip_tags($item->get_description()), 50, '...') : ''
             );
 
+            if ($this->is_invalid_or_error_news_article($article_data)) {
+                error_log('NewsCrawler: RSS記事をスキップ（エラーページ）: ' . $article_data['title']);
+                continue;
+            }
+
             // 記事の詳細ページから追加コンテンツを取得（可能であれば）
             if (!empty($article_data['url'])) {
                 $additional_content = $this->fetch_additional_content($article_data['url']);
                 if (!empty($additional_content)) {
                     $article_data['content'] = $additional_content;
+                    if ($this->is_invalid_or_error_news_article($article_data)) {
+                        error_log('NewsCrawler: RSS記事をスキップ（詳細ページがエラー）: ' . $article_data['title']);
+                        continue;
+                    }
                 }
             }
 
@@ -3102,6 +3134,105 @@ class NewsCrawler {
         return false;
     }
     
+    /**
+     * HTTPステータスが取得不可（4xx/5xx）か
+     *
+     * @param int|null $code
+     * @return bool
+     */
+    private function is_http_status_error($code) {
+        return is_int($code) && $code >= 400;
+    }
+
+    /**
+     * 404・削除済みなどエラーページ／無効記事か
+     *
+     * @param array       $article
+     * @param int|null    $http_code
+     * @param string|null $html_body
+     * @return bool
+     */
+    private function is_invalid_or_error_news_article($article, $http_code = null, $html_body = '') {
+        if ($this->is_http_status_error($http_code)) {
+            error_log('NewsCrawler: HTTP ' . $http_code . ' のため記事を除外: ' . ($article['url'] ?? ''));
+            return true;
+        }
+
+        $title = isset($article['title']) ? trim($article['title']) : '';
+        $content = isset($article['content']) ? trim(wp_strip_all_tags($article['content'])) : '';
+        $description = isset($article['description']) ? trim(wp_strip_all_tags($article['description'])) : '';
+
+        $title_for_check = preg_replace('/\s*[\|｜]\s*.+$/u', '', $title);
+        $title_for_check = trim($title_for_check);
+
+        $error_title_patterns = array(
+            '/ページが(見|み)つかりません/u',
+            '/^404\b/u',
+            '/\b404\s*(error|not\s*found)/iu',
+            '/page\s+not\s+found/iu',
+            '/お探しのページ/u',
+            '/ご指定のページ/u',
+            '/削除されています/u',
+            '/存在しません/u',
+            '/見つかりませんでした/u',
+            '/アクセスできません/u',
+            '/申し訳ありませんが、お探しの/u',
+            '/指定されたページは/u',
+            '/コンテンツが見つかりません/u',
+            '/ファイルが見つかりません/u',
+            '/^エラー$/u',
+            '/^error$/iu',
+        );
+
+        foreach ($error_title_patterns as $pattern) {
+            if ($title_for_check !== '' && preg_match($pattern, $title_for_check)) {
+                error_log('NewsCrawler: エラーページと判定（タイトル）: ' . $title);
+                return true;
+            }
+        }
+
+        if ($html_body !== '' && $html_body !== null) {
+            $html_error_patterns = array(
+                '/<body[^>]*class="[^"]*(?:error-404|page-not-found|not-found|404)/i',
+                '/<html[^>]*class="[^"]*(?:error-404|page-not-found)/i',
+                '/property=["\']og:type["\'][^>]*content=["\']error["\']/i',
+            );
+            foreach ($html_error_patterns as $pattern) {
+                if (preg_match($pattern, $html_body)) {
+                    if ($title_for_check === '' || preg_match('/ページが(見|み)つかりません|404|not\s+found|お探しのページ|削除されています/iu', $title_for_check)) {
+                        error_log('NewsCrawler: エラーページと判定（HTML）: ' . $title);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        $combined = $title . "\n" . $content . "\n" . $description;
+        $error_body_phrases = array(
+            'お探しのページは削除されています',
+            'お探しのページは見つかりません',
+            'お探しのページは存在しません',
+            'ページは削除されました',
+            'Page not found',
+            'The page you are looking for',
+            'could not be found',
+        );
+        foreach ($error_body_phrases as $phrase) {
+            if (stripos($combined, $phrase) !== false
+                && preg_match('/ページが(見|み)つかりません|お探しのページ|削除されています|404|not\s+found/iu', $title)) {
+                error_log('NewsCrawler: エラーページと判定（本文）: ' . $title);
+                return true;
+            }
+        }
+
+        if ($title_for_check !== '' && preg_match('/ページが(見|み)つかりません|404|not\s+found/iu', $title_for_check) && mb_strlen($content) < 200) {
+            error_log('NewsCrawler: エラーページと判定（短文+エラータイトル）: ' . $title);
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * ニュース記事の重複チェック
      */
@@ -3232,6 +3363,11 @@ class NewsCrawler {
      * 各記事の詳細な要約を生成
      */
     private function generate_article_summary($article) {
+        if ($this->is_invalid_or_error_news_article($article)) {
+            error_log('NewsCrawler: 無効記事のため要約をスキップ: ' . ($article['title'] ?? ''));
+            return '';
+        }
+
         // OpenAI APIキーを取得（複数の設定から確認）
         $basic_settings = get_option('news_crawler_basic_settings', array());
         $api_key = isset($basic_settings['openai_api_key']) ? $basic_settings['openai_api_key'] : '';
@@ -3549,6 +3685,11 @@ class NewsCrawler {
 
         try {
             foreach ($articles as $article) {
+                if ($this->is_invalid_or_error_news_article($article)) {
+                    error_log('NewsCrawler: 投稿作成前に無効記事をスキップ: ' . ($article['title'] ?? ''));
+                    continue;
+                }
+
                 // 記事要約を生成
                 $article_summary = $this->generate_article_summary($article);
 
@@ -4112,6 +4253,12 @@ class NewsCrawler {
                 return '';
             }
 
+            $http_code = (int) wp_remote_retrieve_response_code($response);
+            if ($this->is_http_status_error($http_code)) {
+                error_log('NewsCrawler: 追加コンテンツ取得をスキップ（HTTP ' . $http_code . '）: ' . $url);
+                return '';
+            }
+
             $body = wp_remote_retrieve_body($response);
 
             if (empty($body)) {
@@ -4153,6 +4300,15 @@ class NewsCrawler {
 
             // コンテンツが十分な長さがある場合のみ使用
             if (mb_strlen($additional_content) > 100) {
+                $probe_article = array(
+                    'title' => $this->extract_title($body),
+                    'content' => $additional_content,
+                    'url' => $url,
+                );
+                if ($this->is_invalid_or_error_news_article($probe_article, $http_code, $body)) {
+                    error_log('NewsCrawler: 追加コンテンツはエラーページのため破棄: ' . $url);
+                    return '';
+                }
                 error_log('NewsCrawler: 追加コンテンツ取得成功 - 長さ: ' . mb_strlen($additional_content) . '文字');
                 return $additional_content;
             }
