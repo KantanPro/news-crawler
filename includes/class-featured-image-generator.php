@@ -791,14 +791,14 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function get_template_color_palette($post_id, $title, $force_regenerate = false) {
         $palettes = array(
-            array('#4F46E5', '#7C3AED'),
-            array('#059669', '#0D9488'),
-            array('#DC2626', '#EA580C'),
-            array('#2563EB', '#0891B2'),
-            array('#7C3AED', '#DB2777'),
-            array('#B45309', '#CA8A04'),
-            array('#4338CA', '#6366F1'),
-            array('#BE123C', '#E11D48'),
+            array('#38BDF8', '#F472B6'),
+            array('#34D399', '#FBBF24'),
+            array('#FB7185', '#F97316'),
+            array('#60A5FA', '#22D3EE'),
+            array('#A78BFA', '#F472B6'),
+            array('#FACC15', '#FB923C'),
+            array('#818CF8', '#38BDF8'),
+            array('#F43F5E', '#FB7185'),
         );
 
         $seed = abs(crc32($this->build_variation_seed($post_id, $title, $force_regenerate)));
@@ -2563,32 +2563,32 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function get_ai_creative_context($post_id, $title, $keywords, $attempt = 1, $force_regenerate = false) {
         $scenes = array(
-            'premium multi-device mockup on a clean modern desk: large desktop monitor and smartphone side by side, both showing a colorful news/media management dashboard with article cards, charts, and navigation sidebar; subtle desk props like a small plant and coffee mug; polished 3D digital illustration on a soft light-blue studio background',
-            'tech keynote demo atmosphere: laptop and smartphone on a desk displaying glowing news analytics UI, small holographic floating icon above the desk, blurred presentation stage with a large colorful screen in the background and soft audience silhouettes',
-            'glassmorphism concept diagram: central glowing hub connected by dotted lines to floating translucent UI panels showing news articles, media thumbnails, code blocks, and analytics charts; deep blue-purple gradient background with neon cyan and magenta accents',
-            'professional split-screen infographic: left side cluttered manual information overload, right side clean automated news dashboard on laptop and phone; workflow icons in the top area connected to a glowing cloud automation hub',
-            'isometric 3D workspace hero shot: laptop with colorful editorial dashboard, floating UI cards with headlines and graphs, minimal desk accessories, bright airy studio lighting',
-            'floating dashboard constellation: multiple glass UI windows orbiting a bright central logo shape, each window showing different media modules (gallery, chat, charts, video, documents); cosmic tech atmosphere with vivid gradient glow',
-            'wide hero composition: desktop dashboard with purple-orange-blue promotional banners, product-style cards in a grid below, floating layout icons connected by dashed lines suggesting modular design',
-            'modern office desk scene with keyboard and mouse, monitor showing pipeline overview with colored status blocks and donut chart, tablet and phone showing synchronized news feed UI',
+            'premium multi-device mockup on a clean modern desk: large desktop monitor and smartphone side by side, both showing a colorful news/media management dashboard with article cards, charts, and navigation sidebar; subtle desk props; polished 3D digital illustration on a bright sky-blue and coral gradient studio background',
+            'tech keynote demo atmosphere: laptop and smartphone on a desk displaying glowing news analytics UI, holographic floating icons, large colorful presentation screen behind, bright mint and yellow ambient wash',
+            'glassmorphism concept diagram: central glowing hub connected to floating translucent UI panels showing news articles, media thumbnails, charts; vivid cyan-magenta-yellow gradient background with high saturation',
+            'professional split-screen infographic on a sunny yellow-to-orange gradient backdrop: automated news dashboard on laptop and phone with rainbow workflow icons',
+            'isometric 3D workspace hero shot: laptop with colorful editorial dashboard, floating UI cards with headlines and graphs, bright white and teal studio background',
+            'floating dashboard constellation: multiple glass UI windows orbiting a bright central shape on a vivid purple-pink-blue gradient sky, each window showing media modules',
+            'wide hero composition: desktop dashboard with purple-orange-blue promotional banners on a light cream background, product-style cards in a grid, floating layout icons',
+            'modern office desk scene with keyboard and monitor showing pipeline overview with colored status blocks, tablet and phone on a bright aqua and lime gradient backdrop',
         );
         $palettes = array(
-            'hyper-saturated coral, hot pink, and electric orange UI accents on clean white and sky blue',
-            'vivid mint, teal, cyan, and bright sky blue with purple highlights',
-            'bold magenta, neon purple, and electric blue gradient UI elements',
-            'sunburst yellow, tangerine, and cherry red pop colors with white surfaces',
-            'neon lime, emerald green, and bright aqua on dark navy panels',
-            'rainbow gradient accents across red, orange, yellow, green, blue, and violet UI blocks',
-            'hot pink, violet, and ultraviolet glow with bright white workspace',
-            'crimson red, gold, and vibrant cobalt blue contrast on light backgrounds',
+            'hyper-saturated coral, hot pink, and electric orange UI on bright white and sky blue background',
+            'vivid mint, teal, cyan, and bright sky blue with magenta accents on light pastel backdrop',
+            'bold magenta, neon purple, and electric blue UI on sunny yellow-white gradient background',
+            'sunburst yellow, tangerine, cherry red, and lime green pop colors on cream white background',
+            'neon lime, emerald green, and bright aqua UI on light cyan and pink gradient background',
+            'rainbow gradient background from red through violet with multicolor UI blocks',
+            'hot pink, violet, and ultraviolet UI on bright white and peach gradient workspace',
+            'crimson red, gold, and vibrant cobalt blue on light sky-blue background',
         );
         $lightings = array(
-            'soft studio lighting with radiant UI screen glow and saturated color washes',
-            'bright high-key illumination with vivid screen reflections on desk surfaces',
-            'luminous neon backlight from dashboards with cheerful ambient fill light',
-            'clean diffused daylight with punchy colorful UI highlights',
-            'professional product-render lighting with gentle shadows and crisp detail',
-            'keynote stage glow mixing cool blue ambient light and warm accent highlights',
+            'bright high-key studio lighting with radiant saturated color washes and no dark shadows',
+            'cheerful daylight with vivid screen glow and colorful ambient fill',
+            'luminous upbeat illumination with punchy multi-color UI highlights',
+            'clean diffused high-key light with maximum color saturation',
+            'sunny product-render lighting on a bright colorful backdrop',
+            'vibrant stage glow with warm coral and cool cyan accent lights',
         );
 
         $entropy_source = $this->build_variation_seed($post_id, implode('|', array(
@@ -2604,7 +2604,7 @@ class NewsCrawlerFeaturedImageGenerator {
             $topic_keywords = $this->select_topic_keywords($keywords, 3);
             $keyword_label = implode(', ', $topic_keywords);
             return array(
-                'scene' => 'a colorful hero illustration visually centered on "' . $keyword_label . '" with relevant icons, charts, UI panels, and conceptual imagery that clearly represents the topic',
+                'scene' => 'a colorful hero illustration visually centered on "' . $keyword_label . '" with relevant icons, charts, UI panels, and conceptual imagery on a bright hyper-colorful gradient background (no black background)',
                 'palette' => $palettes[($seed >> 6) % count($palettes)],
                 'lighting' => $lightings[($seed >> 12) % count($lightings)],
                 'seed' => $seed,
@@ -2623,11 +2623,12 @@ class NewsCrawlerFeaturedImageGenerator {
      * AI画像生成用のプロンプトを作成
      */
     private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1, $force_regenerate = false) {
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
-        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|photorealistic|photo-real|editorial photography|realistic photo|stock photo|monochrome|muted|desaturated|grayscale|pastel only)\b/i', $style)) {
-            $style = 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
+        $default_style = 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality';
+        $style = isset($settings['ai_style']) ? $settings['ai_style'] : $default_style;
+        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|black|charcoal|noir|photorealistic|photo-real|editorial photography|realistic photo|stock photo|monochrome|muted|desaturated|grayscale|pastel only)\b/i', $style)) {
+            $style = $default_style;
         }
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a premium professional hero featured image for a news/media automation blog post about';
+        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a premium professional hero featured image with a bright hyper-colorful background for a news/media automation blog post about';
 
         $subject = $this->build_ai_subject_line($title, $keywords);
         $topic_keywords = $this->select_topic_keywords($keywords, 5);
@@ -2649,14 +2650,16 @@ class NewsCrawlerFeaturedImageGenerator {
         $prompt .= ' Include UI elements such as ' . $ui_elements . '.';
         $prompt .= ' Color palette: ' . $creative['palette'] . '.';
         $prompt .= ' Lighting: ' . $creative['lighting'] . '.';
+        $prompt .= ' Background: bright hyper-colorful gradient or studio backdrop (sky blue, coral, mint, yellow, magenta, orange); strictly no black background, no pure black, no charcoal, no dark gray dominant backdrop, no low-key darkness.';
         $prompt .= ' Quality bar: highly detailed polished 3D digital illustration at the level of premium tech SaaS landing page hero images and professional product marketing visuals.';
         $prompt .= ' Rich layered scene with multiple screens, dashboards, icons, charts, and interface panels.';
-        $prompt .= ' Mood: vibrant, colorful, energetic, professional, and eye-catching.';
+        $prompt .= ' Mood: vibrant, colorful, energetic, cheerful, professional, and eye-catching.';
         $prompt .= ' Style: ' . $style . '.';
         $prompt .= ' Render as stylized digital art and UI concept illustration, not a photograph.';
         $prompt .= ' Avoid photorealism, live-action look, camera lens effects, stock photo aesthetics, and realistic human skin texture.';
         $prompt .= ' Use abstract placeholder bars, icons, charts, and colored UI blocks instead of readable text or letters.';
-        $prompt .= ' Use maximum color saturation and bold multi-color UI accents; avoid muted, desaturated, or gray-dominant schemes.';
+        $prompt .= ' Use maximum color saturation and bold multi-color UI accents; avoid muted, desaturated, gray-dominant, or monochrome schemes.';
+        $prompt .= ' The overall image must feel vividly colorful from edge to edge with a light-to-mid-tone bright background only.';
         $prompt .= ' No readable text, no letters, no watermark, no logo text. Landscape orientation for a news blog header.';
         if ($force_regenerate) {
             $prompt .= ' Regeneration request ID: ' . uniqid('regen_', true) . '.';
@@ -2686,8 +2689,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality';
-        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a premium professional hero featured image for a news/media automation blog post about';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality';
+        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a premium professional hero featured image with a bright hyper-colorful background for a news/media automation blog post about';
         if (isset($input['featured_image_model'])) {
             $sanitized['featured_image_model'] = $this->normalize_featured_image_model($input['featured_image_model']);
         }
@@ -2741,7 +2744,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     </tr>
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, ultra detailed, professional marketing quality'); ?>" size="50" />
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality'); ?>" size="50" />
                         <p class="description">画像のスタイルを指定してください（例：premium SaaS hero, polished 3D digital art, colorful UI dashboard, professional marketing quality）</p></td>
                     </tr>
                     <tr>
