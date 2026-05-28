@@ -65,7 +65,7 @@ class NewsCrawlerSettingsManager {
                 'news-crawler-settings-admin',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/settings-admin.js',
                 array('jquery'),
-                NEWS_CRAWLER_VERSION,
+                news_crawler_get_version(),
                 true
             );
             
@@ -81,7 +81,7 @@ class NewsCrawlerSettingsManager {
                 'news-crawler-license-manager',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
                 array('jquery'),
-                NEWS_CRAWLER_VERSION,
+                news_crawler_get_version(),
                 true
             );
             
@@ -106,7 +106,7 @@ class NewsCrawlerSettingsManager {
                 'dev_license_key' => $dev_license_key,
                 'is_development' => $is_dev,
                 'debug_mode' => (defined('WP_DEBUG') && WP_DEBUG) || $is_dev,
-                'plugin_version' => defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : '2.1.5',
+                'plugin_version' => news_crawler_get_version(),
                 'strings' => array(
                     'verifying' => __( '認証中...', 'news-crawler' ),
                     'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),
@@ -311,7 +311,7 @@ class NewsCrawlerSettingsManager {
     private function display_license_input_page($license_status) {
         ?>
         <div class="wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - ライセンス認証</h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - ライセンス認証</h1>
             
             <?php
             // 通知表示
@@ -403,7 +403,7 @@ class NewsCrawlerSettingsManager {
         $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
+            <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -752,7 +752,7 @@ class NewsCrawlerSettingsManager {
         $info = array(
             'WordPress バージョン' => get_bloginfo('version'),
             'PHP バージョン' => PHP_VERSION,
-            'プラグイン バージョン' => (defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : ''),
+            'プラグイン バージョン' => news_crawler_get_version(),
             'GD ライブラリ' => extension_loaded('gd') ? '有効' : '無効',
             'cURL' => extension_loaded('curl') ? '有効' : '無効',
             'JSON' => extension_loaded('json') ? '有効' : '無効',
@@ -1213,7 +1213,7 @@ class NewsCrawlerSettingsManager {
      * 更新情報を表示
      */
     public function display_update_info() {
-        $current_version = NEWS_CRAWLER_VERSION;
+        $current_version = news_crawler_get_version();
         // Updaterから更新状況を取得
         $latest_version = false;
         if (class_exists('NewsCrawlerUpdater')) {
@@ -1315,7 +1315,7 @@ class NewsCrawlerSettingsManager {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示
@@ -1513,18 +1513,6 @@ class NewsCrawlerSettingsManager {
         } else {
             add_settings_error( 'news_crawler_license', 'license_manager_not_found', __( 'ライセンス管理機能が利用できません。', 'news-crawler' ), 'error' );
         }
-    }
-    
-    /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        if (!function_exists('get_plugin_data')) {
-            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
-        }
-        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
-        $plugin_data = get_plugin_data($plugin_file, false, false);
-        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
     }
     
     /**

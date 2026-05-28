@@ -842,7 +842,7 @@ class News_Crawler_X_OAuth {
                     'headers' => array(
                         'Authorization' => 'Bearer ' . $access_token,
                         'Accept' => 'application/json',
-                        'User-Agent' => 'NewsCrawler/' . (defined('NEWS_CRAWLER_VERSION') ? NEWS_CRAWLER_VERSION : '1.0') . '; ' . home_url(),
+                        'User-Agent' => 'NewsCrawler/' . news_crawler_get_version() . '; ' . home_url(),
                     ),
                 )
             );

@@ -48,12 +48,12 @@ class NewsCrawlerCronSettings {
             return;
         }
         
-        wp_enqueue_style('ktp-admin-style', plugin_dir_url(__FILE__) . '../assets/css/auto-posting-admin.css', array(), NEWS_CRAWLER_VERSION);
+        wp_enqueue_style('ktp-admin-style', plugin_dir_url(__FILE__) . '../assets/css/auto-posting-admin.css', array(), news_crawler_get_version());
         wp_enqueue_script(
             'nc-x-settings-admin',
             plugin_dir_url(__FILE__) . '../assets/js/x-settings-admin.js',
             array('jquery'),
-            NEWS_CRAWLER_VERSION,
+            news_crawler_get_version(),
             true
         );
     }
@@ -66,7 +66,7 @@ class NewsCrawlerCronSettings {
         <div class="wrap ktp-admin-wrap">
             <h1 class="ktp-admin-title">
                     <span class="ktp-icon">⚙️</span>
-                    News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定
+                    News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - 自動投稿設定
                 </h1>
             
             <div class="ktp-admin-content">
@@ -582,16 +582,6 @@ echo "$(date): News Crawler cron executed" >> wp-content/plugins/news-crawler/ne
         chmod($script_path, 0755);
         
         error_log('News Crawler: cronスクリプトを作成しました - パス: ' . $script_path);
-    }
-    
-    /**
-     * プラグインバージョンを取得
-     */
-    private function get_plugin_version() {
-        if (defined('NEWS_CRAWLER_VERSION')) {
-            return NEWS_CRAWLER_VERSION;
-        }
-        return '2.9.3';
     }
 }
 

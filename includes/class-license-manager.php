@@ -391,7 +391,7 @@ class NewsCrawler_License_Manager {
         $payload = array(
                 'license_key'    => $license_key,
                 'site_url'       => $site_url,
-            'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+            'plugin_version' => news_crawler_get_version(),
         );
 
         // RFC 3986 形式でエンコード（スペースは%20、パイプは%7C など）
@@ -486,7 +486,7 @@ class NewsCrawler_License_Manager {
                     'api_url' => $this->api_endpoints['verify'],
                     'site_url' => $site_url,
                     'license_key' => substr( $license_key, 0, 8 ) . '...',
-                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                    'plugin_version' => news_crawler_get_version()
                 ) ) );
                 
                 return array(
@@ -587,12 +587,12 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'body' => array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                'plugin_version' => news_crawler_get_version()
             ),
             'timeout' => 30,
             'sslverify' => true
@@ -627,7 +627,7 @@ class NewsCrawler_License_Manager {
                 'debug_info' => array(
                     'license_key' => substr( $license_key, 0, 8 ) . '...',
                     'site_url' => $site_url,
-                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                    'plugin_version' => news_crawler_get_version(),
                     'wp_version' => get_bloginfo( 'version' ),
                     'php_version' => PHP_VERSION,
                     'timestamp' => current_time( 'Y-m-d H:i:s' ),
@@ -638,7 +638,7 @@ class NewsCrawler_License_Manager {
                         'response_body' => $body,
                         'api_url' => $klm_api_url,
                         'site_url' => $site_url,
-                        'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                        'plugin_version' => news_crawler_get_version()
                     )
                 )
             );
@@ -670,7 +670,7 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_get( $this->api_endpoints['info'] . '?license_key=' . urlencode( $license_key ), array(
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'timeout' => 30,
             'sslverify' => true
@@ -1462,12 +1462,12 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_post( $klm_api_url, array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'body' => array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                'plugin_version' => news_crawler_get_version()
             ),
             'timeout' => 30,
             'sslverify' => true
@@ -1497,7 +1497,7 @@ class NewsCrawler_License_Manager {
                 'debug_info' => array(
                     'license_key' => substr( $license_key, 0, 8 ) . '...',
                     'site_url' => $site_url,
-                    'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5',
+                    'plugin_version' => news_crawler_get_version(),
                     'wp_version' => get_bloginfo( 'version' ),
                     'php_version' => PHP_VERSION,
                     'timestamp' => current_time( 'Y-m-d H:i:s' ),
@@ -1508,7 +1508,7 @@ class NewsCrawler_License_Manager {
                         'response_body' => $body,
                         'api_url' => $klm_api_url,
                         'site_url' => $site_url,
-                        'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                        'plugin_version' => news_crawler_get_version()
                     )
                 )
             );
@@ -1546,12 +1546,12 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_post( $debug_url, array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'body' => array(
                 'license_key' => $license_key,
                 'site_url'    => $site_url,
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                'plugin_version' => news_crawler_get_version()
             ),
             'timeout' => 30,
             'sslverify' => true
@@ -1632,12 +1632,12 @@ class NewsCrawler_License_Manager {
         $response = wp_remote_post( $test_url, array(
             'headers' => array(
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'User-Agent'   => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent'   => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'body' => array(
                 'license_key' => 'TEST-CONNECTION',
                 'site_url'    => home_url(),
-                'plugin_version' => defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5'
+                'plugin_version' => news_crawler_get_version()
             ),
             'timeout' => 10,
             'sslverify' => true
@@ -1687,7 +1687,7 @@ class NewsCrawler_License_Manager {
         
         $response = wp_remote_get( $test_url, array(
             'headers' => array(
-                'User-Agent' => 'NewsCrawler/' . ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' )
+                'User-Agent' => 'NewsCrawler/' . news_crawler_get_version()
             ),
             'timeout' => 10,
             'sslverify' => true

@@ -156,7 +156,7 @@ class NC_License_Client {
     public static function verify_license( $license_key ) {
         $endpoint = rtrim( NC_LICENSE_API_BASE, '/' ) . '/wp-json/ktp-license/v1/verify';
 
-        $plugin_version = defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '';
+        $plugin_version = news_crawler_get_version();
         $body           = array(
             'license_key'    => $license_key,
             'site_url'       => home_url(),

@@ -29,7 +29,7 @@ class NewsCrawlerPostEditorSummary {
         // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_summary',
-            'News Crawler ' . $this->get_plugin_version() . ' - AI要約生成',
+            'News Crawler ' . news_crawler_get_version() . ' - AI要約生成',
             array($this, 'render_summary_meta_box'),
             array('post', 'page'),
             'side',
@@ -241,14 +241,6 @@ class NewsCrawlerPostEditorSummary {
         } else {
             wp_send_json_error('OpenAI要約生成クラスが見つかりません');
         }
-    }
-    
-    /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        // 定数から直接取得（より確実）
-        return NEWS_CRAWLER_VERSION;
     }
 }
 

@@ -354,7 +354,7 @@ class NewsCrawlerOGPManager {
         
         ?>
         <div class="wrap">
-            <h1>News Crawler OGP画像設定</h1>
+            <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - OGP画像設定</h1>
             
             <div class="card">
                 <h2>アイキャッチ画像の自動設定</h2>

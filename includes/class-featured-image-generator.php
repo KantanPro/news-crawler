@@ -2782,7 +2782,7 @@ class NewsCrawlerFeaturedImageGenerator {
         // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_featured_image',
-            'News Crawler ' . $this->get_plugin_version() . ' - アイキャッチ生成',
+            'News Crawler ' . news_crawler_get_version() . ' - アイキャッチ生成',
             array($this, 'render_featured_image_meta_box'),
             array('post', 'page'),
             'side',
@@ -3232,13 +3232,5 @@ class NewsCrawlerFeaturedImageGenerator {
             'has_thumbnail' => $has_thumbnail,
             'thumbnail_id' => $thumbnail_id
         ));
-    }
-    
-    /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        // 定数から直接取得（より確実）
-        return NEWS_CRAWLER_VERSION;
     }
 }

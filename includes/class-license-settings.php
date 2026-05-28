@@ -54,18 +54,6 @@ class NewsCrawler_License_Settings {
     }
 
     /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        if ( ! function_exists( 'get_plugin_data' ) ) {
-            require_once( ABSPATH . 'wp-admin/includes/plugin.php' );
-        }
-        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
-        $plugin_data = get_plugin_data( $plugin_file, false, false );
-        return isset( $plugin_data['Version'] ) ? $plugin_data['Version'] : ( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '' );
-    }
-
-    /**
      * Add admin menu
      *
      * @since 2.1.5
@@ -108,7 +96,7 @@ class NewsCrawler_License_Settings {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示
@@ -266,7 +254,7 @@ class NewsCrawler_License_Settings {
                                     </tr>
                                     <tr>
                                         <th style="padding: 5px 0; font-weight: normal;">プラグインバージョン</th>
-                                        <td style="padding: 5px 0;"><?php echo esc_html( defined( 'NEWS_CRAWLER_VERSION' ) ? NEWS_CRAWLER_VERSION : '2.1.5' ); ?></td>
+                                        <td style="padding: 5px 0;"><?php echo esc_html( news_crawler_get_version() ); ?></td>
                                     </tr>
                                     <tr>
                                         <th style="padding: 5px 0; font-weight: normal;">サイトURL</th>

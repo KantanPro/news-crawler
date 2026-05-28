@@ -123,7 +123,7 @@ class NewsCrawlerGenreSettings {
         }
         
         add_menu_page(
-            'News Crawler ' . $this->get_plugin_version(),
+            'News Crawler ' . news_crawler_get_version(),
             'News Crawler',
             $menu_capability,
             'news-crawler-main',
@@ -138,7 +138,7 @@ class NewsCrawlerGenreSettings {
         // 投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - 投稿設定',
+            'News Crawler ' . news_crawler_get_version() . ' - 投稿設定',
             '投稿設定',
             $menu_capability,
             'news-crawler-main',
@@ -148,7 +148,7 @@ class NewsCrawlerGenreSettings {
         // 基本設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - 基本設定',
+            'News Crawler ' . news_crawler_get_version() . ' - 基本設定',
             '基本設定',
             $menu_capability,
             'news-crawler-basic',
@@ -158,7 +158,7 @@ class NewsCrawlerGenreSettings {
         // OGP画像設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - OGP画像設定',
+            'News Crawler ' . news_crawler_get_version() . ' - OGP画像設定',
             'OGP画像設定',
             $menu_capability,
             'news-crawler-ogp-images',
@@ -168,7 +168,7 @@ class NewsCrawlerGenreSettings {
         // ライセンス設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - ライセンス設定',
+            'News Crawler ' . news_crawler_get_version() . ' - ライセンス設定',
             'ライセンス設定',
             $menu_capability,
             'news-crawler-license',
@@ -178,7 +178,7 @@ class NewsCrawlerGenreSettings {
         // 自動投稿設定サブメニュー（黄色で目立たせる）
         add_submenu_page(
             'news-crawler-main',
-            'News Crawler ' . $this->get_plugin_version() . ' - 自動投稿設定',
+            'News Crawler ' . news_crawler_get_version() . ' - 自動投稿設定',
             '<span style="color: #ffb900; font-weight: bold;">🚀 自動投稿設定</span>',
             $menu_capability,
             'news-crawler-cron-settings',
@@ -793,7 +793,7 @@ class NewsCrawlerGenreSettings {
             $settings_manager = new NewsCrawlerSettingsManager();
             $settings_manager->display_post_settings_page('基本設定');
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - 基本設定</h1><p>設定管理クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html(news_crawler_get_version()) . ' - 基本設定</h1><p>設定管理クラスが見つかりません。</p></div>';
         }
     }
     
@@ -808,7 +808,7 @@ class NewsCrawlerGenreSettings {
             if (!$license_manager->is_auto_posting_enabled()) {
                 ?>
                 <div class="wrap">
-                    <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 自動投稿設定</h1>
+                    <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - 自動投稿設定</h1>
                     
                     <div style="margin-top: 80px;">
                         <?php echo $this->render_auto_posting_license_required(); ?>
@@ -828,7 +828,7 @@ class NewsCrawlerGenreSettings {
             
             $cron_settings->admin_page();
         } else {
-            echo '<div class="wrap"><h1>News Crawler ' . esc_html($this->get_plugin_version()) . ' - 自動投稿設定</h1><p>自動投稿設定クラスが見つかりません。</p></div>';
+            echo '<div class="wrap"><h1>News Crawler ' . esc_html(news_crawler_get_version()) . ' - 自動投稿設定</h1><p>自動投稿設定クラスが見つかりません。</p></div>';
         }
     }
     
@@ -1172,7 +1172,7 @@ class NewsCrawlerGenreSettings {
         $genre_settings = $this->get_genre_settings();
         ?>
         <div class="wrap">
-            <h1>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - 投稿設定</h1>
+            <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - 投稿設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
                 <div class="notice notice-success is-dismissible">
@@ -5142,7 +5142,7 @@ $('#cancel-edit').click(function() {
         
         ?>
         <div class="wrap ktp-admin-wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - <?php echo esc_html__( 'ライセンス設定', 'news-crawler' ); ?></h1>
             
             <?php
             // 通知表示
@@ -5395,7 +5395,7 @@ $('#cancel-edit').click(function() {
                 'news-crawler-license-manager',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
                 array('jquery'),
-                NEWS_CRAWLER_VERSION,
+                news_crawler_get_version(),
                 true
             );
             
@@ -5507,23 +5507,12 @@ $('#cancel-edit').click(function() {
     }
     
     /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        if (!function_exists('get_plugin_data')) {
-            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
-        }
-        $plugin_file = NEWS_CRAWLER_PLUGIN_DIR . 'news-crawler.php';
-        $plugin_data = get_plugin_data($plugin_file, false, false);
-        return isset($plugin_data['Version']) ? $plugin_data['Version'] : NEWS_CRAWLER_VERSION;
-    }
-    /**
      * ライセンス入力画面を表示
      */
     private function display_license_input_page($license_status) {
         ?>
         <div class="wrap">
-            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html($this->get_plugin_version()); ?> - ライセンス認証</h1>
+            <h1><span class="dashicons dashicons-lock" style="margin-right: 10px; font-size: 24px; width: 24px; height: 24px;"></span>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - ライセンス認証</h1>
             
             <?php
             // 通知表示
@@ -5609,7 +5598,7 @@ $('#cancel-edit').click(function() {
         
         ?>
         <div class="wrap">
-            <h1>News Crawler OGP画像設定</h1>
+            <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - OGP画像設定</h1>
             
             <div class="card">
                 <h2>アイキャッチ画像の自動設定</h2>

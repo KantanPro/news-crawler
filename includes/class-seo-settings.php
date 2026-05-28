@@ -28,7 +28,7 @@ class NewsCrawlerSeoSettings {
                 'news-crawler-seo-admin',
                 NEWS_CRAWLER_PLUGIN_URL . 'assets/js/seo-admin.js',
                 array('jquery'),
-                NEWS_CRAWLER_VERSION,
+                news_crawler_get_version(),
                 true
             );
         }

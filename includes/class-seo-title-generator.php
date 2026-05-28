@@ -624,7 +624,7 @@ YouTube動画まとめ記事のキーワード活用ルール：
         // 投稿と固定ページの両方に追加
         add_meta_box(
             'news_crawler_seo_title',
-            'News Crawler ' . $this->get_plugin_version() . ' - SEOタイトル生成',
+            'News Crawler ' . news_crawler_get_version() . ' - SEOタイトル生成',
             array($this, 'render_seo_title_meta_box'),
             array('post', 'page'),
             'side',
@@ -783,14 +783,6 @@ YouTube動画まとめ記事のキーワード活用ルール：
             echo '<p>現在の画面: ' . $screen->base . ' / ' . $screen->post_type . '</p>';
             echo '</div>';
         }
-    }
-    
-    /**
-     * プラグインのバージョンを動的に取得
-     */
-    private function get_plugin_version() {
-        // 定数から直接取得（より確実）
-        return NEWS_CRAWLER_VERSION;
     }
 }
 
