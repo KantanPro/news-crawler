@@ -10,6 +10,8 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグイン。YouTube動画のクロール機能も含む。
 
+利用規約: https://www.kantanpro.com/news-crawler-kiyaku
+
 == Description ==
 
 News Crawlerは、指定されたニュースソースから自動的に記事を取得し、WordPressサイトに投稿として追加するプラグインです。

@@ -341,7 +341,7 @@ class NewsCrawlerSettingsManager {
         $requested_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : '';
         $active_tab = in_array($requested_tab, $valid_tabs, true) ? $requested_tab : 'api-settings';
         ?>
-        <div class="wrap">
+        <div class="wrap news-crawler-admin-wrap">
             <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - <?php echo esc_html($page_title_suffix); ?></h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>

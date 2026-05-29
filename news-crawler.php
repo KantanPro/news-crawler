@@ -25,8 +25,16 @@ define('NEWS_CRAWLER_VERSION', '3.3.0');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
+define('NEWS_CRAWLER_TERMS_URL', 'https://www.kantanpro.com/news-crawler-kiyaku');
 
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/functions-version.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/functions-links.php';
+
+add_filter('plugin_row_meta', 'news_crawler_plugin_row_meta', 10, 2);
+add_filter('admin_body_class', 'news_crawler_admin_body_class');
+add_action('admin_enqueue_scripts', 'news_crawler_enqueue_admin_footer_styles');
+add_action('admin_footer', 'news_crawler_render_terms_footer');
+add_action('admin_print_footer_scripts', 'news_crawler_place_terms_footer_script', 99);
 
 // 必要なクラスファイルをインクルード
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-i18n.php';

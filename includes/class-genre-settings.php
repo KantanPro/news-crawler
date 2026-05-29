@@ -1135,7 +1135,7 @@ class NewsCrawlerGenreSettings {
         
         $genre_settings = $this->get_genre_settings();
         ?>
-        <div class="wrap">
+        <div class="wrap news-crawler-admin-wrap">
             <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - 投稿設定</h1>
             
             <?php if (isset($_GET['settings-updated'])): ?>
