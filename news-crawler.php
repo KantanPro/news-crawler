@@ -33,6 +33,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-i18n.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-security-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-settings-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-genre-settings.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-youtube-channel-resolver.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-youtube-crawler.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-featured-image-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-eyecatch-generator.php';
@@ -731,8 +732,8 @@ class NewsCrawler {
         $options = get_option($this->option_name, array());
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
         $channels_text = implode("\n", $channels);
-        echo '<textarea id="youtube_channels" name="' . $this->option_name . '[channels]" rows="5" cols="50" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">' . esc_textarea($channels_text) . '</textarea>';
-        echo '<p class="description">1行に1チャンネルIDを入力してください。チャンネルIDは通常「UC」で始まります。</p>';
+        echo '<textarea id="youtube_channels" name="' . $this->option_name . '[channels]" rows="5" cols="50" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&#10;https://www.youtube.com/@channelname">' . esc_textarea($channels_text) . '</textarea>';
+        echo '<p class="description">1行に1件。チャンネルID、チャンネルURL（/channel/… または /@ハンドル）、@ハンドル名が利用できます。</p>';
     }
     
     public function max_videos_callback() {
@@ -856,15 +857,21 @@ class NewsCrawler {
         }
         
         if (isset($input['channels'])) {
+            $raw_channels = array();
             if (is_array($input['channels'])) {
-                $channels = array_map('trim', $input['channels']);
-                $channels = array_filter($channels);
-                $sanitized['channels'] = $channels;
+                $raw_channels = array_filter(array_map('trim', $input['channels']));
             } elseif (is_string($input['channels']) && !empty(trim($input['channels']))) {
-                $channels = explode("\n", $input['channels']);
-                $channels = array_map('trim', $channels);
-                $channels = array_filter($channels);
-                $sanitized['channels'] = $channels;
+                $raw_channels = array_filter(array_map('trim', explode("\n", $input['channels'])));
+            }
+            if (!empty($raw_channels)) {
+                $basic_settings = get_option('news_crawler_basic_settings', array());
+                $yt_api_key = !empty($basic_settings['youtube_api_key'])
+                    ? sanitize_text_field($basic_settings['youtube_api_key'])
+                    : sanitize_text_field(get_option('youtube_api_key', ''));
+                $normalized = News_Crawler_Youtube_Channel_Resolver::normalize_lines($raw_channels, $yt_api_key);
+                $sanitized['channels'] = !empty($normalized['channels'])
+                    ? $normalized['channels']
+                    : $raw_channels;
             } else {
                 $sanitized['channels'] = isset($existing_options['channels']) ? $existing_options['channels'] : array();
             }
@@ -1419,6 +1426,12 @@ class NewsCrawler {
     public function crawl_youtube() {
         $options = get_option($this->option_name, array());
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $yt_api_key = !empty($basic_settings['youtube_api_key'])
+            ? sanitize_text_field($basic_settings['youtube_api_key'])
+            : sanitize_text_field(get_option('youtube_api_key', ''));
+        $normalized = News_Crawler_Youtube_Channel_Resolver::normalize_lines($channels, $yt_api_key);
+        $channels = $normalized['channels'];
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
         $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
@@ -1432,7 +1445,7 @@ class NewsCrawler {
 
         if (empty($channels)) {
             error_log('NewsCrawler: YouTubeチャンネルが設定されていません');
-            return 'YouTubeチャンネルが設定されていません。設定画面でチャンネルIDを追加してください。';
+            return 'YouTubeチャンネルが設定されていません。設定画面でチャンネルIDまたはチャンネルURLを追加してください。';
         }
 
         if (empty($this->api_key)) {

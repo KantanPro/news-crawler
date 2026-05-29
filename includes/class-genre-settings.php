@@ -1217,10 +1217,10 @@ class NewsCrawlerGenreSettings {
                             <h3>YouTube設定</h3>
                             <table class="form-table">
                                 <tr>
-                                    <th scope="row">YouTubeチャンネルID</th>
+                                    <th scope="row">YouTubeチャンネル</th>
                                     <td>
-                                        <textarea id="youtube-channels" name="youtube_channels" rows="5" cols="50" class="large-text" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-                                        <p class="description">1行に1チャンネルIDを入力してください。</p>
+                                        <textarea id="youtube-channels" name="youtube_channels" rows="5" cols="50" class="large-text" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&#10;https://www.youtube.com/@channelname&#10;https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+                                        <p class="description">1行に1件。チャンネルID（UCで始まる24文字）、チャンネルURL（/channel/… または /@ハンドル）、@ハンドル名が利用できます。URL・@ハンドルは基本設定の YouTube API キーでチャンネルIDに変換して保存します。</p>
                                     </td>
                                 </tr>
                                 <tr>
@@ -2464,9 +2464,19 @@ $('#cancel-edit').click(function() {
             $setting['news_sources'] = $this->normalize_and_unique_lines($setting['news_sources'], 'url');
             $setting['max_articles'] = intval($_POST['max_articles']);
         } elseif ($content_type === 'youtube') {
-            $setting['youtube_channels'] = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['youtube_channels']))));
-            // 重複除去（順序維持）
-            $setting['youtube_channels'] = $this->normalize_and_unique_lines($setting['youtube_channels'], 'text');
+            $raw_channels = array_filter(array_map('trim', explode("\n", sanitize_textarea_field($_POST['youtube_channels']))));
+            $normalized = $this->normalize_youtube_channel_lines($raw_channels);
+            if (!empty($normalized['errors'])) {
+                wp_send_json_error(
+                    'YouTubeチャンネルを解決できませんでした: '
+                    . implode(', ', $normalized['errors'])
+                    . '（チャンネルURL・@ハンドルには基本設定の YouTube API キーが必要です）'
+                );
+            }
+            if (empty($normalized['channels'])) {
+                wp_send_json_error('有効なYouTubeチャンネルを1件以上入力してください。');
+            }
+            $setting['youtube_channels'] = $normalized['channels'];
             $setting['max_videos'] = intval($_POST['max_videos']);
             $setting['embed_type'] = sanitize_text_field($_POST['embed_type']);
         }
@@ -3003,6 +3013,13 @@ $('#cancel-edit').click(function() {
             if (empty($youtube_channels) && isset($setting['youtube_channels']) && is_string($setting['youtube_channels'])) {
                 $youtube_channels = array_filter(array_map('trim', explode("\n", $setting['youtube_channels'])));
             }
+
+            $normalized = $this->normalize_youtube_channel_lines($youtube_channels);
+            $youtube_channels = $normalized['channels'];
+            if (!empty($normalized['errors'])) {
+                return 'YouTubeチャンネルを解決できませんでした: '
+                    . implode(', ', $normalized['errors']);
+            }
             
             // キーワードを正規化（配列以外の保存形式にも対応）
             $keywords_raw = isset($setting['keywords']) ? $setting['keywords'] : array();
@@ -3070,8 +3087,8 @@ $('#cancel-edit').click(function() {
                 $debug_info[] = '  - チャンネル[' . $index . ']: "' . $channel . '"';
                 if (empty(trim($channel))) {
                     $debug_info[] = '    → 警告: 空のチャンネルIDが含まれています';
-                } elseif (!preg_match('/^UC[a-zA-Z0-9_-]{22}$/', trim($channel))) {
-                    $debug_info[] = '    → 警告: 有効なYouTubeチャンネルIDではありません（UCで始まる24文字の文字列である必要があります）';
+                } elseif (!News_Crawler_Youtube_Channel_Resolver::is_channel_id($channel)) {
+                    $debug_info[] = '    → 警告: チャンネルID形式ではありません（保存時に UC… へ変換されているか確認してください）';
                 }
             }
             
@@ -3137,6 +3154,25 @@ $('#cancel-edit').click(function() {
     /**
      * 行リスト（キーワード/URL/IDなど）をトリムし、空行を除去して順序を維持したまま重複を除去
      */
+    /**
+     * YouTube チャンネル行を UC 形式の ID に正規化
+     *
+     * @param array $lines
+     * @return array{channels: string[], errors: string[]}
+     */
+    private function normalize_youtube_channel_lines(array $lines) {
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = !empty($basic_settings['youtube_api_key'])
+            ? sanitize_text_field($basic_settings['youtube_api_key'])
+            : '';
+
+        if (!class_exists('News_Crawler_Youtube_Channel_Resolver')) {
+            require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-youtube-channel-resolver.php';
+        }
+
+        return News_Crawler_Youtube_Channel_Resolver::normalize_lines($lines, $api_key);
+    }
+
     private function normalize_and_unique_lines($items, $type = 'text') {
         if (!is_array($items)) {
             return array();
@@ -4773,6 +4809,12 @@ $('#cancel-edit').click(function() {
         $youtube_api_key = $basic_settings['youtube_api_key'] ?? '';
         
         if (empty($youtube_api_key)) {
+            return 0;
+        }
+
+        $normalized = $this->normalize_youtube_channel_lines($youtube_channels);
+        $youtube_channels = $normalized['channels'];
+        if (empty($youtube_channels)) {
             return 0;
         }
         

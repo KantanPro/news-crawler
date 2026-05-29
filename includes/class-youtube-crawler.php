@@ -590,6 +590,11 @@ class NewsCrawlerYouTubeCrawler {
         if (empty($this->api_key)) {
             wp_send_json_error('YouTube APIキーが設定されていません。');
         }
+
+        $channels = $this->resolve_channel_ids($channels);
+        if (empty($channels)) {
+            wp_send_json_error('チャンネルURL・@ハンドルを解決できませんでした。YouTube APIキーと入力内容を確認してください。');
+        }
         
         $test_result = array();
         foreach ($channels as $channel) {
@@ -604,9 +609,34 @@ class NewsCrawlerYouTubeCrawler {
         wp_send_json_success(implode('<br>', $test_result));
     }
     
+    /**
+     * チャンネル設定を UC 形式 ID に正規化（URL・@ハンドル対応）
+     *
+     * @param array $channels
+     * @return array
+     */
+    private function resolve_channel_ids(array $channels) {
+        $basic_settings = get_option('news_crawler_basic_settings', array());
+        $api_key = !empty($basic_settings['youtube_api_key'])
+            ? sanitize_text_field($basic_settings['youtube_api_key'])
+            : ($this->api_key ?? '');
+
+        if (!class_exists('News_Crawler_Youtube_Channel_Resolver')) {
+            require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-youtube-channel-resolver.php';
+        }
+
+        $result = News_Crawler_Youtube_Channel_Resolver::normalize_lines($channels, $api_key);
+        if (!empty($result['errors'])) {
+            error_log('YouTubeCrawler: チャンネル解決失敗: ' . implode(', ', $result['errors']));
+        }
+
+        return $result['channels'];
+    }
+
     public function crawl_youtube() {
         $options = get_option($this->option_name, array());
         $channels = isset($options['channels']) && !empty($options['channels']) ? $options['channels'] : array();
+        $channels = $this->resolve_channel_ids($channels);
         $keywords = isset($options['keywords']) && !empty($options['keywords']) ? $options['keywords'] : array('AI', 'テクノロジー', 'ビジネス', 'ニュース');
         $max_videos = isset($options['max_videos']) && !empty($options['max_videos']) ? $options['max_videos'] : 5;
         $categories = isset($options['post_categories']) && !empty($options['post_categories']) ? $options['post_categories'] : array('blog');
