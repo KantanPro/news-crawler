@@ -62,7 +62,7 @@ if (!function_exists('news_crawler_admin_body_class')) {
 
 if (!function_exists('news_crawler_enqueue_admin_footer_styles')) {
     /**
-     * 利用規約表示（コンテンツ末尾・右寄せ）用スタイル
+     * 利用規約表示（コンテンツ末尾・左寄せ）用スタイル
      *
      * @param string $hook_suffix 現在の管理画面フック.
      */
@@ -81,7 +81,7 @@ if (!function_exists('news_crawler_enqueue_admin_footer_styles')) {
                 color: #50575e;
                 font-size: 12px;
                 line-height: 1.5;
-                text-align: right;
+                text-align: left;
             }
         ';
 
