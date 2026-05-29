@@ -68,15 +68,6 @@ class NewsCrawlerFeaturedImageGenerator {
         // 現在のカテゴリーを保存（固定ページの場合は空配列）
         $saved_categories = $current_categories;
         
-        // ライセンスチェック - AIが無効な場合はUnsplashへ切り替え
-        if ($method === 'ai' && class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            if (!$license_manager->is_advanced_features_enabled()) {
-                error_log('NewsCrawlerFeaturedImageGenerator: ライセンスが無効なため、Unsplash画像取得へ切り替えます');
-                $method = 'unsplash';
-            }
-        }
-        
         $settings = get_option($this->option_name, array());
         
         $result = false;

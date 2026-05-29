@@ -47,8 +47,6 @@ class NewsCrawlerGenreSettings {
 
         add_action('wp_ajax_force_auto_posting_execution', array($this, 'force_auto_posting_execution'));
         
-        // ライセンス認証の処理を追加
-        add_action('admin_init', array($this, 'handle_license_activation'));
         add_action('wp_ajax_test_twitter_connection', array($this, 'test_twitter_connection'));
         add_action('wp_ajax_test_age_limit_function', array($this, 'test_age_limit_function'));
         // サーバーcron対応のため、以下のハンドラーは削除
@@ -62,12 +60,6 @@ class NewsCrawlerGenreSettings {
         
         // 個別ジャンルの自動投稿フックを動的に登録
         add_action('init', array($this, 'register_genre_hooks'));
-        
-        // ライセンス認証の処理を追加
-        add_action('admin_init', array($this, 'handle_license_activation'));
-        
-        // ライセンス管理用スクリプトの読み込み
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_license_scripts'));
         
         // Cron設定クラスの初期化
         if (class_exists('NewsCrawlerCronSettings')) {
@@ -165,21 +157,11 @@ class NewsCrawlerGenreSettings {
             array($this, 'ogp_settings_page')
         );
         
-        // ライセンス設定サブメニュー
-        add_submenu_page(
-            'news-crawler-main',
-            'News Crawler ' . news_crawler_get_version() . ' - ライセンス設定',
-            'ライセンス設定',
-            $menu_capability,
-            'news-crawler-license',
-            array($this, 'license_settings_page')
-        );
-        
-        // 自動投稿設定サブメニュー（黄色で目立たせる）
+        // 自動投稿設定サブメニュー
         add_submenu_page(
             'news-crawler-main',
             'News Crawler ' . news_crawler_get_version() . ' - 自動投稿設定',
-            '<span style="color: #ffb900; font-weight: bold;">🚀 自動投稿設定</span>',
+            '自動投稿設定',
             $menu_capability,
             'news-crawler-cron-settings',
             array($this, 'cron_settings_page')
@@ -802,24 +784,6 @@ class NewsCrawlerGenreSettings {
      * Cron設定ページの表示（自動投稿設定）
      */
     public function cron_settings_page() {
-        // 自動投稿機能にはライセンスが必要
-        if (class_exists('NewsCrawler_License_Manager')) {
-            $license_manager = NewsCrawler_License_Manager::get_instance();
-            if (!$license_manager->is_auto_posting_enabled()) {
-                ?>
-                <div class="wrap">
-                    <h1>News Crawler <?php echo esc_html(news_crawler_get_version()); ?> - 自動投稿設定</h1>
-                    
-                    <div style="margin-top: 80px;">
-                        <?php echo $this->render_auto_posting_license_required(); ?>
-                    </div>
-                </div>
-                <?php
-                return;
-            }
-        }
-        
-        // ライセンスが有効な場合は通常の設定画面を表示
         if (class_exists('NewsCrawlerCronSettings')) {
             $cron_settings = new NewsCrawlerCronSettings();
             

@@ -1765,5 +1765,4 @@ class NewsCrawler_License_Manager {
     }
 }
 
-// Initialize the license manager
-NewsCrawler_License_Manager::get_instance();
+// 廃止: v3.3.0 以降は読み込まれません（WooCommerce ダウンロード販売向け）

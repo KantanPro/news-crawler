@@ -38,9 +38,6 @@ class NewsCrawlerSettingsManager {
             }
         }
         
-        // ライセンス認証の処理を追加
-        add_action('admin_init', array($this, 'handle_license_activation'));
-        
         error_log( 'NewsCrawler Settings: Constructor completed' );
     }
     
@@ -72,47 +69,6 @@ class NewsCrawlerSettingsManager {
             wp_localize_script('news-crawler-settings-admin', 'newsCrawlerSettings', array(
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('check_for_updates')
-            ));
-        }
-        
-        // News Crawler関連のページでライセンス管理スクリプトを読み込み
-        if (strpos($hook, 'news-crawler') !== false) {
-            wp_enqueue_script(
-                'news-crawler-license-manager',
-                NEWS_CRAWLER_PLUGIN_URL . 'assets/js/license-manager.js',
-                array('jquery'),
-                news_crawler_get_version(),
-                true
-            );
-            
-            // AJAX用のデータをローカライズ
-            $nonce = wp_create_nonce('news_crawler_license_nonce');
-            error_log('NewsCrawler Settings: Generated nonce for license manager: ' . $nonce);
-            
-            // 開発環境かどうかを厳密にチェック
-            $is_dev = false;
-            $dev_license_key = '';
-            if (class_exists('NewsCrawler_License_Manager')) {
-                $license_manager = NewsCrawler_License_Manager::get_instance();
-                $is_dev = $license_manager->is_development_environment();
-                if ($is_dev) {
-                    $dev_license_key = $license_manager->get_display_dev_license_key();
-                }
-            }
-            
-            wp_localize_script('news-crawler-license-manager', 'news_crawler_license_ajax', array(
-                'ajaxurl' => admin_url('admin-ajax.php'),
-                'nonce'   => $nonce,
-                'dev_license_key' => $dev_license_key,
-                'is_development' => $is_dev,
-                'debug_mode' => (defined('WP_DEBUG') && WP_DEBUG) || $is_dev,
-                'plugin_version' => news_crawler_get_version(),
-                'strings' => array(
-                    'verifying' => __( '認証中...', 'news-crawler' ),
-                    'success'   => __( 'ライセンスが正常に認証されました。', 'news-crawler' ),
-                    'error'     => __( 'ライセンスの認証に失敗しました。', 'news-crawler' ),
-                    'network_error' => __( '通信エラーが発生しました。', 'news-crawler' )
-                )
             ));
         }
     }
@@ -285,23 +241,6 @@ class NewsCrawlerSettingsManager {
      */
     public function settings_page() {
         error_log( 'NewsCrawler Settings: settings_page() called' );
-        
-        // ライセンス管理クラスが存在するかチェック
-        if (!class_exists('NewsCrawler_License_Manager')) {
-            error_log( 'NewsCrawler Settings: NewsCrawler_License_Manager class not found' );
-            $this->display_license_input_page(array(
-                'status' => 'error',
-                'message' => 'ライセンス管理機能が利用できません。',
-                'icon' => 'dashicons-warning',
-                'color' => '#f56e28'
-            ));
-            return;
-        }
-        
-        // 設定管理はライセンス不要になったため、ライセンスチェックを削除
-        
-        // 有効なライセンスキーがある場合は投稿設定画面を表示
-        error_log( 'NewsCrawler Settings: Displaying post settings page' );
         $this->display_post_settings_page();
     }
     

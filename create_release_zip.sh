@@ -40,6 +40,7 @@ cp -r assets "${TEMP_DIR}/"
 cp -r languages "${TEMP_DIR}/"
 cp news-crawler.php "${TEMP_DIR}/"
 cp readme.txt "${TEMP_DIR}/"
+cp license.txt "${TEMP_DIR}/"
 cp news-crawler-cron.sh "${TEMP_DIR}/"
 
 # 不要なファイルを除外（配布サイト用に最適化）

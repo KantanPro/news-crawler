@@ -578,4 +578,4 @@ class NewsCrawler_License_Settings {
 }
 
 // Initialize the license settings
-NewsCrawler_License_Settings::get_instance();
+// 廃止: v3.3.0 以降は読み込まれません

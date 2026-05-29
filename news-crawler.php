@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.2.29
+ * Version: 3.3.0
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義（NEWS_CRAWLER_VERSION は get_plugin_data 不可時のフォールバック）
-define('NEWS_CRAWLER_VERSION', '3.2.28');
+define('NEWS_CRAWLER_VERSION', '3.3.0');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -43,9 +43,6 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-ogp-manager.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-cron-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-title-generator.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-updater.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-manager.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-license-settings.php';
-require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-nc-license-client.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-seo-settings.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-crypto.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-oauth.php';
@@ -75,71 +72,8 @@ function news_crawler_init() {
     add_action('init', 'news_crawler_init_components', 15);
 }
 
-// AJAXハンドラーの直接登録（バックアップ用）
-add_action('wp_ajax_news_crawler_toggle_dev_license', 'news_crawler_ajax_toggle_dev_license');
-add_action('wp_ajax_nopriv_news_crawler_toggle_dev_license', 'news_crawler_ajax_toggle_dev_license');
-
-
 // キャッシュクリアのAJAX処理
 add_action('wp_ajax_news_crawler_clear_cache', 'news_crawler_clear_cache_ajax');
-
-// 直接的なAJAX処理（WordPressのAJAX処理をバイパス）
-add_action('wp_loaded', 'news_crawler_handle_direct_ajax');
-
-function news_crawler_handle_direct_ajax() {
-    if (isset($_POST['action']) && $_POST['action'] === 'news_crawler_direct_toggle') {
-        news_crawler_direct_toggle_handler();
-        exit;
-    }
-}
-
-function news_crawler_direct_toggle_handler() {
-    error_log('NewsCrawler: Direct toggle handler called');
-    error_log('NewsCrawler: POST data = ' . print_r($_POST, true));
-    
-    // 基本的なセキュリティチェック
-    if (!current_user_can('manage_options')) {
-        error_log('NewsCrawler: User does not have manage_options capability');
-        wp_die('権限がありません。');
-    }
-    
-    // ライセンス管理クラスのインスタンスを取得
-    if (class_exists('NewsCrawler_License_Manager')) {
-        $license_manager = NewsCrawler_License_Manager::get_instance();
-        
-        // 開発環境チェック
-        if (!$license_manager->is_development_environment()) {
-            error_log('NewsCrawler: Not in development environment');
-            wp_send_json_error(array('message' => '開発環境でのみ利用できます。'));
-        }
-        
-        // 開発用ライセンスの状態を切り替え
-        $enabled = get_option('news_crawler_dev_license_enabled', '1');
-        $new_status = ($enabled === '1') ? '0' : '1';
-        
-        update_option('news_crawler_dev_license_enabled', $new_status);
-        
-        error_log('NewsCrawler: Dev license toggled from ' . $enabled . ' to ' . $new_status);
-        
-        // JSONレスポンスを返す
-        header('Content-Type: application/json');
-        echo json_encode(array(
-            'success' => true,
-            'data' => array(
-                'new_status' => ($new_status === '1'),
-                'message' => '開発用ライセンスの状態が変更されました。'
-            )
-        ));
-    } else {
-        error_log('NewsCrawler: NewsCrawler_License_Manager class not found');
-        header('Content-Type: application/json');
-        echo json_encode(array(
-            'success' => false,
-            'data' => array('message' => 'ライセンス管理機能が利用できません。')
-        ));
-    }
-}
-
 
 function news_crawler_clear_cache_ajax() {
     // セキュリティチェック
@@ -161,50 +95,6 @@ function news_crawler_clear_cache_ajax() {
     }
     
     wp_send_json_success('キャッシュをクリアしました。');
-}
-
-function news_crawler_ajax_toggle_dev_license() {
-    error_log('NewsCrawler: Direct AJAX handler called for news_crawler_toggle_dev_license');
-    error_log('NewsCrawler: POST data = ' . print_r($_POST, true));
-    error_log('NewsCrawler: GET data = ' . print_r($_GET, true));
-    
-    // 基本的なセキュリティチェック
-    // Nonce を許容: 管理者は不一致でも続行可能（開発/運用容易化）
-    $received_nonce = isset($_POST['nonce']) ? $_POST['nonce'] : ( $_POST['_ajax_nonce'] ?? null );
-    $nonce_valid = false;
-    if (isset($received_nonce)) {
-        $nonce = sanitize_text_field($received_nonce);
-        error_log('NewsCrawler: Received nonce: ' . $nonce);
-        error_log('NewsCrawler: Expected nonce: ' . wp_create_nonce('news_crawler_license_nonce'));
-        $nonce_valid = wp_verify_nonce($nonce, 'news_crawler_license_nonce');
-    } else {
-        error_log('NewsCrawler: No nonce found in POST data');
-    }
-    if (!$nonce_valid && !current_user_can('manage_options')) {
-        error_log('NewsCrawler: Nonce verification failed and user lacks capability');
-        wp_die('Security check failed. Please try again.');
-    }
-    
-    // ユーザー権限チェック
-    if (!current_user_can('manage_options')) {
-        error_log('NewsCrawler: User does not have manage_options capability');
-        wp_die('権限がありません。');
-    }
-    
-    // ライセンス管理クラスのインスタンスを取得
-    if (class_exists('NewsCrawler_License_Manager')) {
-        $license_manager = NewsCrawler_License_Manager::get_instance();
-        $license_manager->ajax_toggle_dev_license();
-    } else {
-        error_log('NewsCrawler: NewsCrawler_License_Manager class not found');
-        wp_send_json_error(array('message' => 'ライセンス管理機能が利用できません。'));
-    }
-}
-
-// 自動投稿機能のライセンス制限通知（X投稿機能は開発段階のため除外）
-function news_crawler_auto_posting_license_notice() {
-    // X投稿機能は開発段階の機能のため、この通知は使用しない
-    // 自動投稿設定メニューでのみライセンスチェックを適用
 }
 
 // プラグインコンポーネントの初期化
@@ -252,13 +142,6 @@ function news_crawler_migrate_featured_image_method_settings() {
 function news_crawler_init_components() {
     news_crawler_migrate_featured_image_method_settings();
 
-    // ライセンス管理クラスの初期化（最初に実行）
-    if (class_exists('NewsCrawler_License_Manager')) {
-        $license_manager = NewsCrawler_License_Manager::get_instance();
-        
-        // 自動投稿機能のみライセンスが必要なため、ライセンス制限通知は削除
-    }
-    
     // セキュリティマネージャーの初期化（軽量）
     NewsCrawlerSecurityManager::get_instance();
     // ジャンル設定管理クラス（管理画面/cron のみ初期化）
@@ -331,16 +214,6 @@ function news_crawler_init_components() {
     }
     
     // 更新チェッククラスは早期初期化で処理済み
-    
-    // ライセンス管理クラスを初期化
-    if (class_exists('NewsCrawler_License_Manager')) {
-        NewsCrawler_License_Manager::get_instance();
-    }
-    
-    // ライセンス設定クラス（管理画面のみ）
-    if (is_admin() && class_exists('NewsCrawler_License_Settings')) {
-        NewsCrawler_License_Settings::get_instance();
-    }
     
     // Cron設定クラス（管理画面/cron のみ）
     if ((is_admin() || (defined('DOING_CRON') && DOING_CRON)) && class_exists('NewsCrawlerCronSettings')) {
