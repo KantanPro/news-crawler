@@ -365,7 +365,8 @@ class News_Crawler_X_Poster {
      * @param array  $settings 設定
      * @return array{success:bool,tweet_id?:string,error?:string}
      */
-    private function post_via_oauth2($message, $settings) {
+    private function post_via_oauth2($message, $settings, $attempt = 1) {
+        $max_attempts = 3;
         $access_token = News_Crawler_X_OAuth::instance()->get_access_token();
         if ($access_token === '') {
             return array('success' => false, 'error' => 'X アカウントが接続されていません。');
@@ -391,14 +392,30 @@ class News_Crawler_X_Poster {
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
         if ($code === 401 && News_Crawler_X_OAuth::instance()->refresh_access_token()) {
-            return $this->post_via_oauth2($message, $settings);
+            return $this->post_via_oauth2($message, $settings, 1);
         }
 
         if ($code >= 200 && $code < 300 && !empty($data['data']['id'])) {
             return array('success' => true, 'tweet_id' => (string) $data['data']['id']);
         }
 
-        return array('success' => false, 'error' => $this->extract_api_error_message($data, $code));
+        if ($attempt < $max_attempts && in_array($code, array(403, 429), true)) {
+            $delay = min(8, (int) pow(2, $attempt));
+            $this->log(
+                'X 投稿を再試行します (HTTP ' . $code . ', 試行 ' . ($attempt + 1) . '/' . $max_attempts . ', ' . $delay . '秒待機)',
+                'info'
+            );
+            sleep($delay);
+            News_Crawler_X_OAuth::instance()->maybe_refresh_token();
+            return $this->post_via_oauth2($message, $settings, $attempt + 1);
+        }
+
+        $error = $this->extract_api_error_message($data, $code);
+        if ($code === 403) {
+            $error .= '（投稿文字数: ' . mb_strlen($message) . ' 文字）';
+        }
+
+        return array('success' => false, 'error' => $error);
     }
 
     /**
@@ -408,7 +425,8 @@ class News_Crawler_X_Poster {
      * @param array  $settings 設定
      * @return array{success:bool,tweet_id?:string,error?:string}
      */
-    private function post_via_oauth1($message, $settings) {
+    private function post_via_oauth1($message, $settings, $attempt = 1) {
+        $max_attempts = 3;
         $oauth = News_Crawler_X_OAuth::instance();
         if (!$oauth->has_usable_oauth1_credentials($settings)) {
             return array(
@@ -443,9 +461,24 @@ class News_Crawler_X_Poster {
             return array('success' => true, 'tweet_id' => (string) $data['data']['id']);
         }
 
+        if ($attempt < $max_attempts && in_array($code, array(403, 429), true)) {
+            $delay = min(8, (int) pow(2, $attempt));
+            $this->log(
+                'X 投稿を再試行します (HTTP ' . $code . ', 試行 ' . ($attempt + 1) . '/' . $max_attempts . ', ' . $delay . '秒待機)',
+                'info'
+            );
+            sleep($delay);
+            return $this->post_via_oauth1($message, $settings, $attempt + 1);
+        }
+
+        $error = $this->format_oauth1_post_error($data, $code);
+        if ($code === 403) {
+            $error .= '（投稿文字数: ' . mb_strlen($message) . ' 文字）';
+        }
+
         return array(
             'success' => false,
-            'error' => $this->format_oauth1_post_error($data, $code),
+            'error' => $error,
         );
     }
 

@@ -709,7 +709,8 @@ class News_Crawler_X_OAuth {
 
         $settings = $this->get_settings();
         $expires = (int) ($settings['twitter_oauth2_token_expires'] ?? 0);
-        if ($expires > 0 && time() >= $expires) {
+        // 期限切れ 5 分前から更新（cron 長時間実行時の 403 回避）
+        if ($expires > 0 && time() >= ($expires - 300)) {
             $this->refresh_access_token();
         }
     }
@@ -1068,8 +1069,13 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('info', '未シェアの News Crawler 投稿は見つかりませんでした。');
         }
 
+        $index = 0;
         foreach ($post_ids as $post_id) {
+            if ($index > 0) {
+                sleep(3);
+            }
             News_Crawler_X_Poster::share_post($post_id, true);
+            $index++;
         }
 
         $this->redirect_with_notice(
