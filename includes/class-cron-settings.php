@@ -475,12 +475,15 @@ class NewsCrawlerCronSettings {
     private function render_share_log_table() {
         $entries = News_Crawler_X_Share_Log::get_entries();
         $pending_share_count = class_exists('News_Crawler_X_Poster')
-            ? count(News_Crawler_X_Poster::get_pending_post_ids(20))
+            ? News_Crawler_X_Poster::get_pending_post_count()
             : 0;
+        $retry_batch_size = class_exists('News_Crawler_X_Poster')
+            ? News_Crawler_X_Poster::RETRY_PENDING_SHARE_BATCH_SIZE
+            : 3;
         ?>
         <h3>シェアログ</h3>
         <?php if ($pending_share_count > 0) : ?>
-            <p class="description">未シェアの News Crawler 投稿が <?php echo esc_html((string) $pending_share_count); ?> 件あります。「未シェア投稿を再試行」ボタンで X シェアを実行できます。</p>
+            <p class="description">未シェアの News Crawler 投稿が <?php echo esc_html((string) $pending_share_count); ?> 件あります。「未シェア投稿を再試行」ボタンで最大 <?php echo esc_html((string) $retry_batch_size); ?> 件ずつ X シェアできます。</p>
         <?php endif; ?>
         <?php if (empty($entries)) : ?>
             <p>ログはまだありません。</p>

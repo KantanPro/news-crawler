@@ -1064,7 +1064,7 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('error', 'X 投稿機能が利用できません。');
         }
 
-        $post_ids = News_Crawler_X_Poster::get_pending_post_ids(20);
+        $post_ids = News_Crawler_X_Poster::get_pending_post_ids();
         if (empty($post_ids)) {
             $this->redirect_with_notice('info', '未シェアの News Crawler 投稿は見つかりませんでした。');
         }
@@ -1078,9 +1078,14 @@ class News_Crawler_X_OAuth {
             $index++;
         }
 
+        $batch_size = News_Crawler_X_Poster::RETRY_PENDING_SHARE_BATCH_SIZE;
         $this->redirect_with_notice(
             'success',
-            sprintf('未シェア投稿 %d 件の X シェアを再試行しました。シェアログを確認してください。', count($post_ids))
+            sprintf(
+                '未シェア投稿 %1$d 件（最大 %2$d 件）の X シェアを再試行しました。シェアログを確認してください。',
+                count($post_ids),
+                $batch_size
+            )
         );
     }
 

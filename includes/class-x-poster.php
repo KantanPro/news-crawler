@@ -13,6 +13,9 @@ if (!defined('ABSPATH')) {
 
 class News_Crawler_X_Poster {
 
+    /** 未シェア投稿を再試行ボタンで一度にシェアする件数 */
+    const RETRY_PENDING_SHARE_BATCH_SIZE = 3;
+
     /**
      * @var array<int, bool>
      */
@@ -90,13 +93,41 @@ class News_Crawler_X_Poster {
      * @param int $limit 取得件数
      * @return array<int, int>
      */
-    public static function get_pending_post_ids($limit = 20) {
-        $query = new WP_Query(array(
+    public static function get_pending_post_ids($limit = null) {
+        if ($limit === null) {
+            $limit = self::RETRY_PENDING_SHARE_BATCH_SIZE;
+        }
+        $args = self::get_pending_posts_query_args($limit);
+        $args['no_found_rows'] = true;
+        $query = new WP_Query($args);
+
+        return array_map('intval', $query->posts);
+    }
+
+    /**
+     * 未シェアの News Crawler 投稿件数
+     *
+     * @return int
+     */
+    public static function get_pending_post_count() {
+        $args = self::get_pending_posts_query_args(1);
+        $args['no_found_rows'] = false;
+        $query = new WP_Query($args);
+        return (int) $query->found_posts;
+    }
+
+    /**
+     * 未シェア投稿クエリの共通引数
+     *
+     * @param int $limit 取得件数
+     * @return array<string, mixed>
+     */
+    private static function get_pending_posts_query_args($limit) {
+        return array(
             'post_type' => 'post',
             'post_status' => 'publish',
             'posts_per_page' => max(1, min(50, (int) $limit)),
             'fields' => 'ids',
-            'no_found_rows' => true,
             'meta_query' => array(
                 'relation' => 'AND',
                 array(
@@ -119,9 +150,7 @@ class News_Crawler_X_Poster {
                     ),
                 ),
             ),
-        ));
-
-        return array_map('intval', $query->posts);
+        );
     }
 
     /**
