@@ -143,6 +143,14 @@ class NewsCrawlerSettingsManager {
             'news-crawler-settings-features',
             'feature_settings'
         );
+
+        add_settings_field(
+            'ai_base_prompt',
+            'アイキャッチ生成プロンプト（基本）',
+            array($this, 'ai_base_prompt_callback'),
+            'news-crawler-settings-features',
+            'feature_settings'
+        );
         
         // 更新情報セクション（更新情報タブ用スラッグ）
         add_settings_section(
@@ -791,7 +799,7 @@ class NewsCrawlerSettingsManager {
         $options = array(
             'ai' => 'AI生成（OpenAI DALL-E）（推奨）',
             'unsplash' => 'Unsplash画像取得',
-            'template' => 'テンプレート生成（グラデーション＋文字）'
+            'template' => 'テンプレート生成（グラデーション＋図形イラスト＋文字）'
         );
         echo '<select name="' . $this->option_name . '[featured_image_method]">';
         foreach ($options as $key => $label) {
@@ -803,12 +811,13 @@ class NewsCrawlerSettingsManager {
 
     public function featured_image_model_callback() {
         $settings = get_option($this->option_name, array());
-        $value = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'dall-e-3';
+        $value = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'gpt-image-1.5';
         $options = class_exists('NewsCrawlerFeaturedImageGenerator')
             ? NewsCrawlerFeaturedImageGenerator::get_featured_image_model_choices()
             : array(
-                'dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）',
-                'dall-e-2' => 'DALL-E 2（1024x1024）',
+                'gpt-image-1.5' => 'GPT Image 1.5（推奨・1536x1024）',
+                'gpt-image-1' => 'GPT Image 1',
+                'gpt-image-1-mini' => 'GPT Image 1 Mini（低コスト）',
             );
         echo '<select name="' . $this->option_name . '[featured_image_model]">';
         foreach ($options as $key => $label) {
@@ -816,6 +825,18 @@ class NewsCrawlerSettingsManager {
         }
         echo '</select>';
         echo '<p class="description">AI生成を選択した場合に使用するOpenAI画像モデルを指定します。</p>';
+    }
+
+    public function ai_base_prompt_callback() {
+        $settings = get_option($this->option_name, array());
+        $default = class_exists('NewsCrawlerFeaturedImageGenerator')
+            ? NewsCrawlerFeaturedImageGenerator::get_default_ai_base_prompt()
+            : 'Flat 2D vector illustration infographic banner with drawn icons and colorful abstract UI blocks for a news blog topic about';
+        $value = isset($settings['ai_base_prompt']) && $settings['ai_base_prompt'] !== ''
+            ? $settings['ai_base_prompt']
+            : $default;
+        echo '<textarea name="' . $this->option_name . '[ai_base_prompt]" rows="4" cols="70" class="large-text">' . esc_textarea($value) . '</textarea>';
+        echo '<p class="description">投稿ごとの画像生成指示がない場合に使用する基本プロンプトです。投稿編集画面の指示がある場合はそちらが優先されます。常に2Dイラストで生成し、実写は禁止されます。</p>';
     }
     
     public function auto_summary_generation_callback() {
@@ -930,13 +951,19 @@ class NewsCrawlerSettingsManager {
                         $value = $aliases[$value];
                     }
                 } elseif ($select === 'featured_image_model') {
-                    $allowed_models = array('dall-e-3', 'dall-e-2');
+                    $allowed_models = class_exists('NewsCrawlerFeaturedImageGenerator')
+                        ? array_keys(NewsCrawlerFeaturedImageGenerator::get_featured_image_model_choices())
+                        : array('gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini');
                     if (!in_array($value, $allowed_models, true)) {
-                        $value = 'dall-e-3';
+                        $value = 'gpt-image-1.5';
                     }
                 }
                 $sanitized[$select] = $value;
             }
+        }
+
+        if (array_key_exists('ai_base_prompt', $input)) {
+            $sanitized['ai_base_prompt'] = sanitize_textarea_field($input['ai_base_prompt']);
         }
 
         // 数値
@@ -1117,7 +1144,7 @@ class NewsCrawlerSettingsManager {
             'openai_api_key' => '',
             'auto_featured_image' => true,
             'featured_image_method' => 'ai',
-            'featured_image_model' => 'dall-e-3',
+            'featured_image_model' => 'gpt-image-1.5',
             'auto_summary_generation' => true,
             'summary_generation_model' => 'gpt-3.5-turbo',
             'duplicate_check_strictness' => 'medium',

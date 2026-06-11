@@ -14,6 +14,7 @@ class NewsCrawlerFeaturedImageGenerator {
     private $option_name = 'news_crawler_featured_image_settings';
     private $ai_model_override = '';
     private $keyword_focus = false;
+    private $custom_image_prompt = '';
     
     public function __construct() {
         add_action('admin_init', array($this, 'admin_init'));
@@ -40,19 +41,23 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $method 生成方法 ('ai', 'template', 'unsplash')
      * @return bool|int 成功時はattachment_id、失敗時はfalse
      */
-    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false, $ai_model = '', $keyword_focus = false) {
+    public function generate_and_set_featured_image($post_id, $title, $keywords = array(), $method = 'ai', $force_regenerate = false, $ai_model = '', $keyword_focus = false, $custom_prompt = '') {
         $requested_method = $this->normalize_featured_image_method($method);
         $method = $requested_method;
         $actual_method = $requested_method;
         $previous_model_override = $this->ai_model_override;
         $previous_keyword_focus = $this->keyword_focus;
+        $previous_custom_image_prompt = $this->custom_image_prompt;
         $this->ai_model_override = is_string($ai_model) ? sanitize_text_field($ai_model) : '';
         $this->keyword_focus = (bool) $keyword_focus;
+        $this->custom_image_prompt = $this->resolve_custom_image_prompt($post_id, $custom_prompt);
 
         if ($force_regenerate) {
             error_log('NewsCrawlerFeaturedImageGenerator: 再生成モード - 投稿ID: ' . $post_id);
         }
-        if ($this->keyword_focus && !empty($keywords)) {
+        if ($this->custom_image_prompt !== '') {
+            error_log('NewsCrawlerFeaturedImageGenerator: 画像生成指示プロンプトあり - ' . $this->custom_image_prompt);
+        } elseif ($this->keyword_focus && !empty($keywords)) {
             error_log('NewsCrawlerFeaturedImageGenerator: キーワード優先モード - ' . implode(', ', (array) $keywords));
         }
 
@@ -62,11 +67,15 @@ class NewsCrawlerFeaturedImageGenerator {
         if (empty($current_categories) && $post && $post->post_type === 'post') {
             $this->ai_model_override = $previous_model_override;
             $this->keyword_focus = $previous_keyword_focus;
+            $this->custom_image_prompt = $previous_custom_image_prompt;
             return array('error' => 'カテゴリーを設定してください');
         }
         
         // 現在のカテゴリーを保存（固定ページの場合は空配列）
         $saved_categories = $current_categories;
+
+        // 過去に生成した画像を再利用せず、毎回新規生成する
+        $this->clear_existing_featured_image($post_id);
         
         $settings = get_option($this->option_name, array());
         
@@ -77,14 +86,18 @@ class NewsCrawlerFeaturedImageGenerator {
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings, $force_regenerate);
                 if (is_array($result) && isset($result['error'])) {
                     error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成に失敗 - エラー: ' . $result['error']);
-                    error_log('NewsCrawlerFeaturedImageGenerator: Unsplash画像取得へフォールバックします（テンプレートは使用しません）');
-                    $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate);
-                    if (is_array($unsplash_result) && isset($unsplash_result['error'])) {
-                        error_log('NewsCrawlerFeaturedImageGenerator: Unsplashフォールバックも失敗 - ' . $unsplash_result['error'] . '（投稿はアイキャッチなしで続行）');
-                        $result = false;
+                    if ($this->custom_image_prompt !== '') {
+                        error_log('NewsCrawlerFeaturedImageGenerator: 画像生成指示プロンプト指定時はテンプレートフォールバックを行いません');
                     } else {
-                        $result = $unsplash_result;
+                        error_log('NewsCrawlerFeaturedImageGenerator: イラスト専用のためテンプレート生成へフォールバックします（Unsplash実写は使用しません）');
+                        $actual_method = 'template';
+                        $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate, true);
+                        if (is_array($template_result) && isset($template_result['error'])) {
+                            error_log('NewsCrawlerFeaturedImageGenerator: イラストテンプレートフォールバックも失敗 - ' . $template_result['error'] . '（投稿はアイキャッチなしで続行）');
+                            $result = false;
+                        } else {
+                            $result = $template_result;
+                        }
                     }
                 }
                 break;
@@ -96,10 +109,10 @@ class NewsCrawlerFeaturedImageGenerator {
                 break;
             default:
                 $result = $this->generate_ai_image($post_id, $title, $keywords, $settings, $force_regenerate);
-                if (is_array($result) && isset($result['error'])) {
-                    $actual_method = 'unsplash';
-                    $unsplash_result = $this->fetch_unsplash_image($post_id, $title, $keywords, $settings, $force_regenerate);
-                    $result = (is_array($unsplash_result) && isset($unsplash_result['error'])) ? false : $unsplash_result;
+                if (is_array($result) && isset($result['error']) && $this->custom_image_prompt === '') {
+                    $actual_method = 'template';
+                    $template_result = $this->generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate, true);
+                    $result = (is_array($template_result) && isset($template_result['error'])) ? false : $template_result;
                 }
                 break;
         }
@@ -108,7 +121,10 @@ class NewsCrawlerFeaturedImageGenerator {
         if ($result && !is_array($result)) {
             update_post_meta($post_id, '_news_crawler_featured_image_requested_method', $requested_method);
             update_post_meta($post_id, '_news_crawler_featured_image_method', $actual_method);
-            if ($this->keyword_focus && !empty($keywords)) {
+            if ($this->custom_image_prompt !== '') {
+                update_post_meta($post_id, '_news_crawler_featured_image_prompt', $this->custom_image_prompt);
+                delete_post_meta($post_id, '_news_crawler_featured_image_keywords');
+            } elseif ($this->keyword_focus && !empty($keywords)) {
                 update_post_meta($post_id, '_news_crawler_featured_image_keywords', implode(', ', $this->parse_featured_image_keywords($keywords)));
             }
             error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ生成完了 - 要求: ' . $requested_method . ', 実際: ' . $actual_method . ', 投稿ID: ' . $post_id);
@@ -133,8 +149,136 @@ class NewsCrawlerFeaturedImageGenerator {
 
         $this->ai_model_override = $previous_model_override;
         $this->keyword_focus = $previous_keyword_focus;
+        $this->custom_image_prompt = $previous_custom_image_prompt;
         
         return $result;
+    }
+
+    /**
+     * 画像生成指示プロンプトを解決（リクエスト > 投稿メタ）
+     *
+     * @param int    $post_id       投稿 ID
+     * @param string $custom_prompt リクエストから渡されたプロンプト
+     * @return string
+     */
+    private function resolve_custom_image_prompt($post_id, $custom_prompt) {
+        $resolved = $this->sanitize_custom_image_prompt($custom_prompt);
+        if ($resolved !== '') {
+            return $resolved;
+        }
+
+        if ($post_id > 0) {
+            $saved_prompt = get_post_meta($post_id, '_news_crawler_featured_image_prompt', true);
+            if (is_string($saved_prompt) && trim($saved_prompt) !== '') {
+                $resolved = $this->sanitize_custom_image_prompt($saved_prompt);
+                if ($resolved !== '') {
+                    return $resolved;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 投稿編集画面から渡される画像生成指示プロンプトをサニタイズ
+     *
+     * @param string $prompt プロンプト
+     * @return string
+     */
+    private function sanitize_custom_image_prompt($prompt) {
+        $prompt = sanitize_textarea_field((string) $prompt);
+        $prompt = preg_replace("/[\r\n]+/", ' ', $prompt);
+        $prompt = preg_replace('/\s+/', ' ', trim($prompt));
+
+        if ($prompt === '') {
+            return '';
+        }
+
+        if (strlen($prompt) > 1000) {
+            $prompt = mb_substr($prompt, 0, 1000);
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * キーワード（オプション）入力テキストを表示用に整形
+     *
+     * @param array|string $keywords キーワード
+     * @return string
+     */
+    private function get_keyword_focus_display_text($keywords) {
+        $items = $this->parse_featured_image_keywords($keywords);
+        if (empty($items)) {
+            return '';
+        }
+
+        return implode(', ', $items);
+    }
+
+    /**
+     * 生成済み画像の中央にキーワードテキストを重ねる
+     *
+     * @param int    $attachment_id 添付ファイル ID
+     * @param string $text          表示テキスト
+     * @return bool
+     */
+    private function overlay_centered_text_on_attachment($attachment_id, $text) {
+        $file = get_attached_file($attachment_id);
+        if (!$file || !file_exists($file)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: キーワードオーバーレイ失敗 - ファイルなし ID: ' . $attachment_id);
+            return false;
+        }
+
+        $mime = (string) get_post_mime_type($attachment_id);
+        $image = null;
+
+        if (strpos($mime, 'png') !== false) {
+            $image = @imagecreatefrompng($file);
+        } elseif (strpos($mime, 'webp') !== false && function_exists('imagecreatefromwebp')) {
+            $image = @imagecreatefromwebp($file);
+        } else {
+            $image = @imagecreatefromjpeg($file);
+        }
+
+        if (!$image) {
+            error_log('NewsCrawlerFeaturedImageGenerator: キーワードオーバーレイ失敗 - 画像読み込み不可 ID: ' . $attachment_id);
+            return false;
+        }
+
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $drawn = $this->draw_japanese_text_on_image($image, $text, 52, '#FFFFFF', $width, $height);
+        if (!$drawn) {
+            imagedestroy($image);
+            error_log('NewsCrawlerFeaturedImageGenerator: キーワードオーバーレイ失敗 - 描画不可 ID: ' . $attachment_id);
+            return false;
+        }
+
+        $saved = false;
+        if (strpos($mime, 'png') !== false) {
+            $saved = imagepng($image, $file);
+        } elseif (strpos($mime, 'webp') !== false && function_exists('imagewebp')) {
+            $saved = imagewebp($image, $file, 90);
+        } else {
+            $saved = imagejpeg($image, $file, 92);
+        }
+        imagedestroy($image);
+
+        if (!$saved) {
+            error_log('NewsCrawlerFeaturedImageGenerator: キーワードオーバーレイ失敗 - 保存不可 ID: ' . $attachment_id);
+            return false;
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $file);
+        if (!is_wp_error($attachment_data)) {
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
+        }
+
+        error_log('NewsCrawlerFeaturedImageGenerator: キーワードを中央に配置 - ID: ' . $attachment_id . ', text: ' . $text);
+        return true;
     }
 
     /**
@@ -166,9 +310,22 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     public static function get_featured_image_model_choices() {
         return array(
-            'dall-e-3' => 'DALL-E 3（推奨・1792x1024 HD）',
-            'dall-e-2' => 'DALL-E 2（1024x1024）',
+            'gpt-image-1.5' => 'GPT Image 1.5（推奨・1536x1024）',
+            'gpt-image-1' => 'GPT Image 1',
+            'gpt-image-1-mini' => 'GPT Image 1 Mini（低コスト）',
+            'dall-e-3' => 'DALL-E 3（2026年5月廃止・非推奨）',
+            'dall-e-2' => 'DALL-E 2（2026年5月廃止・非推奨）',
         );
+    }
+
+    /**
+     * GPT Image 系モデルかどうか
+     *
+     * @param string $model モデル名
+     * @return bool
+     */
+    private function is_gpt_image_model($model) {
+        return (bool) preg_match('/^(gpt-image|chatgpt-image)/i', (string) $model);
     }
 
     /**
@@ -179,8 +336,13 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function normalize_featured_image_model($model) {
         $model = sanitize_text_field((string) $model);
+
+        if (in_array($model, array('dall-e-2', 'dall-e-3'), true)) {
+            return 'gpt-image-1.5';
+        }
+
         $choices = self::get_featured_image_model_choices();
-        return array_key_exists($model, $choices) ? $model : 'dall-e-3';
+        return array_key_exists($model, $choices) ? $model : 'gpt-image-1.5';
     }
 
     /**
@@ -203,7 +365,90 @@ class NewsCrawlerFeaturedImageGenerator {
             return $this->normalize_featured_image_model($basic_settings['featured_image_model']);
         }
 
-        return 'dall-e-3';
+        return 'gpt-image-1.5';
+    }
+
+    /**
+     * アイキャッチAI生成のデフォルトベースプロンプト
+     *
+     * @return string
+     */
+    public static function get_default_ai_base_prompt() {
+        return 'Flat 2D vector illustration infographic banner with drawn icons and colorful abstract UI blocks for a news blog topic about';
+    }
+
+    /**
+     * 実写化しやすい語句を含むベースプロンプトをイラスト専用に補正
+     *
+     * @param string $prompt ベースプロンプト
+     * @return string
+     */
+    private function sanitize_base_prompt_for_illustration($prompt) {
+        $prompt = trim((string) $prompt);
+        if ($prompt === '') {
+            return self::get_default_ai_base_prompt();
+        }
+
+        if (!preg_match('/\b(illustration|illustrated|vector|infographic|drawn|cartoon|flat\s*2d|2d)\b/i', $prompt)) {
+            return self::get_default_ai_base_prompt();
+        }
+
+        $blocked_patterns = array(
+            '/\b(photograph|photography|photo-real|photorealistic|stock\s*photo|hero\s*featured\s*image|product\s*photography|cinematic|documentary|dslr|camera\s*shot|live-action|realistic\s*human|real\s*world|studio\s*shot|3d\s*render|hyper-real|octane\s*render|unreal\s*engine)\b/i',
+        );
+        foreach ($blocked_patterns as $pattern) {
+            $prompt = preg_replace($pattern, '', $prompt);
+        }
+
+        $prompt = preg_replace('/\s+/', ' ', trim($prompt, " \t\n\r\0\x0B.,;"));
+        if ($prompt === '') {
+            return self::get_default_ai_base_prompt();
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * 常に先頭に付与するイラスト強制宣言
+     *
+     * @return string
+     */
+    private function get_mandatory_illustration_opener() {
+        return 'MANDATORY: flat 2D digital illustration only. Forbidden: photograph, photo, photorealistic image, cinematic image, stock photo, real person, real object, camera capture, realistic 3D render.';
+    }
+
+    /**
+     * イラスト専用・実写禁止のプロンプト指示
+     *
+     * @return array{prefix:string,mid:string,suffix:string}
+     */
+    private function get_illustration_only_directives() {
+        return array(
+            'prefix' => 'Create ONLY a flat 2D vector illustration or editorial infographic illustration. Use drawn shapes, illustrated icons, abstract UI blocks, arrows, charts, and simplified symbols. No photos. No realism.',
+            'mid' => ' REMINDER: illustration only, never photography. Use cartoon-like flat shapes and bold outlines.',
+            'suffix' => ' FINAL CHECK: output must be a colorful flat illustration poster, not a photo, not photorealistic, not cinematic, not stock imagery, not monochrome.',
+        );
+    }
+
+    /**
+     * 使用するアイキャッチAIベースプロンプトを解決
+     *
+     * @param array $settings アイキャッチ設定
+     * @return string
+     */
+    private function get_ai_base_prompt($settings) {
+        $raw = '';
+
+        if (!empty($settings['ai_base_prompt'])) {
+            $raw = $settings['ai_base_prompt'];
+        } else {
+            $basic_settings = get_option('news_crawler_basic_settings', array());
+            if (!empty($basic_settings['ai_base_prompt'])) {
+                $raw = $basic_settings['ai_base_prompt'];
+            }
+        }
+
+        return $this->sanitize_base_prompt_for_illustration($raw);
     }
 
     /**
@@ -214,22 +459,33 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return array<string,mixed>
      */
     private function build_dalle_api_request_body($model, $prompt) {
+        $model = $this->normalize_featured_image_model($model);
         $body = array(
             'model' => $model,
             'prompt' => $prompt,
             'n' => 1,
-            'response_format' => 'url',
         );
 
-        if ($model === 'dall-e-3') {
+        if ($this->is_gpt_image_model($model)) {
+            // GPT Image は response_format 非対応（常に b64_json）
+            $body['size'] = '1536x1024';
+            $body['quality'] = 'medium';
+            $body['output_format'] = 'png';
+            $max_prompt_length = 32000;
+        } elseif ($model === 'dall-e-3') {
+            $body['response_format'] = 'url';
             $body['size'] = '1792x1024';
-            $body['quality'] = 'hd';
+            $body['quality'] = 'standard';
             $body['style'] = 'vivid';
+            $max_prompt_length = 4000;
         } else {
+            $body['response_format'] = 'url';
             $body['size'] = '1024x1024';
-            if (strlen($body['prompt']) > 1000) {
-                $body['prompt'] = substr($body['prompt'], 0, 997) . '...';
-            }
+            $max_prompt_length = 1000;
+        }
+
+        if (strlen($body['prompt']) > $max_prompt_length) {
+            $body['prompt'] = substr($body['prompt'], 0, $max_prompt_length - 3) . '...';
         }
 
         return $body;
@@ -261,16 +517,19 @@ class NewsCrawlerFeaturedImageGenerator {
      */
     private function build_variation_seed($post_id, $context, $force_regenerate = false) {
         $seed = (string) $post_id . '|' . (string) $context;
+        $seed .= '|' . microtime(true) . '|' . wp_rand(100000, 999999);
         if ($force_regenerate) {
-            $seed .= '|regen|' . microtime(true) . '|' . wp_rand(100000, 999999);
+            $seed .= '|regen';
         }
         return $seed;
     }
 
     /**
      * テンプレートベースの画像生成
+     *
+     * @param bool $illustration_only true のときは図形イラストのみ（文字なし。AI失敗時フォールバック用）
      */
-    private function generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate = false) {
+    private function generate_template_image($post_id, $title, $keywords, $settings, $force_regenerate = false, $illustration_only = false) {
         // GD拡張の確認
         if (!extension_loaded('gd')) {
             error_log('NewsCrawlerFeaturedImageGenerator: GD extension not loaded');
@@ -307,35 +566,41 @@ class NewsCrawlerFeaturedImageGenerator {
                 imagedestroy($image);
                 return array('error' => 'グラデーション背景の作成に失敗しました。');
             }
-            
-            // テキスト設定 - デフォルト値を使用
-            $text_color = '#FFFFFF';
-            $font_size = 48;
-            
-            // 表示タイトル（短い定型レイアウト。長いSEOタイトルは折り返し・はみ出しの原因になる）
-            $topic_keywords = $this->select_topic_keywords($keywords, 5);
-            if ($this->keyword_focus && !empty($topic_keywords)) {
-                $display_title = implode(' / ', array_slice($topic_keywords, 0, 2));
-            } else {
-                $display_title = $this->create_japanese_title($title, $topic_keywords);
-            }
-            error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
-            
-            // 日本語テキストを画像に描画
-            $text_result = $this->draw_japanese_text_on_image($image, $display_title, $font_size, $text_color, $width, $height);
-            if (!$text_result) {
-                error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw Japanese text');
+
+            $decor_result = $this->draw_template_illustration_decorations($image, $width, $height, $post_id, $force_regenerate);
+            if (!$decor_result) {
+                error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw template illustration decorations');
                 imagedestroy($image);
-                return array('error' => '日本語テキストの描画に失敗しました。');
+                return array('error' => 'テンプレートイラスト装飾の描画に失敗しました。');
             }
-            
-            // キーワードタグを追加
-            if (!empty($topic_keywords)) {
-                $keywords_result = $this->draw_keywords_on_image($image, $topic_keywords, $width, $height, $text_color);
-                if (!$keywords_result) {
-                    error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw keywords');
-                    // キーワードの描画失敗は致命的ではないので続行
+
+            if (!$illustration_only) {
+                // テキスト設定 - デフォルト値を使用
+                $text_color = '#FFFFFF';
+                $font_size = 40;
+
+                // 表示タイトル（短い定型レイアウト。長いSEOタイトルは折り返し・はみ出しの原因になる）
+                $topic_keywords = $this->select_topic_keywords($keywords, 5);
+                $display_title = $this->create_japanese_title($title, $topic_keywords);
+                error_log('NewsCrawlerFeaturedImageGenerator: Generated title: ' . $display_title);
+
+                // 日本語テキストを画像に描画
+                $text_result = $this->draw_japanese_text_on_image($image, $display_title, $font_size, $text_color, $width, $height);
+                if (!$text_result) {
+                    error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw Japanese text');
+                    imagedestroy($image);
+                    return array('error' => '日本語テキストの描画に失敗しました。');
                 }
+
+                // キーワードタグを追加
+                if (!empty($topic_keywords)) {
+                    $keywords_result = $this->draw_keywords_on_image($image, $topic_keywords, $width, $height, $text_color);
+                    if (!$keywords_result) {
+                        error_log('NewsCrawlerFeaturedImageGenerator: Failed to draw keywords');
+                    }
+                }
+            } else {
+                error_log('NewsCrawlerFeaturedImageGenerator: イラストのみテンプレート（文字なし）を生成');
             }
             
             // 画像を保存（save_image_as_attachment 内で image リソースを解放）
@@ -380,7 +645,7 @@ class NewsCrawlerFeaturedImageGenerator {
         error_log('NewsCrawlerFeaturedImageGenerator: DALL-E model: ' . $model);
 
         // OpenAI DALL-E API呼び出し（強化版指数バックオフ付き）
-        $max_retries = 3;
+        $max_retries = 5;
         $base_delay = 2;
         $max_delay = 60;
 
@@ -517,9 +782,9 @@ class NewsCrawlerFeaturedImageGenerator {
             return array('error' => 'OpenAI DALL-E APIからの応答が不正です。JSONデコードエラー: ' . $json_error);
         }
 
-        if (isset($data['data'][0]['url'])) {
-            error_log('NewsCrawlerFeaturedImageGenerator: DALL-E画像生成成功 - URL: ' . $data['data'][0]['url']);
-            return $this->download_and_attach_image($data['data'][0]['url'], $post_id, $title);
+        $attachment_result = $this->process_ai_image_generation_response($data, $post_id, $title);
+        if ($attachment_result !== null) {
+            return $attachment_result;
         }
 
         // APIレスポンスの解析に失敗した場合
@@ -750,13 +1015,9 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         $count = count($results);
-        // 関連度の高い上位候補から選び、投稿ごとにバリエーションを付ける
+        // 関連度の高い上位候補からランダムに選び、同じ画像の再利用を防ぐ
         $top_n = min(5, $count);
-        if ($force_regenerate) {
-            $offset = wp_rand(0, max(0, $top_n - 1));
-        } else {
-            $offset = abs(crc32($this->build_variation_seed($post_id, $search_query, false))) % $top_n;
-        }
+        $offset = wp_rand(0, max(0, $top_n - 1));
 
         for ($i = 0; $i < $top_n; $i++) {
             $index = ($offset + $i) % $top_n;
@@ -900,11 +1161,8 @@ class NewsCrawlerFeaturedImageGenerator {
             $generic_present = array();
         }
 
-        $seed = abs(crc32((string) $title . '|' . implode(',', array_slice((array) $keywords, 0, 3))));
         if (count($specific) > 1) {
-            usort($specific, function ($a, $b) use ($seed) {
-                return (abs(crc32($a . $seed)) % 1000) <=> (abs(crc32($b . $seed)) % 1000);
-            });
+            shuffle($specific);
         }
 
         return array_merge($specific, $generic_present);
@@ -982,6 +1240,81 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         return array_values(array_unique($terms));
+    }
+
+    /**
+     * テンプレート画像にフラットUI風の図形イラストを描画
+     *
+     * @param resource $image  GD 画像リソース
+     * @param int      $width  幅
+     * @param int      $height 高さ
+     * @param int      $post_id 投稿 ID
+     * @param bool     $force_regenerate 再生成フラグ
+     * @return bool
+     */
+    private function draw_template_illustration_decorations($image, $width, $height, $post_id, $force_regenerate = false) {
+        if (!is_resource($image) && !($image instanceof \GdImage)) {
+            return false;
+        }
+
+        $seed = abs(crc32($this->build_variation_seed($post_id, 'template-illustration', $force_regenerate)));
+        $card_colors = array('#FFFFFF', '#FDE68A', '#BFDBFE', '#FBCFE8', '#BBF7D0', '#DDD6FE', '#FECACA', '#A5F3FC');
+        $accent_colors = array('#6366F1', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6');
+
+        imagealphablending($image, true);
+
+        for ($i = 0; $i < 6; $i++) {
+            $card_w = 150 + (($seed >> ($i * 2)) % 5) * 24;
+            $card_h = 95 + (($seed >> ($i * 3)) % 4) * 18;
+            $x = 60 + (($seed >> ($i * 4)) % 10) * 95;
+            $y = 50 + (($seed >> ($i * 5)) % 8) * 58;
+
+            if ($x + $card_w > $width - 40) {
+                $x = $width - $card_w - 40;
+            }
+            if ($y + $card_h > $height - 40) {
+                $y = $height - $card_h - 40;
+            }
+
+            $card_rgb = $this->hex_to_rgb($card_colors[$i % count($card_colors)]);
+            $fill = imagecolorallocatealpha($image, $card_rgb['r'], $card_rgb['g'], $card_rgb['b'], 18);
+            $border = imagecolorallocate($image, 255, 255, 255);
+            imagefilledrectangle($image, $x, $y, $x + $card_w, $y + $card_h, $fill);
+            imagerectangle($image, $x, $y, $x + $card_w, $y + $card_h, $border);
+
+            $title_bar = imagecolorallocatealpha($image, 255, 255, 255, 40);
+            imagefilledrectangle($image, $x + 8, $y + 8, $x + $card_w - 8, $y + 28, $title_bar);
+
+            for ($b = 0; $b < 5; $b++) {
+                $bar_rgb = $this->hex_to_rgb($accent_colors[($i + $b) % count($accent_colors)]);
+                $bar_color = imagecolorallocate($image, $bar_rgb['r'], $bar_rgb['g'], $bar_rgb['b']);
+                $bar_h = 12 + (($seed >> ($i + $b + 1)) % 28);
+                $bar_x = $x + 14 + ($b * 22);
+                imagefilledrectangle($image, $bar_x, $y + $card_h - 18 - $bar_h, $bar_x + 14, $y + $card_h - 18, $bar_color);
+            }
+        }
+
+        for ($c = 0; $c < 10; $c++) {
+            $radius = 14 + (($seed >> ($c * 2)) % 4) * 6;
+            $cx = 80 + (($seed >> ($c * 3)) % 18) * 55;
+            $cy = 40 + (($seed >> ($c * 4)) % 10) * 48;
+            $circle_rgb = $this->hex_to_rgb($accent_colors[$c % count($accent_colors)]);
+            $circle_color = imagecolorallocatealpha($image, $circle_rgb['r'], $circle_rgb['g'], $circle_rgb['b'], 10);
+            imagefilledellipse($image, min($cx, $width - 30), min($cy, $height - 30), $radius * 2, $radius * 2, $circle_color);
+        }
+
+        $arrow_color = imagecolorallocate($image, 255, 255, 255);
+        for ($a = 0; $a < 4; $a++) {
+            $x1 = 120 + (($seed >> ($a * 6)) % 12) * 70;
+            $y1 = 180 + (($seed >> ($a * 7)) % 6) * 45;
+            $x2 = $x1 + 80 + (($seed >> ($a * 8)) % 3) * 20;
+            $y2 = $y1 - 20 + (($seed >> ($a * 9)) % 5) * 15;
+            imageline($image, $x1, $y1, $x2, $y2, $arrow_color);
+            imageline($image, $x2, $y2, $x2 - 12, $y2 - 8, $arrow_color);
+            imageline($image, $x2, $y2, $x2 - 12, $y2 + 8, $arrow_color);
+        }
+
+        return true;
     }
 
 /**
@@ -2161,6 +2494,141 @@ class NewsCrawlerFeaturedImageGenerator {
     }
     
     /**
+     * OpenAI 画像生成 API のレスポンスを添付ファイル化
+     *
+     * @param array<string,mixed> $data    API レスポンス
+     * @param int                 $post_id 投稿 ID
+     * @param string              $title   投稿タイトル
+     * @return int|array<int|string>|null  成功時は添付 ID、失敗時は error 配列、未対応時は null
+     */
+    private function process_ai_image_generation_response($data, $post_id, $title) {
+        if (!isset($data['data'][0]) || !is_array($data['data'][0])) {
+            return null;
+        }
+
+        $item = $data['data'][0];
+
+        if (!empty($item['url'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成成功 - URL: ' . $item['url']);
+            return $this->download_and_attach_image($item['url'], $post_id, $title);
+        }
+
+        if (!empty($item['b64_json'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: AI画像生成成功 - base64 データ受信');
+            return $this->save_base64_image_as_attachment($item['b64_json'], $post_id, $title, 'png');
+        }
+
+        return null;
+    }
+
+    /**
+     * base64 画像データを添付ファイルとして保存
+     *
+     * @param string $base64_data base64 エンコード画像
+     * @param int    $post_id     投稿 ID
+     * @param string $title       投稿タイトル
+     * @param string $extension   ファイル拡張子
+     * @return int|array<int|string>
+     */
+    private function save_base64_image_as_attachment($base64_data, $post_id, $title, $extension = 'png') {
+        $image_data = base64_decode((string) $base64_data, true);
+        if ($image_data === false || $image_data === '') {
+            error_log('NewsCrawlerFeaturedImageGenerator: base64 画像のデコードに失敗しました');
+            return array('error' => 'AI生成画像のデコードに失敗しました。');
+        }
+
+        $image_size = strlen($image_data);
+        if ($image_size < 1000) {
+            error_log('NewsCrawlerFeaturedImageGenerator: base64 画像サイズが小さすぎます: ' . $image_size . ' bytes');
+            return array('error' => 'AI生成画像のサイズが小さすぎます。有効な画像ではない可能性があります。');
+        }
+
+        $extension = sanitize_key($extension);
+        if ($extension === '') {
+            $extension = 'png';
+        }
+
+        $mime_types = array(
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+        );
+        $content_type = isset($mime_types[$extension]) ? $mime_types[$extension] : 'image/png';
+
+        $upload_dir = wp_upload_dir();
+        if (!wp_mkdir_p($upload_dir['path'])) {
+            error_log('NewsCrawlerFeaturedImageGenerator: アップロードディレクトリの作成に失敗しました: ' . $upload_dir['path']);
+            return array('error' => 'アップロードディレクトリの作成に失敗しました。権限を確認してください。');
+        }
+
+        $filename = 'featured-image-' . $post_id . '-' . uniqid('', true) . '.' . $extension;
+        $filepath = $upload_dir['path'] . '/' . $filename;
+
+        if (!file_put_contents($filepath, $image_data)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: base64 画像ファイルの保存に失敗しました: ' . $filepath);
+            return array('error' => '画像ファイルの保存に失敗しました。ディスク容量や権限を確認してください。');
+        }
+
+        error_log('NewsCrawlerFeaturedImageGenerator: base64 画像保存成功 - サイズ: ' . $image_size . ' bytes');
+
+        return $this->register_featured_image_attachment($filepath, $filename, $content_type, $post_id, $title);
+    }
+
+    /**
+     * 保存済み画像ファイルを WordPress 添付として登録しアイキャッチに設定
+     *
+     * @param string $filepath     ファイルパス
+     * @param string $filename     ファイル名
+     * @param string $content_type MIME タイプ
+     * @param int    $post_id      投稿 ID
+     * @param string $title        投稿タイトル
+     * @return int|array<int|string>
+     */
+    private function register_featured_image_attachment($filepath, $filename, $content_type, $post_id, $title) {
+        $upload_dir = wp_upload_dir();
+
+        $attachment = array(
+            'guid' => $upload_dir['url'] . '/' . $filename,
+            'post_mime_type' => $content_type,
+            'post_title' => 'アイキャッチ: ' . $title,
+            'post_content' => '',
+            'post_status' => 'inherit',
+        );
+
+        $attachment_id = wp_insert_attachment($attachment, $filepath, $post_id);
+
+        if (is_wp_error($attachment_id)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
+            @unlink($filepath);
+            return array('error' => '添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $filepath);
+        if (is_wp_error($attachment_data)) {
+            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルメタデータの生成に失敗しました: ' . $attachment_data->get_error_message());
+        } else {
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
+        }
+
+        $thumbnail_result = set_post_thumbnail($post_id, $attachment_id);
+        if (!$thumbnail_result) {
+            error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ画像の設定に失敗しました - 投稿ID: ' . $post_id . ', 添付ファイルID: ' . $attachment_id);
+            return array('error' => 'アイキャッチ画像の設定に失敗しました。');
+        }
+
+        if (class_exists('NewsCrawlerOGPManager')) {
+            $ogp_manager = new NewsCrawlerOGPManager();
+            $ogp_manager->update_featured_image_meta($post_id, $attachment_id);
+        }
+
+        error_log('NewsCrawlerFeaturedImageGenerator: 画像の登録と設定が完了しました - 添付ファイルID: ' . $attachment_id);
+        return $attachment_id;
+    }
+
+    /**
      * 外部画像をダウンロードして添付ファイルとして保存 - 強化版通信エラーハンドリング
      */
     private function download_and_attach_image($image_url, $post_id, $title) {
@@ -2326,49 +2794,7 @@ class NewsCrawlerFeaturedImageGenerator {
 
         error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロード成功 - サイズ: ' . $saved_size . ' bytes, タイプ: ' . $content_type);
 
-        // WordPressの添付ファイルとして登録
-        $attachment = array(
-            'guid' => $upload_dir['url'] . '/' . $filename,
-            'post_mime_type' => $content_type,
-            'post_title' => 'アイキャッチ: ' . $title,
-            'post_content' => '',
-            'post_status' => 'inherit'
-        );
-
-        $attachment_id = wp_insert_attachment($attachment, $filepath, $post_id);
-
-        if (is_wp_error($attachment_id)) {
-            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
-            @unlink($filepath); // ファイルを削除
-            return array('error' => '添付ファイルの登録に失敗しました: ' . $attachment_id->get_error_message());
-        }
-
-        // 添付ファイルのメタデータを生成
-        require_once(ABSPATH . 'wp-admin/includes/image.php');
-        $attachment_data = wp_generate_attachment_metadata($attachment_id, $filepath);
-        if (is_wp_error($attachment_data)) {
-            error_log('NewsCrawlerFeaturedImageGenerator: 添付ファイルメタデータの生成に失敗しました: ' . $attachment_data->get_error_message());
-            // メタデータ生成失敗でも続行
-        } else {
-            wp_update_attachment_metadata($attachment_id, $attachment_data);
-        }
-
-        // 投稿のアイキャッチに設定
-        $thumbnail_result = set_post_thumbnail($post_id, $attachment_id);
-        if (!$thumbnail_result) {
-            error_log('NewsCrawlerFeaturedImageGenerator: アイキャッチ画像の設定に失敗しました - 投稿ID: ' . $post_id . ', 添付ファイルID: ' . $attachment_id);
-            // 添付ファイルは残すが、エラーを返す
-            return array('error' => 'アイキャッチ画像の設定に失敗しました。');
-        }
-
-        // OGPマネージャーに通知（存在する場合）
-        if (class_exists('NewsCrawlerOGPManager')) {
-            $ogp_manager = new NewsCrawlerOGPManager();
-            $ogp_manager->update_featured_image_meta($post_id, $attachment_id);
-        }
-
-        error_log('NewsCrawlerFeaturedImageGenerator: 画像ダウンロードと設定が完了しました - 添付ファイルID: ' . $attachment_id);
-        return $attachment_id;
+        return $this->register_featured_image_attachment($filepath, $filename, $content_type, $post_id, $title);
     }
     
     /**
@@ -2446,6 +2872,35 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         return $title_head;
+    }
+
+    /**
+     * DALL-E 向けの安全な抽象トピック（記事タイトルは渡さない）
+     *
+     * @param array $keywords キーワード配列
+     * @return string
+     */
+    private function build_safe_illustration_topic($keywords) {
+        $topic_keywords = $this->select_topic_keywords($keywords, 5);
+        $english_terms = $this->map_keywords_to_english_search_terms($topic_keywords, '');
+
+        $blocked_pattern = '/\b(war|death|accident|earthquake|disaster|blood|nude|naked|politician|president|prime minister|celebrity|portrait|face|person|people|human|news photo|press photo|current affairs|breaking news)\b/i';
+        $safe_terms = array();
+
+        foreach ($english_terms as $term) {
+            $term = trim((string) $term);
+            if ($term === '' || preg_match($blocked_pattern, $term)) {
+                continue;
+            }
+            $safe_terms[] = $term;
+        }
+
+        $safe_terms = array_values(array_unique($safe_terms));
+        if (!empty($safe_terms)) {
+            return implode(', ', array_slice($safe_terms, 0, 4));
+        }
+
+        return 'digital media automation, online publishing, technology icons, colorful infographic symbols';
     }
 
     /**
@@ -2550,18 +3005,20 @@ class NewsCrawlerFeaturedImageGenerator {
      * @param string $title    タイトル
      * @param array  $keywords キーワード
      * @param int    $attempt  API 試行回数
-     * @return array{scene:string,palette:string,lighting:string,seed:int}
+     * @return array{scene:string,palette:string,color_treatment:string,seed:int}
      */
     private function get_ai_creative_context($post_id, $title, $keywords, $attempt = 1, $force_regenerate = false) {
         $scenes = array(
-            'premium multi-device mockup on a clean modern desk: large desktop monitor and smartphone side by side, both showing a colorful news/media management dashboard with article cards, charts, and navigation sidebar; subtle desk props; polished 3D digital illustration on a bright sky-blue and coral gradient studio background',
-            'tech keynote demo atmosphere: laptop and smartphone on a desk displaying glowing news analytics UI, holographic floating icons, large colorful presentation screen behind, bright mint and yellow ambient wash',
-            'glassmorphism concept diagram: central glowing hub connected to floating translucent UI panels showing news articles, media thumbnails, charts; vivid cyan-magenta-yellow gradient background with high saturation',
-            'professional split-screen infographic on a sunny yellow-to-orange gradient backdrop: automated news dashboard on laptop and phone with rainbow workflow icons',
-            'isometric 3D workspace hero shot: laptop with colorful editorial dashboard, floating UI cards with headlines and graphs, bright white and teal studio background',
-            'floating dashboard constellation: multiple glass UI windows orbiting a bright central shape on a vivid purple-pink-blue gradient sky, each window showing media modules',
-            'wide hero composition: desktop dashboard with purple-orange-blue promotional banners on a light cream background, product-style cards in a grid, floating layout icons',
-            'modern office desk scene with keyboard and monitor showing pipeline overview with colored status blocks, tablet and phone on a bright aqua and lime gradient backdrop',
+            'flat vector hero illustration: abstract rounded app windows, colorful news cards, chart icons, and navigation tabs as simple drawn shapes on a bright sky-blue and coral gradient backdrop',
+            'editorial infographic illustration: floating flat UI panels with hand-drawn analytics icons, speech bubbles, arrows, and workflow symbols on a mint and yellow canvas',
+            'colorful concept diagram illustration: central illustrated hub connected to flat vector panels showing article tiles, media icons, and charts on a vivid cyan-magenta-yellow gradient background',
+            'split-screen infographic poster on a sunny yellow-to-orange gradient backdrop: 2D drawn dashboard blocks with rainbow workflow icons and simplified geometric shapes',
+            'isometric flat illustration layout: cartoon-style abstract UI cards with headlines and graph icons on a bright white and teal gradient background',
+            'floating illustrated dashboard constellation: multiple flat vector windows orbiting a bright central shape on a vivid purple-pink-blue gradient sky',
+            'wide hero editorial illustration: abstract dashboard blocks with purple-orange-blue banners on a light cream background, illustrated cards in a grid, playful iconography',
+            'abstract pipeline infographic poster: flat rectangles, circles, and arrows with colored status blocks on a bright aqua and lime gradient backdrop',
+            'hand-drawn tech blog cover illustration: bold outlines, chunky icons, dotted connectors, and colorful infographic blocks arranged like a magazine feature spread',
+            'playful vector SaaS illustration: rounded UI panels, professional icon set, dotted connectors, and layered flat shapes on a cheerful multicolor background',
         );
         $palettes = array(
             'hyper-saturated coral, hot pink, and electric orange UI on bright white and sky blue background',
@@ -2573,13 +3030,13 @@ class NewsCrawlerFeaturedImageGenerator {
             'hot pink, violet, and ultraviolet UI on bright white and peach gradient workspace',
             'crimson red, gold, and vibrant cobalt blue on light sky-blue background',
         );
-        $lightings = array(
-            'bright high-key studio lighting with radiant saturated color washes and no dark shadows',
-            'cheerful daylight with vivid screen glow and colorful ambient fill',
-            'luminous upbeat illumination with punchy multi-color UI highlights',
-            'clean diffused high-key light with maximum color saturation',
-            'sunny product-render lighting on a bright colorful backdrop',
-            'vibrant stage glow with warm coral and cool cyan accent lights',
+        $color_treatments = array(
+            'flat cel-shaded illustration colors with bold saturation and clean vector fills',
+            'cheerful poster-style flat colors with vivid accents and simple gradients',
+            'editorial infographic palette with punchy multi-color UI highlights',
+            'clean vector color blocks with maximum saturation and no realistic shading',
+            'bright cartoon-style flat coloring on a colorful gradient backdrop',
+            'vibrant illustrated poster colors with warm coral and cool cyan accents',
         );
 
         $entropy_source = $this->build_variation_seed($post_id, implode('|', array(
@@ -2592,12 +3049,11 @@ class NewsCrawlerFeaturedImageGenerator {
         $seed = abs(crc32($entropy_source));
 
         if ($this->keyword_focus && !empty($keywords)) {
-            $topic_keywords = $this->select_topic_keywords($keywords, 3);
-            $keyword_label = implode(', ', $topic_keywords);
+            $safe_topic = $this->build_safe_illustration_topic($keywords);
             return array(
-                'scene' => 'a colorful hero illustration visually centered on "' . $keyword_label . '" with relevant icons, charts, UI panels, and conceptual imagery on a bright hyper-colorful gradient background (no black background)',
+                'scene' => 'a colorful flat vector illustration with abstract icons and symbols for ' . $safe_topic . ', plus drawn charts, UI panels, and geometric shapes on a bright hyper-colorful gradient background',
                 'palette' => $palettes[($seed >> 6) % count($palettes)],
-                'lighting' => $lightings[($seed >> 12) % count($lightings)],
+                'color_treatment' => $color_treatments[($seed >> 12) % count($color_treatments)],
                 'seed' => $seed,
             );
         }
@@ -2605,59 +3061,58 @@ class NewsCrawlerFeaturedImageGenerator {
         return array(
             'scene' => $scenes[$seed % count($scenes)],
             'palette' => $palettes[($seed >> 6) % count($palettes)],
-            'lighting' => $lightings[($seed >> 12) % count($lightings)],
+            'color_treatment' => $color_treatments[($seed >> 12) % count($color_treatments)],
             'seed' => $seed,
         );
     }
 
     /**
-     * AI画像生成用のプロンプトを作成
+     * AI画像生成用のプロンプトを作成（常にイラスト専用・記事タイトルは使用しない）
      */
     private function create_ai_prompt($post_id, $title, $keywords, $settings, $attempt = 1, $force_regenerate = false) {
-        $default_style = 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality';
-        $style = isset($settings['ai_style']) ? $settings['ai_style'] : $default_style;
-        if (preg_match('/\b(cinematic|dark|moody|noir|underexposed|low.?key|black|charcoal|noir|photorealistic|photo-real|editorial photography|realistic photo|stock photo|monochrome|muted|desaturated|grayscale|pastel only)\b/i', $style)) {
-            $style = $default_style;
-        }
-        $base_prompt = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : 'Create a premium professional hero featured image with a bright hyper-colorful background for a news/media automation blog post about';
+        unset($title);
+        $settings = is_array($settings) ? $settings : array();
 
-        $subject = $this->build_ai_subject_line($title, $keywords);
-        $topic_keywords = $this->select_topic_keywords($keywords, 5);
-        $keyword_text = !empty($topic_keywords) ? implode(', ', $topic_keywords) : '';
-        $ui_elements = $this->build_ai_ui_elements_hint($title, $keywords);
-        $creative = $this->get_ai_creative_context($post_id, $title, $keywords, $attempt, $force_regenerate);
+        $topic = $this->build_safe_illustration_topic($keywords);
+        $creative = $this->get_ai_creative_context($post_id, '', $keywords, $attempt, $force_regenerate);
+        $global_base_prompt = $this->get_ai_base_prompt($settings);
+        $user_direction = $this->custom_image_prompt;
 
-        if ($this->keyword_focus && $keyword_text !== '') {
-            $prompt = $base_prompt . ' the following user-specified topics: "' . $keyword_text . '"';
-            $prompt .= '. The image must clearly visualize and represent these topics: ' . $keyword_text . '.';
-            $prompt .= ' Primary subject focus: "' . $subject . '".';
+        if ($user_direction !== '') {
+            $prompt = $this->get_mandatory_illustration_opener() . ' ';
+            $prompt .= 'PRIMARY IMAGE DIRECTION (highest priority, follow closely): ' . $user_direction . '. ';
+            $prompt .= 'Create a detailed flat 2D vector illustration infographic poster based on the PRIMARY IMAGE DIRECTION. ';
+            $prompt .= 'NOT a photograph. NOT photorealistic. Include colorful UI cards, icons, charts, arrows, and abstract blocks that express the PRIMARY IMAGE DIRECTION. ';
+            $prompt .= 'Bold outlines, simplified geometric shapes, cel-shaded flat colors, bright gradient background. ';
+            $prompt .= 'No people, no faces, no real objects, no cameras, no photorealism, no readable text. Landscape blog header illustration.';
+            $prompt .= $this->get_illustration_only_directives()['suffix'];
+        } elseif ($attempt > 1) {
+            $prompt = 'Detailed flat 2D vector illustration only. NOT a photo. NOT photorealistic. ';
+            $prompt .= $global_base_prompt . ' ';
+            $prompt .= 'A rich colorful infographic poster filled with many UI cards, icon buttons, line charts, bar charts, pie charts, arrows, circles, badges, and panels. ';
+            $prompt .= 'Topic symbols: ' . $topic . '. ';
+            $prompt .= 'Bright multicolor gradient background. Bold outlines. Dense illustrated layout. No people. No faces. No realism. No readable text. Landscape header.';
         } else {
-            $prompt = $base_prompt . ' "' . $subject . '"';
-            if ($keyword_text !== '') {
-                $prompt .= ' inspired by ' . $keyword_text;
-            }
+            $prompt = $this->get_mandatory_illustration_opener() . ' ';
+            $prompt .= $global_base_prompt . ' ';
+            $prompt .= 'Create a detailed flat 2D vector illustration infographic poster. NOT a photograph. NOT photorealistic. ';
+            $prompt .= 'Fill the canvas with many illustrated elements: rounded UI cards, sidebar panels, icon buttons, line charts, bar charts, donut charts, progress bars, notification dots, arrows, and decorative circles. ';
+            $prompt .= 'Topic symbols (illustrated icons only): ' . $topic . '. ';
+            $prompt .= 'Visual style: ' . $creative['scene'] . '. ';
+            $prompt .= 'Palette: ' . $creative['palette'] . '. ';
+            $prompt .= 'Color treatment: ' . $creative['color_treatment'] . '. ';
+            $prompt .= 'Bold outlines, simplified geometric shapes, cel-shaded flat colors, bright gradient background, dense infographic composition. ';
+            $prompt .= 'No people, no faces, no real objects, no cameras, no rooms, no desks, no 3D realism, no stock photo look. ';
+            $prompt .= 'At least five vivid colors. No monochrome. No readable text, no letters, no typography. Landscape blog header illustration.';
+            $prompt .= $this->get_illustration_only_directives()['suffix'];
         }
-        $prompt .= '. Scene: ' . $creative['scene'] . '.';
-        $prompt .= ' Include UI elements such as ' . $ui_elements . '.';
-        $prompt .= ' Color palette: ' . $creative['palette'] . '.';
-        $prompt .= ' Lighting: ' . $creative['lighting'] . '.';
-        $prompt .= ' Background: bright hyper-colorful gradient or studio backdrop (sky blue, coral, mint, yellow, magenta, orange); strictly no black background, no pure black, no charcoal, no dark gray dominant backdrop, no low-key darkness.';
-        $prompt .= ' Quality bar: highly detailed polished 3D digital illustration at the level of premium tech SaaS landing page hero images and professional product marketing visuals.';
-        $prompt .= ' Rich layered scene with multiple screens, dashboards, icons, charts, and interface panels.';
-        $prompt .= ' Mood: vibrant, colorful, energetic, cheerful, professional, and eye-catching.';
-        $prompt .= ' Style: ' . $style . '.';
-        $prompt .= ' Render as stylized digital art and UI concept illustration, not a photograph.';
-        $prompt .= ' Avoid photorealism, live-action look, camera lens effects, stock photo aesthetics, and realistic human skin texture.';
-        $prompt .= ' Use abstract placeholder bars, icons, charts, and colored UI blocks instead of readable text or letters.';
-        $prompt .= ' Use maximum color saturation and bold multi-color UI accents; avoid muted, desaturated, gray-dominant, or monochrome schemes.';
-        $prompt .= ' The overall image must feel vividly colorful from edge to edge with a light-to-mid-tone bright background only.';
-        $prompt .= ' No readable text, no letters, no watermark, no logo text. Landscape orientation for a news blog header.';
-        if ($force_regenerate) {
-            $prompt .= ' Regeneration request ID: ' . uniqid('regen_', true) . '.';
-        }
-        $prompt .= ' Unique generation ID: ' . $creative['seed'];
 
-        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E prompt (attempt ' . $attempt . '): ' . $prompt);
+        if ($force_regenerate) {
+            $prompt .= ' Regeneration ID: ' . uniqid('regen_', true) . '.';
+        }
+        $prompt .= ' Unique ID: ' . $creative['seed'] . '-' . $attempt;
+
+        error_log('NewsCrawlerFeaturedImageGenerator: DALL-E illustration-only prompt (attempt ' . $attempt . ', user_direction=' . ($user_direction !== '' ? 'yes' : 'no') . '): ' . $prompt);
 
         return $prompt;
     }
@@ -2680,8 +3135,8 @@ class NewsCrawlerFeaturedImageGenerator {
         
         // AI設定
 
-        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality';
-        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : 'Create a premium professional hero featured image with a bright hyper-colorful background for a news/media automation blog post about';
+        $sanitized['ai_style'] = isset($input['ai_style']) ? sanitize_text_field($input['ai_style']) : 'flat 2D vector illustration, editorial infographic poster, hand-drawn digital art, bold outlined icons, simplified geometric shapes, vivid saturated flat colors, bright colorful background, illustrated blog cover art';
+        $sanitized['ai_base_prompt'] = isset($input['ai_base_prompt']) ? sanitize_textarea_field($input['ai_base_prompt']) : self::get_default_ai_base_prompt();
         if (isset($input['featured_image_model'])) {
             $sanitized['featured_image_model'] = $this->normalize_featured_image_model($input['featured_image_model']);
         }
@@ -2724,7 +3179,8 @@ class NewsCrawlerFeaturedImageGenerator {
                         <td>
                             <select name="<?php echo $this->option_name; ?>[featured_image_model]">
                                 <?php
-                                $selected_model = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'dall-e-3';
+                                $selected_model = isset($settings['featured_image_model']) ? $settings['featured_image_model'] : 'gpt-image-1.5';
+                                $selected_model = $this->normalize_featured_image_model($selected_model);
                                 foreach (self::get_featured_image_model_choices() as $model_value => $model_label) :
                                 ?>
                                     <option value="<?php echo esc_attr($model_value); ?>" <?php selected($selected_model, $model_value); ?>><?php echo esc_html($model_label); ?></option>
@@ -2735,7 +3191,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     </tr>
                     <tr>
                         <th scope="row">画像スタイル</th>
-                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'premium SaaS hero illustration, polished 3D digital art, hyper colorful UI, vivid saturated colors, bright colorful background, ultra detailed, professional marketing quality'); ?>" size="50" />
+                        <td><input type="text" name="<?php echo $this->option_name; ?>[ai_style]" value="<?php echo esc_attr($settings['ai_style'] ?? 'flat 2D vector illustration, editorial infographic poster, hand-drawn digital art, bold outlined icons, simplified geometric shapes, vivid saturated flat colors, bright colorful background, illustrated blog cover art'); ?>" size="50" />
                         <p class="description">画像のスタイルを指定してください（例：premium SaaS hero, polished 3D digital art, colorful UI dashboard, professional marketing quality）</p></td>
                     </tr>
                     <tr>
@@ -2806,11 +3262,18 @@ class NewsCrawlerFeaturedImageGenerator {
             $featured_image_model = $basic_settings['featured_image_model'];
         }
         if ($featured_image_model === '') {
-            $featured_image_model = 'dall-e-3';
+            $featured_image_model = 'gpt-image-1.5';
         }
-        $saved_keywords = get_post_meta($post->ID, '_news_crawler_featured_image_keywords', true);
-        if (!is_string($saved_keywords)) {
-            $saved_keywords = '';
+        $featured_image_model = $this->normalize_featured_image_model($featured_image_model);
+        $saved_image_prompt = get_post_meta($post->ID, '_news_crawler_featured_image_prompt', true);
+        if (!is_string($saved_image_prompt)) {
+            $saved_image_prompt = '';
+        }
+        if ($saved_image_prompt === '') {
+            $legacy_keywords = get_post_meta($post->ID, '_news_crawler_featured_image_keywords', true);
+            if (is_string($legacy_keywords) && $legacy_keywords !== '') {
+                $saved_image_prompt = $legacy_keywords;
+            }
         }
         
         // 既にアイキャッチ画像が設定されているかチェック
@@ -2869,11 +3332,11 @@ class NewsCrawlerFeaturedImageGenerator {
         echo '</select>';
         echo '</div>';
         
-        // キーワード入力
+        // 画像生成指示プロンプト
         echo '<div style="margin-bottom: 15px;">';
-        echo '<label for="featured-image-keywords" style="display: block; margin-bottom: 5px; font-weight: bold;">キーワード (オプション):</label>';
-        echo '<input type="text" id="featured-image-keywords" placeholder="カンマ区切りで入力" style="width: 100%;" value="' . esc_attr($saved_keywords) . '" />';
-        echo '<p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">再生成時はここに入力したキーワードを優先して画像を生成します</p>';
+        echo '<label for="featured-image-prompt" style="display: block; margin-bottom: 5px; font-weight: bold;">画像生成指示プロンプト（オプション）:</label>';
+        echo '<textarea id="featured-image-prompt" rows="4" class="large-text" style="width: 100%;" placeholder="例: 青とオレンジを基調に、ニュース配信とAIを象徴するフラットなアイコンを多めに">' . esc_textarea($saved_image_prompt) . '</textarea>';
+        echo '<p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">この投稿のアイキャッチ生成時に最優先で反映する指示です。常に2Dイラストで生成され、実写は禁止されます。</p>';
         echo '</div>';
         
         // ステータス表示エリア
@@ -2906,7 +3369,7 @@ class NewsCrawlerFeaturedImageGenerator {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured-image-method').val();
-                var keywords = $('#featured-image-keywords').val();
+                var imagePrompt = $('#featured-image-prompt').val();
                 var featuredImageModel = $('#featured-image-model').val();
 
                 button.prop('disabled', true).text('生成中...');
@@ -2922,7 +3385,7 @@ class NewsCrawlerFeaturedImageGenerator {
                         nonce: '<?php echo wp_create_nonce('generate_featured_image_nonce'); ?>',
                         post_id: <?php echo $post->ID; ?>,
                         method: method,
-                        keywords: keywords,
+                        image_generation_prompt: imagePrompt,
                         featured_image_model: featuredImageModel
                     },
                     success: function(response) {
@@ -2997,7 +3460,7 @@ class NewsCrawlerFeaturedImageGenerator {
                 var button = $(this);
                 var statusDiv = $('#featured-image-status');
                 var method = $('#featured-image-method').val();
-                var keywords = $('#featured-image-keywords').val();
+                var imagePrompt = $('#featured-image-prompt').val();
                 var featuredImageModel = $('#featured-image-model').val();
 
                 button.prop('disabled', true).text('再生成中...');
@@ -3013,7 +3476,7 @@ class NewsCrawlerFeaturedImageGenerator {
                         nonce: '<?php echo wp_create_nonce('regenerate_featured_image_nonce'); ?>',
                         post_id: <?php echo $post->ID; ?>,
                         method: method,
-                        keywords: keywords,
+                        image_generation_prompt: imagePrompt,
                         featured_image_model: featuredImageModel
                     },
                     success: function(response) {
@@ -3099,7 +3562,7 @@ class NewsCrawlerFeaturedImageGenerator {
         
         $post_id = intval($_POST['post_id']);
         $method = sanitize_text_field($_POST['method']);
-        $keywords = sanitize_text_field($_POST['keywords']);
+        $image_generation_prompt = isset($_POST['image_generation_prompt']) ? wp_unslash($_POST['image_generation_prompt']) : '';
         $ai_model = sanitize_text_field($_POST['featured_image_model'] ?? '');
         
         $post = get_post($post_id);
@@ -3107,17 +3570,8 @@ class NewsCrawlerFeaturedImageGenerator {
             wp_send_json_error('投稿が見つかりません');
         }
         
-        // 既にアイキャッチ画像が設定されている場合はスキップ
-        if (has_post_thumbnail($post_id)) {
-            wp_send_json_error('既にアイキャッチ画像が設定されています');
-        }
-        
-        // キーワードを配列に変換
-        $keywords_array = $this->parse_featured_image_keywords($keywords);
-        $keyword_focus = !empty($keywords_array);
-        
         // アイキャッチ画像を生成
-        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, $keywords_array, $method, false, $ai_model, $keyword_focus);
+        $result = $this->generate_and_set_featured_image($post_id, $post->post_title, array(), $method, false, $ai_model, false, $image_generation_prompt);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);
@@ -3155,20 +3609,13 @@ class NewsCrawlerFeaturedImageGenerator {
         
         $post_id = intval($_POST['post_id']);
         $method = sanitize_text_field($_POST['method']);
-        $keywords = sanitize_text_field($_POST['keywords']);
+        $image_generation_prompt = isset($_POST['image_generation_prompt']) ? wp_unslash($_POST['image_generation_prompt']) : '';
         $ai_model = sanitize_text_field($_POST['featured_image_model'] ?? '');
         
         $post = get_post($post_id);
         if (!$post || !in_array($post->post_type, array('post', 'page'))) {
             wp_send_json_error('投稿が見つかりません');
         }
-        
-        // 既存のアイキャッチを完全に削除してから新規生成
-        $this->clear_existing_featured_image($post_id);
-
-        // キーワードを配列に変換
-        $keywords_array = $this->parse_featured_image_keywords($keywords);
-        $keyword_focus = !empty($keywords_array);
 
         $title = get_the_title($post_id);
         if ($title === '' || strpos($title, '以降はＡＩで生成') !== false) {
@@ -3176,7 +3623,7 @@ class NewsCrawlerFeaturedImageGenerator {
         }
 
         // 新しいアイキャッチ画像を生成（再生成フラグ付き）
-        $result = $this->generate_and_set_featured_image($post_id, $title, $keywords_array, $method, true, $ai_model, $keyword_focus);
+        $result = $this->generate_and_set_featured_image($post_id, $title, array(), $method, true, $ai_model, false, $image_generation_prompt);
         
         if (is_array($result) && isset($result['error'])) {
             wp_send_json_error($result['error']);

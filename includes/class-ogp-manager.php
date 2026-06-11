@@ -299,13 +299,7 @@ class NewsCrawlerOGPManager {
             return;
         }
         
-        // 既にアイキャッチ画像が設定されている場合はスキップ
-        if (has_post_thumbnail($post_id)) {
-            return;
-        }
-        
-        // News Crawler生成画像をアイキャッチ画像として設定
-        $this->set_generated_image_as_featured($post_id);
+        // 過去に生成した画像の再利用は行わない（新規生成は FeaturedImageGenerator 側で実施）
     }
     
     /**
@@ -317,16 +311,8 @@ class NewsCrawlerOGPManager {
         if (!$post || $post->post_type !== 'post') {
             return;
         }
-        
-        // News Crawler生成画像をアイキャッチ画像として強制設定
-        $generated_image_id = get_post_meta($post_id, '_news_crawler_generated_image_id', true);
-        
-        if ($generated_image_id) {
-            // 既存のアイキャッチ画像を削除してから設定
-            delete_post_thumbnail($post_id);
-            $this->set_featured_image($post_id, $generated_image_id);
-            error_log('NewsCrawler OGP: 投稿公開時にアイキャッチ画像を強制設定 - Post ID: ' . $post_id . ', Image ID: ' . $generated_image_id);
-        }
+
+        // 過去に生成した画像の再利用は行わない（公開時も現在のアイキャッチを維持）
     }
     
     /**
