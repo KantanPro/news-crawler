@@ -374,7 +374,154 @@ class NewsCrawlerFeaturedImageGenerator {
      * @return string
      */
     public static function get_default_ai_base_prompt() {
-        return 'Flat 2D vector illustration infographic banner with drawn icons and colorful abstract UI blocks for a news blog topic about';
+        return <<<'PROMPT'
+ブログの記事アイキャッチ画像を生成してください。
+
+【目的】
+
+WordPressニュースサイト用のアイキャッチ画像。
+記事内容を視覚的に表現しつつ、サイト全体で統一感のあるデザインにする。
+
+【デザインスタイル】
+
+* フラットな2Dベクターイラスト
+* モダンなインフォグラフィックバナー
+* 手描き風アイコン
+* カラフルな抽象的UIブロック
+* SaaSダッシュボード風パネル
+* シンプルな幾何学図形
+* クリーンで洗練されたデザイン
+* 高コントラスト
+* 視認性重視
+
+【レイアウト】
+
+* 背景全体に記事テーマを表現するイラストを配置
+* キャンバス全体をデザイン要素で埋めること
+* 抽象UIブロックやアイコンを全体に配置すること
+* 背景の空白を最小限にすること
+* YouTubeサムネイルのように一目で内容が伝わるデザイン
+* 中央部分を空白にしないこと
+* 中央部分にも装飾要素を配置すること
+
+【中央テキスト（必須）】
+
+記事内にアイキャッチ生成プロンプトが存在する場合は、その内容から最も重要なキーワードを抽出して表示する。
+
+アイキャッチ生成プロンプトが存在しない場合は、記事タイトルから最も重要なキーワードを抽出して表示する。
+
+抽出に失敗した場合は必ず以下のいずれかを表示すること。
+
+NEWS
+UPDATE
+TOPIC
+
+【重要ルール】
+
+* 中央テキストは必須
+* テキストを表示しないことは禁止
+* テキストを空欄にすることは禁止
+* テキストを省略することは禁止
+* テキストが生成できない場合は NEWS を表示すること
+* 中央テキストを画像の主役として扱うこと
+* 記事内容に関連するキーワードを優先すること
+* 1〜4行以内で表示すること
+
+【テキストデザイン】
+
+* 日本語対応
+* 太字
+* 大きく読みやすい
+* 中央配置
+* 白または明るい色
+* 背景とのコントラストを確保
+* スマートフォン表示でも判読可能
+* テキストが画像内で最も目立つこと
+
+【背景ルール】
+
+* 透明背景禁止
+* チェック柄背景禁止
+* 空白背景禁止
+* 未描画領域禁止
+* 背景未生成禁止
+* キャンバス全体を装飾すること
+* キャンバスの端までイラストを描画すること
+* 背景は記事テーマに関連するイラストで埋めること
+
+【禁止事項】
+
+* 写真
+* 実写
+* 人物写真
+* 顔写真
+* ストックフォト
+* フォトリアル
+* 3Dレンダリング
+* カメラ効果
+* 被写界深度
+* レンズブラー
+* 過度なリアリズム
+* ウォーターマーク
+* ロゴ
+* AI生成特有の不要な文字列
+
+【必須指定】
+
+Vector illustration only.
+Flat 2D design only.
+Infographic style.
+NOT a photograph.
+NOT photorealistic.
+NOT realistic.
+No human faces.
+No stock photo.
+
+【出力】
+
+* WordPressアイキャッチ画像
+* アスペクト比16:9
+* 高解像度
+* News Crawler向けの統一されたビジュアルスタイル
+* 中央テキスト必須
+* 背景全面描画必須
+* テキスト未表示禁止
+* 透明領域禁止
+PROMPT;
+    }
+
+    /**
+     * 未設定または旧デフォルトの場合に新デフォルトプロンプトを使うか
+     *
+     * @param string $value 保存済みプロンプト
+     * @return bool
+     */
+    public static function should_use_default_ai_base_prompt($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return true;
+        }
+
+        $legacy_defaults = array(
+            'Flat 2D vector illustration infographic banner with drawn icons and colorful abstract UI blocks for a news blog topic about',
+            'Create a premium professional hero featured image for a news/media automation blog post about',
+        );
+
+        return in_array($value, $legacy_defaults, true);
+    }
+
+    /**
+     * 基本設定用のアイキャッチ生成プロンプト初期値を取得
+     *
+     * @param string $saved_value 保存済み値
+     * @return string
+     */
+    public static function resolve_ai_base_prompt_setting_value($saved_value) {
+        if (self::should_use_default_ai_base_prompt($saved_value)) {
+            return self::get_default_ai_base_prompt();
+        }
+
+        return trim((string) $saved_value);
     }
 
     /**
@@ -387,6 +534,11 @@ class NewsCrawlerFeaturedImageGenerator {
         $prompt = trim((string) $prompt);
         if ($prompt === '') {
             return self::get_default_ai_base_prompt();
+        }
+
+        // 構造化プロンプト（デフォルト含む）は禁止語句の除去対象外
+        if (strpos($prompt, '【') !== false || mb_strlen($prompt) > 300) {
+            return $prompt;
         }
 
         if (!preg_match('/\b(illustration|illustrated|vector|infographic|drawn|cartoon|flat\s*2d|2d)\b/i', $prompt)) {
@@ -446,6 +598,10 @@ class NewsCrawlerFeaturedImageGenerator {
             if (!empty($basic_settings['ai_base_prompt'])) {
                 $raw = $basic_settings['ai_base_prompt'];
             }
+        }
+
+        if (self::should_use_default_ai_base_prompt($raw)) {
+            return self::get_default_ai_base_prompt();
         }
 
         return $this->sanitize_base_prompt_for_illustration($raw);
@@ -3196,7 +3352,7 @@ class NewsCrawlerFeaturedImageGenerator {
                     </tr>
                     <tr>
                         <th scope="row">ベースプロンプト</th>
-                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="3" cols="50"><?php echo esc_textarea($settings['ai_base_prompt'] ?? 'Create a premium professional hero featured image for a news/media automation blog post about'); ?></textarea>
+                        <td><textarea name="<?php echo $this->option_name; ?>[ai_base_prompt]" rows="20" cols="50"><?php echo esc_textarea(self::resolve_ai_base_prompt_setting_value($settings['ai_base_prompt'] ?? '')); ?></textarea>
                         <p class="description">AI画像生成の基本となるプロンプトを指定してください。タイトルは自動で追加されます。</p></td>
                     </tr>
                 </table>

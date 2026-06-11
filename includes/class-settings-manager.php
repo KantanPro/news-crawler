@@ -829,14 +829,12 @@ class NewsCrawlerSettingsManager {
 
     public function ai_base_prompt_callback() {
         $settings = get_option($this->option_name, array());
-        $default = class_exists('NewsCrawlerFeaturedImageGenerator')
-            ? NewsCrawlerFeaturedImageGenerator::get_default_ai_base_prompt()
-            : 'Flat 2D vector illustration infographic banner with drawn icons and colorful abstract UI blocks for a news blog topic about';
-        $value = isset($settings['ai_base_prompt']) && $settings['ai_base_prompt'] !== ''
-            ? $settings['ai_base_prompt']
-            : $default;
-        echo '<textarea name="' . $this->option_name . '[ai_base_prompt]" rows="4" cols="70" class="large-text">' . esc_textarea($value) . '</textarea>';
-        echo '<p class="description">投稿ごとの画像生成指示がない場合に使用する基本プロンプトです。投稿編集画面の指示がある場合はそちらが優先されます。常に2Dイラストで生成し、実写は禁止されます。</p>';
+        $saved = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : '';
+        $value = class_exists('NewsCrawlerFeaturedImageGenerator')
+            ? NewsCrawlerFeaturedImageGenerator::resolve_ai_base_prompt_setting_value($saved)
+            : $saved;
+        echo '<textarea name="' . $this->option_name . '[ai_base_prompt]" rows="20" cols="70" class="large-text">' . esc_textarea($value) . '</textarea>';
+        echo '<p class="description">投稿ごとの画像生成指示がない場合に使用する基本プロンプトです。投稿編集画面の指示がある場合はそちらが優先されます。</p>';
     }
     
     public function auto_summary_generation_callback() {
@@ -963,7 +961,11 @@ class NewsCrawlerSettingsManager {
         }
 
         if (array_key_exists('ai_base_prompt', $input)) {
-            $sanitized['ai_base_prompt'] = sanitize_textarea_field($input['ai_base_prompt']);
+            $value = sanitize_textarea_field($input['ai_base_prompt']);
+            if (class_exists('NewsCrawlerFeaturedImageGenerator') && NewsCrawlerFeaturedImageGenerator::should_use_default_ai_base_prompt($value)) {
+                $value = NewsCrawlerFeaturedImageGenerator::get_default_ai_base_prompt();
+            }
+            $sanitized['ai_base_prompt'] = $value;
         }
 
         // 数値
@@ -1139,12 +1141,16 @@ class NewsCrawlerSettingsManager {
         }
         
         // デフォルト設定
+        $default_ai_base_prompt = class_exists('NewsCrawlerFeaturedImageGenerator')
+            ? NewsCrawlerFeaturedImageGenerator::get_default_ai_base_prompt()
+            : '';
         $default_settings = array(
             'youtube_api_key' => '',
             'openai_api_key' => '',
             'auto_featured_image' => true,
             'featured_image_method' => 'ai',
             'featured_image_model' => 'gpt-image-1.5',
+            'ai_base_prompt' => $default_ai_base_prompt,
             'auto_summary_generation' => true,
             'summary_generation_model' => 'gpt-3.5-turbo',
             'duplicate_check_strictness' => 'medium',

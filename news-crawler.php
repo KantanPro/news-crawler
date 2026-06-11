@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.3.4
+ * Version: 3.3.5
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義（NEWS_CRAWLER_VERSION は get_plugin_data 不可時のフォールバック）
-define('NEWS_CRAWLER_VERSION', '3.3.4');
+define('NEWS_CRAWLER_VERSION', '3.3.5');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -148,8 +148,35 @@ function news_crawler_migrate_featured_image_method_settings() {
     update_option('news_crawler_featured_method_migrated_314', true);
 }
 
+/**
+ * アイキャッチ生成プロンプト（基本）の初期値を設定
+ */
+function news_crawler_migrate_ai_base_prompt_default() {
+    if (get_option('news_crawler_ai_base_prompt_migrated_v1')) {
+        return;
+    }
+
+    if (!class_exists('NewsCrawlerFeaturedImageGenerator')) {
+        return;
+    }
+
+    $settings = get_option('news_crawler_basic_settings', array());
+    if (!is_array($settings)) {
+        $settings = array();
+    }
+
+    $current = isset($settings['ai_base_prompt']) ? $settings['ai_base_prompt'] : '';
+    if (NewsCrawlerFeaturedImageGenerator::should_use_default_ai_base_prompt($current)) {
+        $settings['ai_base_prompt'] = NewsCrawlerFeaturedImageGenerator::get_default_ai_base_prompt();
+        update_option('news_crawler_basic_settings', $settings);
+    }
+
+    update_option('news_crawler_ai_base_prompt_migrated_v1', true);
+}
+
 function news_crawler_init_components() {
     news_crawler_migrate_featured_image_method_settings();
+    news_crawler_migrate_ai_base_prompt_default();
 
     // セキュリティマネージャーの初期化（軽量）
     NewsCrawlerSecurityManager::get_instance();
