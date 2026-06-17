@@ -687,11 +687,19 @@ class News_Crawler_X_OAuth {
         );
 
         if (is_wp_error($response)) {
+            error_log('News Crawler X OAuth: refresh_access_token request error - ' . $response->get_error_message());
             return false;
         }
 
+        $status_code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
         if (!is_array($data) || empty($data['access_token'])) {
+            error_log(
+                'News Crawler X OAuth: refresh_access_token failed HTTP '
+                . $status_code
+                . ' - '
+                . wp_json_encode($data)
+            );
             return false;
         }
 

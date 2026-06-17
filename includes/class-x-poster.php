@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 class News_Crawler_X_Poster {
 
     /** 未シェア投稿を再試行ボタンで一度にシェアする件数 */
-    const RETRY_PENDING_SHARE_BATCH_SIZE = 3;
+    const RETRY_PENDING_SHARE_BATCH_SIZE = 1;
 
     /**
      * @var array<int, bool>
@@ -467,8 +467,16 @@ class News_Crawler_X_Poster {
         $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
-        if ($code === 401 && News_Crawler_X_OAuth::instance()->refresh_access_token()) {
-            return $this->post_via_oauth2($message, $settings, 1);
+        if ($code === 401) {
+            $refreshed = News_Crawler_X_OAuth::instance()->refresh_access_token();
+            if ($refreshed) {
+                return $this->post_via_oauth2($message, $settings, 1);
+            }
+
+            return array(
+                'success' => false,
+                'error' => $this->format_oauth2_post_error($data, $code, true),
+            );
         }
 
         if ($code >= 200 && $code < 300 && !empty($data['data']['id'])) {
@@ -486,7 +494,7 @@ class News_Crawler_X_Poster {
             return $this->post_via_oauth2($message, $settings, $attempt + 1);
         }
 
-        $error = $this->extract_api_error_message($data, $code);
+        $error = $this->format_oauth2_post_error($data, $code, false);
         if ($code === 403) {
             $error .= '（投稿文字数: ' . mb_strlen($message) . ' 文字）';
         }
@@ -556,6 +564,37 @@ class News_Crawler_X_Poster {
             'success' => false,
             'error' => $error,
         );
+    }
+
+    /**
+     * OAuth 2.0 投稿エラーを日本語化
+     *
+     * @param mixed $data            API レスポンス
+     * @param int   $response_code   HTTP コード
+     * @param bool  $refresh_failed  トークン自動更新の失敗
+     * @return string
+     */
+    private function format_oauth2_post_error($data, $response_code, $refresh_failed = false) {
+        $message = $this->extract_api_error_message($data, $response_code);
+
+        if ($response_code !== 401) {
+            return $message;
+        }
+
+        $diagnostics = News_Crawler_X_OAuth::instance()->get_connection_diagnostics();
+        $hints = array();
+
+        if (empty($diagnostics['client_secret_usable'])) {
+            $hints[] = 'Client Secret が未設定または復号できません。Developer Portal で Regenerate 直後に表示される平文（マスク表示はコピー不可）を Client Secret 欄へ貼り付けて「設定を保存」してください。';
+        }
+
+        if ($refresh_failed || empty($diagnostics['oauth2_refresh_token_saved'])) {
+            $hints[] = '「接続を解除」→ Client ID / Secret を保存 →「X アカウントを接続」で再接続してください。Client Secret だけ保存しても古いトークンは無効のままです。';
+        } else {
+            $hints[] = 'Client Secret を再生成した場合は保存後に必ず「X アカウントを接続」で再接続してください。OAuth 2.0 Client ID/Secret（API Key ではありません）を確認してください。';
+        }
+
+        return $message . ' — ' . implode(' ', $hints);
     }
 
     /**

@@ -457,6 +457,23 @@ class NewsCrawlerCronSettings {
                         <td><?php echo !empty($connection_diagnostics['oauth2_refresh_token_saved']) ? '保存済み' : '未保存'; ?></td>
                     </tr>
                     <tr>
+                        <th scope="row">Access Token 期限</th>
+                        <td>
+                            <?php
+                            $token_expires = (int) ($connection_diagnostics['oauth2_token_expires'] ?? 0);
+                            if ($token_expires > 0) :
+                                $expired = !empty($connection_diagnostics['oauth2_token_expired']);
+                                ?>
+                                <?php echo esc_html(wp_date('Y-m-d H:i:s', $token_expires)); ?>
+                                <?php if ($expired) : ?>
+                                    <strong style="color:#b32d2e;">（期限切れ — 「X アカウントを接続」で再接続してください）</strong>
+                                <?php endif; ?>
+                            <?php else : ?>
+                                不明
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">トークン保存先</th>
                         <td><code><?php echo esc_html($connection_diagnostics['oauth2_storage_option'] ?? 'news_crawler_x_oauth'); ?></code>（専用オプション）</td>
                     </tr>
