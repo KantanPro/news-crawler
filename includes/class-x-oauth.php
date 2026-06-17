@@ -1074,7 +1074,7 @@ class News_Crawler_X_OAuth {
             if ($index > 0) {
                 sleep(3);
             }
-            News_Crawler_X_Poster::share_post($post_id, true);
+            News_Crawler_X_Poster::share_post($post_id, true, true);
             $index++;
         }
 

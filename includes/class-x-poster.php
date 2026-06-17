@@ -67,7 +67,7 @@ class News_Crawler_X_Poster {
      * @param int  $post_id 投稿 ID
      * @param bool $force   既にシェア済みでも再試行する
      */
-    public static function share_post($post_id, $force = false) {
+    public static function share_post($post_id, $force = false, $skip_daily_limit = false) {
         $post_id = (int) $post_id;
         if ($post_id <= 0) {
             return;
@@ -84,7 +84,40 @@ class News_Crawler_X_Poster {
             $poster = new self();
         }
 
-        $poster->auto_post_to_x($post_id);
+        $poster->auto_post_to_x($post_id, $skip_daily_limit);
+    }
+
+    /**
+     * 本日（サイトタイムゾーン）の X 自動シェア成功件数
+     *
+     * @return int
+     */
+    public static function count_today_x_shares() {
+        $today_start = current_time('Y-m-d') . ' 00:00:00';
+        $today_end = current_time('Y-m-d') . ' 23:59:59';
+
+        $query = new WP_Query(array(
+            'post_type' => 'any',
+            'post_status' => 'any',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'no_found_rows' => false,
+            'meta_query' => array(
+                'relation' => 'AND',
+                array(
+                    'key' => '_x_posted',
+                    'value' => '1',
+                ),
+                array(
+                    'key' => '_x_posted_at',
+                    'value' => array($today_start, $today_end),
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATETIME',
+                ),
+            ),
+        ));
+
+        return (int) $query->found_posts;
     }
 
     /**
@@ -170,9 +203,10 @@ class News_Crawler_X_Poster {
     /**
      * 自動投稿
      *
-     * @param int $post_id 投稿 ID
+     * @param int  $post_id          投稿 ID
+     * @param bool $skip_daily_limit 日次上限チェックをスキップする（手動再試行・テスト用）
      */
-    public function auto_post_to_x($post_id) {
+    public function auto_post_to_x($post_id, $skip_daily_limit = false) {
         $post_id = (int) $post_id;
         if ($post_id <= 0 || isset(self::$processing[$post_id])) {
             return;
@@ -191,6 +225,19 @@ class News_Crawler_X_Poster {
         if (empty($settings['twitter_enabled'])) {
             $this->log_share_skip($post_id, 'X 自動シェアが無効です。自動投稿設定で有効にしてください。');
             return;
+        }
+
+        if (!$skip_daily_limit) {
+            $daily_limit = isset($settings['twitter_max_daily_shares'])
+                ? max(0, (int) $settings['twitter_max_daily_shares'])
+                : 0;
+            if ($daily_limit > 0 && self::count_today_x_shares() >= $daily_limit) {
+                $this->log_share_skip(
+                    $post_id,
+                    sprintf('本日の X 自動シェア上限（%d 件）に達したためスキップしました。', $daily_limit)
+                );
+                return;
+            }
         }
 
         self::$processing[$post_id] = true;
@@ -593,6 +640,6 @@ class News_Crawler_X_Poster {
      */
     public function manual_test_x_post($post_id) {
         update_post_meta($post_id, '_news_crawler_created', true);
-        self::share_post($post_id, true);
+        self::share_post($post_id, true, true);
     }
 }

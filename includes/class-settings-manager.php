@@ -1030,6 +1030,9 @@ class NewsCrawlerSettingsManager {
         if (array_key_exists('twitter_max_length', $input)) {
             $sanitized['twitter_max_length'] = max(1, min(280, intval($input['twitter_max_length'])));
         }
+        if (array_key_exists('twitter_max_daily_shares', $input)) {
+            $sanitized['twitter_max_daily_shares'] = max(0, min(500, intval($input['twitter_max_daily_shares'])));
+        }
         
         // メッセージテンプレートは改行を保持
         if (array_key_exists('twitter_message_template', $input)) {

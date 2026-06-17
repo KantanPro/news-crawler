@@ -182,6 +182,8 @@ class NewsCrawlerCronSettings {
         if ($template === '{title}' || $template === '%TITLE%') {
             $template = "%TITLE%\n%URL%";
         }
+        $max_daily_shares = isset($settings['twitter_max_daily_shares']) ? (int) $settings['twitter_max_daily_shares'] : 0;
+        $today_x_shares = class_exists('News_Crawler_X_Poster') ? News_Crawler_X_Poster::count_today_x_shares() : 0;
         ?>
         <p>News Crawler が作成した投稿を公開すると、X へ自動シェアします。</p>
 
@@ -198,6 +200,27 @@ class NewsCrawlerCronSettings {
                             <input type="checkbox" name="news_crawler_basic_settings[twitter_enabled]" value="1" <?php checked(!empty($settings['twitter_enabled'])); ?> />
                             投稿公開時に X へ自動シェアする
                         </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="nc-x-max-daily-shares">1日の自動シェア上限</label></th>
+                    <td>
+                        <input
+                            id="nc-x-max-daily-shares"
+                            type="number"
+                            name="news_crawler_basic_settings[twitter_max_daily_shares]"
+                            value="<?php echo esc_attr((string) $max_daily_shares); ?>"
+                            min="0"
+                            max="500"
+                            class="small-text"
+                        />
+                        件
+                        <p class="description">0 で無制限。本日の自動シェア数:
+                            <strong><?php echo esc_html((string) $today_x_shares); ?></strong>
+                            <?php if ($max_daily_shares > 0) : ?>
+                                / <?php echo esc_html((string) $max_daily_shares); ?>
+                            <?php endif; ?>
+                        </p>
                     </td>
                 </tr>
             </table>
