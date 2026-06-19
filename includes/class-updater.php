@@ -101,11 +101,26 @@ class NewsCrawlerUpdater {
             || current_filter() === 'pre_set_site_transient_update_plugins'
             || (defined('DOING_CRON') && DOING_CRON);
         $latest = $this->get_latest_version($force_refresh);
+        if ((!$latest || empty($latest['version'])) && $force_refresh) {
+            $latest = $this->get_stale_cached_version();
+        }
+        if ($latest) {
+            $latest = $this->normalize_version_info($latest);
+        }
         if (!$latest || empty($latest['version'])) {
             return $transient;
         }
 
         if (version_compare($current_version, $latest['version'], '<')) {
+            $package = $this->resolve_update_package_url($latest);
+            if ($package === '') {
+                error_log(
+                    'News Crawler Updater: update available but package URL could not be resolved for version '
+                    . $latest['version']
+                );
+                return $transient;
+            }
+
             if (!isset($transient->response)) {
                 $transient->response = array();
             }
@@ -115,7 +130,7 @@ class NewsCrawlerUpdater {
                 'plugin'       => $this->plugin_basename,
                 'new_version'  => $latest['version'],
                 'url'          => $this->github_repo_url,
-                'package'      => $latest['download_url'],
+                'package'      => $package,
                 'requires'     => $this->requires_wp,
                 'requires_php' => $this->requires_php,
                 'tested'       => $this->tested_wp,
@@ -390,6 +405,8 @@ class NewsCrawlerUpdater {
         if (function_exists('wp_update_plugins')) {
             wp_update_plugins();
         }
+
+        $this->ensure_update_in_transient();
     }
 
     /**
@@ -410,13 +427,19 @@ class NewsCrawlerUpdater {
             return;
         }
 
-        $update_url = admin_url('update-core.php');
+        $this->ensure_update_in_transient();
+
+        $update_url = wp_nonce_url(
+            self_admin_url('update.php?action=upgrade-plugin&plugin=' . rawurlencode($this->plugin_basename)),
+            'upgrade-plugin_' . $this->plugin_basename
+        );
         echo '<div class="notice notice-warning is-dismissible"><p>';
         echo '<strong>News Crawler:</strong> 新しいバージョン ';
         echo esc_html($status['latest_version']);
         echo ' が利用可能です（現在: ';
         echo esc_html($status['current_version']);
-        echo '）。<a href="' . esc_url($update_url) . '">更新画面へ</a>';
+        echo '）。<a href="' . esc_url($update_url) . '">今すぐ更新</a>';
+        echo ' | <a href="' . esc_url(admin_url('update-core.php?force-check=1')) . '">更新画面へ</a>';
         echo '</p></div>';
     }
 
@@ -433,7 +456,10 @@ class NewsCrawlerUpdater {
      */
     public function get_update_status() {
         $latest = $this->get_latest_version(true);
-        if (!$latest) {
+        if ((!$latest || empty($latest['version']))) {
+            $latest = $this->get_stale_cached_version();
+        }
+        if (!$latest || empty($latest['version'])) {
             return array(
                 'status'  => 'error',
                 'message' => 'GitHubからの更新情報の取得に失敗しました',
@@ -445,13 +471,15 @@ class NewsCrawlerUpdater {
         }
         $plugin_data = get_plugin_data($this->plugin_file, false, false);
         $current_version = isset($plugin_data['Version']) ? $plugin_data['Version'] : '0.0.0';
+        $latest = $this->normalize_version_info($latest);
+        $package = $this->resolve_update_package_url($latest);
 
         return array(
             'status'          => 'success',
             'current_version' => $current_version,
             'latest_version'  => $latest['version'],
-            'has_update'      => version_compare($current_version, $latest['version'], '<'),
-            'download_url'    => $latest['download_url'],
+            'has_update'      => version_compare($current_version, $latest['version'], '<') && $package !== '',
+            'download_url'    => $package,
             'description'     => $latest['description'],
             'published_at'    => $latest['published_at'],
         );
@@ -551,10 +579,14 @@ class NewsCrawlerUpdater {
         }
 
         if (!$data || !isset($data['tag_name'])) {
-            return $this->get_recent_backup_version();
+            $backup = $this->get_recent_backup_version();
+            if ($backup) {
+                return $this->normalize_version_info($backup);
+            }
+            return $this->get_stale_cached_version();
         }
 
-        $version_info = $this->build_version_info($data);
+        $version_info = $this->normalize_version_info($this->build_version_info($data));
         $this->store_version_cache($version_info);
 
         return $version_info;
@@ -595,12 +627,15 @@ class NewsCrawlerUpdater {
         $response = $this->github_api_get($latest_url);
         if (is_wp_error($response)) {
             error_log('News Crawler Updater: GitHub latest release error - ' . $response->get_error_message());
-            return null;
+            return $this->get_cached_release_data_for_api_fallback();
         }
 
-        $status_code = wp_remote_retrieve_response_code($response);
+        $status_code = (int) wp_remote_retrieve_response_code($response);
         if ($status_code !== 200) {
             $this->log_github_api_failure('latest release', $status_code, $response);
+            if (in_array($status_code, array(403, 429), true)) {
+                return $this->get_cached_release_data_for_api_fallback();
+            }
             return null;
         }
 
@@ -620,12 +655,15 @@ class NewsCrawlerUpdater {
         $response = $this->github_api_get($list_url);
         if (is_wp_error($response)) {
             error_log('News Crawler Updater: GitHub releases list error - ' . $response->get_error_message());
-            return null;
+            return $this->get_cached_release_data_for_api_fallback();
         }
 
-        $status_code = wp_remote_retrieve_response_code($response);
+        $status_code = (int) wp_remote_retrieve_response_code($response);
         if ($status_code !== 200) {
             $this->log_github_api_failure('releases list', $status_code, $response);
+            if (in_array($status_code, array(403, 429), true)) {
+                return $this->get_cached_release_data_for_api_fallback();
+            }
             return null;
         }
 
@@ -894,6 +932,153 @@ class NewsCrawlerUpdater {
         }
 
         return false;
+    }
+
+    /**
+     * 更新用 package URL を解決（公開アーカイブ URL を優先）
+     *
+     * @param array $latest バージョン情報
+     * @return string
+     */
+    private function resolve_update_package_url(array $latest) {
+        $url = '';
+        if (!empty($latest['download_url'])) {
+            $url = $this->normalize_package_url((string) $latest['download_url']);
+        }
+
+        if ($url === '' && !empty($latest['release_tag'])) {
+            $url = $this->build_public_release_download_url((string) $latest['release_tag']);
+        }
+
+        if ($url === '' && !empty($latest['version'])) {
+            $url = $this->build_public_release_download_url('v' . ltrim((string) $latest['version'], 'v'));
+        }
+
+        return $url;
+    }
+
+    /**
+     * バージョン情報を更新チェック向けに正規化
+     *
+     * @param array $latest バージョン情報
+     * @return array
+     */
+    private function normalize_version_info(array $latest) {
+        if (empty($latest['release_tag']) && !empty($latest['version'])) {
+            $latest['release_tag'] = 'v' . ltrim((string) $latest['version'], 'v');
+        }
+
+        $package = $this->resolve_update_package_url($latest);
+        if ($package !== '') {
+            $latest['download_url'] = $package;
+        }
+
+        return $latest;
+    }
+
+    /**
+     * 期限切れでも利用可能なキャッシュ済みバージョン情報
+     *
+     * @return array|false
+     */
+    private function get_stale_cached_version() {
+        foreach ($this->get_cached_version_candidates() as $cached) {
+            if (is_array($cached) && !empty($cached['version'])) {
+                return $this->normalize_version_info($cached);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * GitHub API レート制限時にキャッシュから Release データを復元
+     *
+     * @return array|null
+     */
+    private function get_cached_release_data_for_api_fallback() {
+        $cached = $this->get_stale_cached_version();
+        if (!is_array($cached) || empty($cached['version'])) {
+            return null;
+        }
+
+        $tag = !empty($cached['release_tag'])
+            ? (string) $cached['release_tag']
+            : 'v' . ltrim((string) $cached['version'], 'v');
+
+        return array(
+            'tag_name' => $tag,
+            'published_at' => isset($cached['published_at']) ? (string) $cached['published_at'] : '',
+            'body' => isset($cached['description']) ? (string) $cached['description'] : '',
+            'assets' => array(),
+        );
+    }
+
+    /**
+     * WordPress 更新 transient に自プラグインの更新情報を反映
+     *
+     * @return bool
+     */
+    private function ensure_update_in_transient() {
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugin_data = get_plugin_data($this->plugin_file, false, false);
+        $current_version = isset($plugin_data['Version']) ? $plugin_data['Version'] : '0.0.0';
+        $latest = $this->get_latest_version(true);
+        if ((!$latest || empty($latest['version']))) {
+            $latest = $this->get_stale_cached_version();
+        }
+        if (!is_array($latest) || empty($latest['version'])) {
+            return false;
+        }
+
+        $latest = $this->normalize_version_info($latest);
+        if (version_compare($current_version, $latest['version'], '>=')) {
+            return false;
+        }
+
+        $package = $this->resolve_update_package_url($latest);
+        if ($package === '') {
+            return false;
+        }
+
+        $transient = get_site_transient('update_plugins');
+        if (!is_object($transient)) {
+            $transient = new stdClass();
+        }
+        if (!isset($transient->checked) || !is_array($transient->checked)) {
+            $transient->checked = array();
+        }
+        if (!isset($transient->response) || !is_array($transient->response)) {
+            $transient->response = array();
+        }
+
+        $transient->checked[$this->plugin_basename] = $current_version;
+        $transient->response[$this->plugin_basename] = (object) array(
+            'id'           => $this->plugin_slug,
+            'slug'         => $this->plugin_slug,
+            'plugin'       => $this->plugin_basename,
+            'new_version'  => $latest['version'],
+            'url'          => $this->github_repo_url,
+            'package'      => $package,
+            'requires'     => $this->requires_wp,
+            'requires_php' => $this->requires_php,
+            'tested'       => $this->tested_wp,
+            'last_updated' => isset($latest['published_at']) ? $latest['published_at'] : '',
+            'sections'     => array(
+                'description' => isset($latest['description']) ? $latest['description'] : '',
+                'changelog'   => isset($latest['changelog']) ? $latest['changelog'] : '',
+            ),
+        );
+
+        if (isset($transient->no_update[$this->plugin_basename])) {
+            unset($transient->no_update[$this->plugin_basename]);
+        }
+
+        set_site_transient('update_plugins', $transient);
+        return true;
     }
 
     private function get_changelog_for_version($version) {
