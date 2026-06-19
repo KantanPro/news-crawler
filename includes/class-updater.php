@@ -50,7 +50,7 @@ class NewsCrawlerUpdater {
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
         add_filter('upgrader_post_install', array($this, 'rename_github_source'), 9, 3);
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
-        add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 10, 3);
+        add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 5, 3);
         add_action('upgrader_process_complete', array($this, 'handle_auto_activation'), 10, 2);
         add_action('admin_init', array($this, 'maybe_reload_admin_after_activation'));
         add_action('admin_init', array($this, 'maybe_refresh_on_admin_screens'));
@@ -182,21 +182,58 @@ class NewsCrawlerUpdater {
     }
 
     public function upgrader_pre_download($reply, $package, $upgrader) {
-        if (strpos($package, 'github.com') !== false) {
-            add_filter('http_request_args', array($this, 'github_download_args'), 10, 2);
+        if ($reply !== false || empty($package) || !$this->is_github_url($package)) {
+            return $reply;
         }
-        return $reply;
+
+        if (!$this->is_target_upgrader_package($package, $upgrader)) {
+            return $reply;
+        }
+
+        $package = $this->normalize_package_url($package);
+        if ($package === '') {
+            return new WP_Error(
+                'download_failed',
+                'GitHub からのダウンロード URL を解決できませんでした。しばらく待ってから再度お試しください。'
+            );
+        }
+
+        add_filter('http_request_args', array($this, 'github_download_args'), 10, 2);
+        $temp_file = download_url($package, 300);
+        remove_filter('http_request_args', array($this, 'github_download_args'), 10);
+
+        if (is_wp_error($temp_file)) {
+            error_log(
+                'News Crawler Updater: GitHub download failed - '
+                . $temp_file->get_error_message()
+                . ' (url=' . $package . ')'
+            );
+        }
+
+        return $temp_file;
     }
 
     public function github_download_args($args, $url) {
-        if (strpos($url, 'github.com') !== false) {
-            $args['timeout'] = 60;
-            $args['headers']['User-Agent'] = 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url');
-            $token = $this->get_github_token();
-            if ($token) {
-                $args['headers']['Authorization'] = 'Bearer ' . $token;
-            }
+        if (!$this->is_github_url($url)) {
+            return $args;
         }
+
+        $args['timeout'] = 60;
+        $args['headers'] = isset($args['headers']) && is_array($args['headers']) ? $args['headers'] : array();
+        $args['headers']['User-Agent'] = 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url');
+
+        // 公開アーカイブ URL には API トークンを送らない（403 / レート制限回避）
+        if (strpos($url, 'api.github.com') === false) {
+            unset($args['headers']['Authorization']);
+            $args['headers']['Accept'] = '*/*';
+            return $args;
+        }
+
+        $token = $this->get_github_token();
+        if ($token) {
+            $args['headers']['Authorization'] = 'Bearer ' . $token;
+        }
+
         return $args;
     }
 
@@ -640,22 +677,32 @@ class NewsCrawlerUpdater {
      */
     private function build_version_info(array $data) {
         $normalized_version = ltrim($data['tag_name'], 'v');
+        $release_tag = isset($data['tag_name']) ? (string) $data['tag_name'] : '';
 
-        $download_url = isset($data['zipball_url']) ? $data['zipball_url'] : '';
+        $download_url = $this->build_public_release_download_url($release_tag);
         if (isset($data['assets']) && is_array($data['assets'])) {
             foreach ($data['assets'] as $asset) {
-                if (!empty($asset['browser_download_url']) && preg_match('/\.zip$/i', $asset['browser_download_url'])) {
-                    if (!empty($asset['name']) && stripos($asset['name'], $this->plugin_slug) !== false) {
-                        $download_url = $asset['browser_download_url'];
-                        break;
-                    }
-                    $download_url = $asset['browser_download_url'];
+                if (empty($asset['browser_download_url']) || !preg_match('/\.zip$/i', $asset['browser_download_url'])) {
+                    continue;
                 }
+
+                $asset_url = (string) $asset['browser_download_url'];
+                if (strpos($asset_url, '/releases/download/') === false) {
+                    continue;
+                }
+
+                if (!empty($asset['name']) && stripos($asset['name'], $this->plugin_slug) !== false) {
+                    $download_url = $asset_url;
+                    break;
+                }
+
+                $download_url = $asset_url;
             }
         }
 
         return array(
             'version'      => $normalized_version,
+            'release_tag'  => $release_tag,
             'download_url' => $download_url,
             'published_at' => isset($data['published_at']) ? $data['published_at'] : '',
             'description'  => !empty($data['body']) ? $data['body'] : '',
@@ -663,6 +710,145 @@ class NewsCrawlerUpdater {
             'prerelease'   => isset($data['prerelease']) ? $data['prerelease'] : false,
             'draft'        => isset($data['draft']) ? $data['draft'] : false,
             'fetched_at'   => time(),
+        );
+    }
+
+    /**
+     * GitHub Release の公開アーカイブ URL（API 不要）
+     *
+     * @param string $tag_name リリースタグ（例: v3.3.8）
+     * @return string
+     */
+    private function build_public_release_download_url($tag_name) {
+        $tag_name = trim((string) $tag_name);
+        if ($tag_name === '') {
+            return '';
+        }
+
+        return sprintf(
+            'https://github.com/%s/%s/archive/refs/tags/%s.zip',
+            $this->repo_owner,
+            $this->repo_name,
+            rawurlencode($tag_name)
+        );
+    }
+
+    /**
+     * zipball / API URL を公開ダウンロード URL に正規化
+     *
+     * @param string $package ダウンロード URL
+     * @return string
+     */
+    private function normalize_package_url($package) {
+        $package = trim((string) $package);
+        if ($package === '') {
+            return '';
+        }
+
+        if (
+            strpos($package, '/archive/refs/tags/') !== false
+            || strpos($package, '/releases/download/') !== false
+        ) {
+            return $package;
+        }
+
+        if (preg_match('#api\.github\.com/repos/[^/]+/[^/]+/zipball/([^/?#]+)#i', $package, $matches)) {
+            return $this->build_public_release_download_url(rawurldecode($matches[1]));
+        }
+
+        if (preg_match('#github\.com/[^/]+/[^/]+/zipball/([^/?#]+)#i', $package, $matches)) {
+            return $this->build_public_release_download_url(rawurldecode($matches[1]));
+        }
+
+        foreach ($this->get_cached_version_candidates() as $cached) {
+            if (!is_array($cached)) {
+                continue;
+            }
+
+            if (!empty($cached['release_tag'])) {
+                $url = $this->build_public_release_download_url((string) $cached['release_tag']);
+                if ($url !== '') {
+                    return $url;
+                }
+            }
+
+            if (!empty($cached['download_url'])) {
+                $cached_url = $this->normalize_package_url((string) $cached['download_url']);
+                if ($cached_url !== '' && strpos($cached_url, 'api.github.com') === false) {
+                    return $cached_url;
+                }
+            }
+        }
+
+        return $package;
+    }
+
+    /**
+     * GitHub 関連 URL かどうか
+     *
+     * @param string $url URL
+     * @return bool
+     */
+    private function is_github_url($url) {
+        return is_string($url) && (
+            strpos($url, 'github.com') !== false
+            || strpos($url, 'githubusercontent.com') !== false
+            || strpos($url, 'codeload.github.com') !== false
+        );
+    }
+
+    /**
+     * 更新対象が自プラグインかどうか
+     *
+     * @param string $package  パッケージ URL
+     * @param object $upgrader アップグレーダー
+     * @return bool
+     */
+    private function is_target_upgrader_package($package, $upgrader) {
+        $hook_extra = $this->get_upgrader_hook_extra($upgrader);
+        if ($this->is_target_plugin_update($hook_extra) || $this->is_target_plugin_in_options($hook_extra)) {
+            return true;
+        }
+
+        $repo_path = $this->repo_owner . '/' . $this->repo_name;
+        return stripos($package, $repo_path) !== false;
+    }
+
+    /**
+     * アップグレーダーから hook_extra を取得
+     *
+     * @param object $upgrader アップグレーダー
+     * @return array
+     */
+    private function get_upgrader_hook_extra($upgrader) {
+        $hook_extra = array();
+
+        if (!is_object($upgrader) || !isset($upgrader->skin) || !is_object($upgrader->skin)) {
+            return $hook_extra;
+        }
+
+        if (!empty($upgrader->skin->plugin)) {
+            $hook_extra['plugin'] = (string) $upgrader->skin->plugin;
+        }
+
+        if (!empty($upgrader->skin->options['hook_extra']) && is_array($upgrader->skin->options['hook_extra'])) {
+            $hook_extra = array_merge($hook_extra, $upgrader->skin->options['hook_extra']);
+        }
+
+        return $hook_extra;
+    }
+
+    /**
+     * キャッシュ済みバージョン情報候補を取得
+     *
+     * @return array<int, array>
+     */
+    private function get_cached_version_candidates() {
+        return array(
+            get_transient($this->key('latest_version')),
+            get_transient($this->key('latest_version_backup')),
+            get_transient('news_crawler_latest_version'),
+            get_transient('news_crawler_latest_version_backup'),
         );
     }
 
