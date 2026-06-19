@@ -1012,18 +1012,19 @@ class NewsCrawlerSettingsManager {
             }
         }
 
-        $oauth_preserve_keys = array(
+        $oauth_keys_managed_separately = array(
             'twitter_oauth2_access_token',
             'twitter_oauth2_refresh_token',
             'twitter_oauth2_token_expires',
             'twitter_connected_username',
             'twitter_connected_name',
-            'twitter_share_log',
         );
-        foreach ($oauth_preserve_keys as $key) {
-            if (!array_key_exists($key, $input) && array_key_exists($key, $existing_options)) {
-                $sanitized[$key] = $existing_options[$key];
-            }
+        foreach ($oauth_keys_managed_separately as $key) {
+            unset($sanitized[$key]);
+        }
+
+        if (!array_key_exists('twitter_share_log', $input) && array_key_exists('twitter_share_log', $existing_options)) {
+            $sanitized['twitter_share_log'] = $existing_options['twitter_share_log'];
         }
         
         // X（Twitter）数値設定

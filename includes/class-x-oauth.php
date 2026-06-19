@@ -76,6 +76,8 @@ class News_Crawler_X_OAuth {
         }
 
         if (!empty($oauth['twitter_oauth2_access_token'])) {
+            // 専用オプション移行後も basic_settings に残った OAuth キーを除去
+            $this->strip_oauth_keys_from_basic_settings();
             return $oauth;
         }
 
@@ -163,7 +165,7 @@ class News_Crawler_X_OAuth {
             $settings = array();
         }
 
-        return array_merge($settings, $this->get_oauth_option_settings());
+        return $this->merge_settings_with_oauth($settings);
     }
 
     /**
@@ -181,7 +183,21 @@ class News_Crawler_X_OAuth {
             $settings = array();
         }
 
-        return array_merge($settings, $this->get_oauth_option_settings());
+        return $this->merge_settings_with_oauth($settings);
+    }
+
+    /**
+     * basic_settings と OAuth 専用オプションをマージ（OAuth キーは専用オプションのみ）
+     *
+     * @param array $basic_settings news_crawler_basic_settings
+     * @return array
+     */
+    private function merge_settings_with_oauth(array $basic_settings) {
+        foreach ($this->get_oauth_option_keys() as $key) {
+            unset($basic_settings[$key]);
+        }
+
+        return array_merge($basic_settings, $this->get_oauth_option_settings());
     }
 
     /**
@@ -363,8 +379,10 @@ class News_Crawler_X_OAuth {
      * @return array
      */
     public function get_connection_diagnostics($settings = null) {
+        $this->maybe_refresh_token_for_diagnostics();
         $settings = $this->resolve_settings($settings);
         $method = $this->get_auth_method($settings);
+        $oauth_settings = $this->get_oauth_option_settings();
 
         $diagnostics = array(
             'method' => $method,
@@ -372,10 +390,10 @@ class News_Crawler_X_OAuth {
             'client_id_saved' => !empty($settings['twitter_client_id']),
             'client_secret_saved' => !empty($settings['twitter_client_secret']),
             'client_secret_usable' => $this->has_usable_client_secret($settings),
-            'oauth2_access_token_saved' => !empty($settings['twitter_oauth2_access_token']),
-            'oauth2_refresh_token_saved' => !empty($settings['twitter_oauth2_refresh_token']),
+            'oauth2_access_token_saved' => !empty($oauth_settings['twitter_oauth2_access_token']),
+            'oauth2_refresh_token_saved' => !empty($oauth_settings['twitter_oauth2_refresh_token']),
             'oauth2_storage_option' => self::OAUTH_OPTION_KEY,
-            'oauth2_token_expires' => isset($settings['twitter_oauth2_token_expires']) ? (int) $settings['twitter_oauth2_token_expires'] : 0,
+            'oauth2_token_expires' => isset($oauth_settings['twitter_oauth2_token_expires']) ? (int) $oauth_settings['twitter_oauth2_token_expires'] : 0,
             'oauth1_api_key_saved' => !empty($settings['twitter_api_key']),
             'oauth1_api_secret_saved' => !empty($settings['twitter_api_secret']),
             'oauth1_api_secret_usable' => $this->has_usable_stored_secret((string) ($settings['twitter_api_secret'] ?? '')),
@@ -715,10 +733,29 @@ class News_Crawler_X_OAuth {
             return;
         }
 
-        $settings = $this->get_settings();
-        $expires = (int) ($settings['twitter_oauth2_token_expires'] ?? 0);
+        $oauth = $this->get_oauth_option_settings();
+        $expires = (int) ($oauth['twitter_oauth2_token_expires'] ?? 0);
         // 期限切れ 5 分前から更新（cron 長時間実行時の 403 回避）
         if ($expires > 0 && time() >= ($expires - 300)) {
+            $this->refresh_access_token();
+        }
+    }
+
+    /**
+     * 診断パネル表示前に期限切れトークンを更新
+     */
+    private function maybe_refresh_token_for_diagnostics() {
+        if ($this->get_auth_method() !== 'oauth2') {
+            return;
+        }
+
+        $oauth = $this->get_oauth_option_settings();
+        if (empty($oauth['twitter_oauth2_refresh_token'])) {
+            return;
+        }
+
+        $expires = (int) ($oauth['twitter_oauth2_token_expires'] ?? 0);
+        if ($expires <= 0 || time() >= ($expires - 300)) {
             $this->refresh_access_token();
         }
     }
@@ -1303,6 +1340,36 @@ class News_Crawler_X_OAuth {
         $this->write_oauth_option($oauth);
         $this->update_settings(array('twitter_auth_method' => 'oauth2'));
         $this->strip_oauth_keys_from_basic_settings();
+
+        if (!$this->verify_oauth_token_expires_persisted((int) $oauth['twitter_oauth2_token_expires'])) {
+            error_log(
+                'News Crawler X OAuth: store_tokens completed but token expiry not persisted - '
+                . 'expected=' . (int) $oauth['twitter_oauth2_token_expires']
+            );
+        }
+    }
+
+    /**
+     * OAuth トークン期限が DB に保存されているか
+     *
+     * @param int $expected_expires 期待する Unix タイムスタンプ
+     * @return bool
+     */
+    private function verify_oauth_token_expires_persisted($expected_expires) {
+        wp_cache_delete(self::OAUTH_OPTION_KEY, 'options');
+
+        $oauth = get_option(self::OAUTH_OPTION_KEY, array());
+        if (!is_array($oauth)) {
+            return false;
+        }
+
+        $expires = (int) ($oauth['twitter_oauth2_token_expires'] ?? 0);
+        if ($expires <= 0) {
+            return false;
+        }
+
+        // 保存直後の時刻ずれを許容
+        return $expires >= ($expected_expires - 120);
     }
 
     /**
