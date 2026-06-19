@@ -1114,13 +1114,23 @@ class News_Crawler_X_OAuth {
             $this->redirect_with_notice('info', '未シェアの News Crawler 投稿は見つかりませんでした。');
         }
 
+        $shared_count = 0;
         $index = 0;
         foreach ($post_ids as $post_id) {
+            if (News_Crawler_X_Poster::is_already_shared_to_x($post_id)) {
+                continue;
+            }
+
             if ($index > 0) {
                 sleep(3);
             }
-            News_Crawler_X_Poster::share_post($post_id, true, true);
+            News_Crawler_X_Poster::share_post($post_id, false, true);
+            $shared_count++;
             $index++;
+        }
+
+        if ($shared_count === 0) {
+            $this->redirect_with_notice('info', '未シェアの News Crawler 投稿は見つかりませんでした。');
         }
 
         $batch_size = News_Crawler_X_Poster::RETRY_PENDING_SHARE_BATCH_SIZE;
@@ -1128,7 +1138,7 @@ class News_Crawler_X_OAuth {
             'success',
             sprintf(
                 '未シェア投稿 %1$d 件（最大 %2$d 件）の X シェアを再試行しました。シェアログを確認してください。',
-                count($post_ids),
+                $shared_count,
                 $batch_size
             )
         );

@@ -65,7 +65,7 @@ class News_Crawler_X_Poster {
      * 指定投稿を X にシェア
      *
      * @param int  $post_id 投稿 ID
-     * @param bool $force   既にシェア済みでも再試行する
+     * @param bool $force   既にシェア済みでも再試行する（手動の強制再シェア用。未シェア再試行では false）
      */
     public static function share_post($post_id, $force = false, $skip_daily_limit = false) {
         $post_id = (int) $post_id;
@@ -134,7 +134,49 @@ class News_Crawler_X_Poster {
         $args['no_found_rows'] = true;
         $query = new WP_Query($args);
 
-        return array_map('intval', $query->posts);
+        $post_ids = array_map('intval', $query->posts);
+
+        return array_values(array_filter($post_ids, function ($post_id) {
+            return !self::is_already_shared_to_x($post_id);
+        }));
+    }
+
+    /**
+     * 投稿が X にシェア済みか
+     *
+     * @param int $post_id 投稿 ID
+     * @return bool
+     */
+    public static function is_already_shared_to_x($post_id) {
+        $post_id = (int) $post_id;
+        if ($post_id <= 0) {
+            return false;
+        }
+
+        $posted = get_post_meta($post_id, '_x_posted', true);
+        if ($posted === '1' || $posted === 1 || $posted === true || $posted === 'yes') {
+            return true;
+        }
+
+        $tweet_id = trim((string) get_post_meta($post_id, '_x_post_id', true));
+        if ($tweet_id !== '') {
+            return true;
+        }
+
+        if (class_exists('News_Crawler_X_Share_Log')) {
+            foreach (News_Crawler_X_Share_Log::get_entries() as $entry) {
+                if (!is_array($entry) || ($entry['level'] ?? '') !== 'success') {
+                    continue;
+                }
+
+                $context = isset($entry['context']) && is_array($entry['context']) ? $entry['context'] : array();
+                if ((int) ($context['post_id'] ?? 0) === $post_id) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -143,10 +185,7 @@ class News_Crawler_X_Poster {
      * @return int
      */
     public static function get_pending_post_count() {
-        $args = self::get_pending_posts_query_args(1);
-        $args['no_found_rows'] = false;
-        $query = new WP_Query($args);
-        return (int) $query->found_posts;
+        return count(self::get_pending_post_ids(50));
     }
 
     /**
@@ -180,6 +219,17 @@ class News_Crawler_X_Poster {
                     array(
                         'key' => '_x_posted',
                         'value' => '0',
+                    ),
+                ),
+                array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => '_x_post_id',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                    array(
+                        'key' => '_x_post_id',
+                        'value' => '',
                     ),
                 ),
             ),
@@ -216,7 +266,7 @@ class News_Crawler_X_Poster {
             $this->log_share_skip($post_id, 'News Crawler 作成投稿ではないため X シェア対象外です。');
             return;
         }
-        if (get_post_meta($post_id, '_x_posted', true)) {
+        if (self::is_already_shared_to_x($post_id)) {
             $this->log_share_skip($post_id, 'この投稿は既に X シェア済みです。');
             return;
         }
