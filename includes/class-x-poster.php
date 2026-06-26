@@ -565,7 +565,7 @@ class News_Crawler_X_Poster {
         if (!$oauth->has_usable_oauth1_credentials($settings)) {
             return array(
                 'success' => false,
-                'error' => 'OAuth 1.0a の認証情報が未設定、または復号できません。API Key / Secret / Access Token / Access Token Secret を再入力して「設定を保存」してください。',
+                'error' => 'OAuth 1.0a の認証情報が未設定、または復号できません。コンシューマーキー / コンシューマーシークレット / アクセストークン / アクセストークンシークレットを再入力して「設定を保存」してください。',
             );
         }
 
@@ -641,7 +641,7 @@ class News_Crawler_X_Poster {
         if ($refresh_failed || empty($diagnostics['oauth2_refresh_token_saved'])) {
             $hints[] = '「接続を解除」→ Client ID / Secret を保存 →「X アカウントを接続」で再接続してください。Client Secret だけ保存しても古いトークンは無効のままです。';
         } else {
-            $hints[] = 'Client Secret を再生成した場合は保存後に必ず「X アカウントを接続」で再接続してください。OAuth 2.0 Client ID/Secret（API Key ではありません）を確認してください。';
+            $hints[] = 'Client Secret を再生成した場合は保存後に必ず「X アカウントを接続」で再接続してください。OAuth 2.0 Client ID/Secret（コンシューマーキーではありません）を確認してください。';
         }
 
         return $message . ' — ' . implode(' ', $hints);
@@ -658,7 +658,7 @@ class News_Crawler_X_Poster {
         $message = $this->extract_api_error_message($data, $response_code);
 
         if ($response_code === 401) {
-            return $message . ' — Developer Portal の OAuth 1.0a（API Key / API Secret / Access Token / Access Token Secret）が正しいか確認してください。OAuth 2.0 Client ID/Secret ではありません。Read and Write 権限のトークンを Regenerate して再入力してください。';
+            return $message . ' — Developer Portal の OAuth 1.0a（コンシューマーキー / コンシューマーシークレット / アクセストークン / アクセストークンシークレット）が正しいか確認してください。OAuth 2.0 Client ID/Secret ではありません。読み取りと書き込み権限のトークンを「再生生成」して再入力してください。';
         }
 
         return $message;

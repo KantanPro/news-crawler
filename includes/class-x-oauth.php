@@ -934,7 +934,7 @@ class News_Crawler_X_OAuth {
         if (!$this->has_usable_oauth1_credentials($settings)) {
             return array(
                 'success' => false,
-                'error' => 'OAuth 1.0a の API Key / Secret / Access Token / Access Token Secret が未設定、または復号できません。',
+                'error' => 'OAuth 1.0a のコンシューマーキー / コンシューマーシークレット / アクセストークン / アクセストークンシークレットが未設定、または復号できません。',
             );
         }
 
@@ -1287,7 +1287,7 @@ class News_Crawler_X_OAuth {
             : 'アクセストークンの取得に失敗しました。';
 
         if ($error_code === 'invalid_client' || $status_code === 401) {
-            return 'Client ID または Client Secret が正しくありません。Developer Portal の「Keys and Tokens」にある OAuth 2.0 Client ID / Client Secret（API Key ではありません）を再入力し、「Regenerate」した場合は両方を最新値に更新して「設定を保存」してください。 (HTTP ' . $status_code . ')';
+            return 'Client ID または Client Secret が正しくありません。Developer Portal の「Keys and Tokens」にある OAuth 2.0 Client ID / Client Secret（コンシューマーキーではありません）を再入力し、「再生生成」した場合は両方を最新値に更新して「設定を保存」してください。 (HTTP ' . $status_code . ')';
         }
 
         if ($error_code === 'invalid_grant') {
@@ -1388,8 +1388,8 @@ class News_Crawler_X_OAuth {
      * @param string               $method          HTTP メソッド
      * @param string               $url             URL
      * @param array<string, mixed> $params          クエリパラメータ
-     * @param string               $consumer_key    API Key
-     * @param string               $consumer_secret API Secret
+     * @param string               $consumer_key    コンシューマーキー
+     * @param string               $consumer_secret コンシューマーシークレット
      * @param string               $token           Access Token
      * @param string               $token_secret    Access Token Secret
      * @return string

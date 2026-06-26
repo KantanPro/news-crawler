@@ -462,28 +462,28 @@ class NewsCrawlerGenreSettings {
         $options = get_option('news_crawler_basic_settings', array());
         $api_key = isset($options['twitter_api_key']) ? $options['twitter_api_key'] : '';
         echo '<input type="text" name="news_crawler_basic_settings[twitter_api_key]" value="' . esc_attr($api_key) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Key（Consumer Key）を入力してください。</p>';
+        echo '<p class="description">X Developer Portal の「Keys and Tokens」→「OAuth 1.0 キー」のコンシューマーキーを入力してください。</p>';
     }
     
     public function twitter_api_secret_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $api_secret = isset($options['twitter_api_secret']) ? $options['twitter_api_secret'] : '';
         echo '<input type="password" name="news_crawler_basic_settings[twitter_api_secret]" value="' . esc_attr($api_secret) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAPI Secret（Consumer Secret）を入力してください。</p>';
+        echo '<p class="description">X Developer Portal の「Keys and Tokens」→「OAuth 1.0 キー」のコンシューマーシークレットを入力してください。</p>';
     }
     
     public function twitter_access_token_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $access_token = isset($options['twitter_access_token']) ? $options['twitter_access_token'] : '';
         echo '<input type="text" name="news_crawler_basic_settings[twitter_access_token]" value="' . esc_attr($access_token) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Tokenを入力してください。</p>';
+        echo '<p class="description">X Developer Portal の「Keys and Tokens」→「アクセストークン」の Access Token（読み取りと書き込み権限）を入力してください。</p>';
     }
     
     public function twitter_access_token_secret_callback() {
         $options = get_option('news_crawler_basic_settings', array());
         $access_token_secret = isset($options['twitter_access_token_secret']) ? $options['twitter_access_token_secret'] : '';
         echo '<input type="password" name="news_crawler_basic_settings[twitter_access_token_secret]" value="' . esc_attr($access_token_secret) . '" size="50" />';
-        echo '<p class="description">X Developer Portalで取得したAccess Token Secretを入力してください。</p>';
+        echo '<p class="description">X Developer Portal の「Keys and Tokens」→「アクセストークン」の Access Token Secret を入力してください。</p>';
     }
     
     public function twitter_message_template_callback() {
