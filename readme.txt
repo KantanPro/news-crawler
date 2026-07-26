@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 3.3.14
+Stable tag: 3.3.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,12 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * ジャンル別設定管理
 
 * YouTube APIのクォータ制限対応
+
+**新機能（v3.3.15）:**
+* コアサーバー向けに自動投稿 cron の PHP 検出を再修正
+  * `php -r` 非対応（CGI）でも動くよう `php -v` でバージョン判定
+  * `php81cli` / `php80cli` などコアサーバー公式 CLI パスを優先
+  * 必要時は `news-crawler-php.path` で PHP フルパスを指定可能
 
 **新機能（v3.3.14）:**
 * 自動投稿 cron が古い CLI PHP で Fatal になる問題を修正

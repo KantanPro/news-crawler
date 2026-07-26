@@ -241,44 +241,78 @@ else
     # wp-cliが無い場合はPHP直接実行
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
 
-    # PHPのフルパスを検索（Web と同じ PHP 8.x を優先。
-    # /usr/local/bin/php はコアサーバー等で古い CLI のことがあり、
-    # WordPress 読み込みで「unexpected '=>'」Fatal になる）
+    # PHP バイナリ検索
+    # - コアサーバー V1: php81cli / php80cli 等（/usr/local/bin/php は CGI で古いことが多い）
+    # - バージョン判定は php -v（CGI は -r 非対応で Usage が出る）
+    # - 上書き: 環境変数 NEWS_CRAWLER_PHP または同ディレクトリの news-crawler-php.path
     PHP_CMD=""
-    PHP_CANDIDATES=(
-        "/usr/bin/php8.3"
-        "/usr/local/bin/php8.3"
-        "/usr/bin/php8.2"
-        "/usr/local/bin/php8.2"
-        "/usr/bin/php8.1"
-        "/usr/local/bin/php8.1"
-        "/usr/local/php/8.3/bin/php"
-        "/usr/local/php/8.2/bin/php"
-        "/usr/local/php/8.1/bin/php"
-        "/opt/homebrew/bin/php"
-        "/usr/bin/php"
-        "/usr/local/bin/php"
-        "$(command -v php || true)"
-    )
-
-    for php_path in "${PHP_CANDIDATES[@]}"; do
-        if [ -z "$php_path" ] || [ ! -x "$php_path" ]; then
-            continue
+    PHP_PATH_FILE="${SCRIPT_DIR}/news-crawler-php.path"
+    if [ -n "${NEWS_CRAWLER_PHP:-}" ] && [ -x "${NEWS_CRAWLER_PHP}" ]; then
+        PHP_CMD="${NEWS_CRAWLER_PHP}"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] NEWS_CRAWLER_PHP を使用: $PHP_CMD" >> "$LOG_FILE"
+    elif [ -f "$PHP_PATH_FILE" ]; then
+        configured_php="$(tr -d '[:space:]' < "$PHP_PATH_FILE" | head -n 1)"
+        if [ -n "$configured_php" ] && [ -x "$configured_php" ]; then
+            PHP_CMD="$configured_php"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] news-crawler-php.path を使用: $PHP_CMD" >> "$LOG_FILE"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] news-crawler-php.path が無効です: ${configured_php:-空}" >> "$LOG_FILE"
         fi
-        # PHP 8.1 以上のみ採用（WP / プラグイン要件）
-        php_major="$("$php_path" -r 'echo PHP_MAJOR_VERSION;' 2>/dev/null || true)"
-        php_minor="$("$php_path" -r 'echo PHP_MINOR_VERSION;' 2>/dev/null || true)"
-        if [ -n "$php_major" ] && [ -n "$php_minor" ]; then
-            if [ "$php_major" -gt 8 ] || { [ "$php_major" -eq 8 ] && [ "$php_minor" -ge 1 ]; }; then
-                PHP_CMD="$php_path"
-                break
-            fi
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスキップ（バージョン不足 ${php_major}.${php_minor}）: $php_path" >> "$LOG_FILE"
-        fi
-    done
+    fi
 
     if [ -z "$PHP_CMD" ]; then
-        cleanup_and_exit 1 "PHP 8.1以上のコマンドが見つかりません（Webと同じPHPバイナリを指定してください）"
+        PHP_CANDIDATES=(
+            "/usr/local/bin/php83cli"
+            "/usr/local/bin/php82cli"
+            "/usr/local/bin/php81cli"
+            "/usr/local/bin/php80cli"
+            "/usr/local/php83/bin/php83"
+            "/usr/local/php82/bin/php82"
+            "/usr/local/php81/bin/php81"
+            "/usr/local/php80/bin/php80"
+            "/usr/bin/php8.3"
+            "/usr/local/bin/php8.3"
+            "/usr/bin/php8.2"
+            "/usr/local/bin/php8.2"
+            "/usr/bin/php8.1"
+            "/usr/local/bin/php8.1"
+            "/usr/local/php/8.3/bin/php"
+            "/usr/local/php/8.2/bin/php"
+            "/usr/local/php/8.1/bin/php"
+            "/opt/homebrew/bin/php"
+            "/usr/bin/php"
+            "/usr/local/bin/php"
+            "$(command -v php || true)"
+        )
+
+        for php_path in "${PHP_CANDIDATES[@]}"; do
+            if [ -z "$php_path" ] || [ ! -x "$php_path" ]; then
+                continue
+            fi
+
+            # php -v の1行目から major.minor を取得（-r は使わない）
+            php_ver_line="$("$php_path" -v 2>&1 | head -n 1 || true)"
+            php_major="$(printf '%s\n' "$php_ver_line" | sed -n 's/.*PHP \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1/p')"
+            php_minor="$(printf '%s\n' "$php_ver_line" | sed -n 's/.*PHP \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2/p')"
+
+            if [ -z "$php_major" ] || [ -z "$php_minor" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスキップ（バージョン取得不可）: $php_path / ${php_ver_line}" >> "$LOG_FILE"
+                continue
+            fi
+
+            # PHP 8.0 以上を採用（コアサーバーは php80cli まで公式案内）
+            if [ "$php_major" -gt 8 ] || { [ "$php_major" -eq 8 ] && [ "$php_minor" -ge 0 ]; }; then
+                PHP_CMD="$php_path"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP候補を採用: $php_path (${php_major}.${php_minor})" >> "$LOG_FILE"
+                break
+            fi
+
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスキップ（バージョン不足 ${php_major}.${php_minor}）: $php_path" >> "$LOG_FILE"
+        done
+    fi
+
+    if [ -z "$PHP_CMD" ]; then
+        cleanup_and_exit 1 "PHP 8.0以上のCLIが見つかりません。プラグインディレクトリに news-crawler-php.path（1行でPHPフルパス、例: /usr/local/bin/php81cli）を置いてください"
     fi
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD ($("$PHP_CMD" -v 2>&1 | head -n 1))" >> "$LOG_FILE"
