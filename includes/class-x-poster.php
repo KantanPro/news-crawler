@@ -189,6 +189,111 @@ class News_Crawler_X_Poster {
     }
 
     /**
+     * 本日の自動シェア枠に余裕があるか
+     *
+     * @param array|null $settings X 設定
+     * @return bool
+     */
+    public static function has_daily_share_quota_remaining($settings = null) {
+        if ($settings === null) {
+            if (class_exists('News_Crawler_X_OAuth')) {
+                $settings = News_Crawler_X_OAuth::instance()->get_settings();
+            } else {
+                $settings = get_option('news_crawler_basic_settings', array());
+            }
+        }
+        if (!is_array($settings)) {
+            return false;
+        }
+
+        $daily_limit = isset($settings['twitter_max_daily_shares'])
+            ? max(0, (int) $settings['twitter_max_daily_shares'])
+            : 0;
+        if ($daily_limit <= 0) {
+            // 0 = 無制限。待機行列消化は 1 件/回に抑える前提で枠ありとみなす
+            return true;
+        }
+
+        return self::count_today_x_shares() < $daily_limit;
+    }
+
+    /**
+     * 新規ブログが無い自動投稿実行時に、未シェア待ち行列から 1 件シェアする
+     *
+     * X の 1 日上限などで当日シェアできなかった投稿を、枠が空いた回で消化する。
+     *
+     * @return array{shared:bool,post_id:int,reason:string}
+     */
+    public static function maybe_drain_pending_share_queue() {
+        $result = array(
+            'shared' => false,
+            'post_id' => 0,
+            'reason' => '',
+        );
+
+        if (class_exists('News_Crawler_X_OAuth')) {
+            $settings = News_Crawler_X_OAuth::instance()->get_settings();
+        } else {
+            $settings = get_option('news_crawler_basic_settings', array());
+        }
+        if (!is_array($settings)) {
+            $settings = array();
+        }
+
+        if (empty($settings['twitter_enabled'])) {
+            $result['reason'] = 'X 自動シェアが無効です。';
+            return $result;
+        }
+
+        if (!self::has_daily_share_quota_remaining($settings)) {
+            $daily_limit = isset($settings['twitter_max_daily_shares'])
+                ? max(0, (int) $settings['twitter_max_daily_shares'])
+                : 0;
+            $result['reason'] = sprintf(
+                '本日の X 自動シェア上限（%d 件）に達しているため、未シェア待ち行列は消化しません。',
+                $daily_limit
+            );
+            if (class_exists('News_Crawler_X_Share_Log')) {
+                News_Crawler_X_Share_Log::add($result['reason'], 'info');
+            }
+            return $result;
+        }
+
+        $pending_ids = self::get_pending_post_ids(5);
+        if (empty($pending_ids)) {
+            $result['reason'] = '未シェアの待ち行列は空です。';
+            return $result;
+        }
+
+        $post_id = (int) $pending_ids[0];
+        $post_title = get_the_title($post_id);
+        if (class_exists('News_Crawler_X_Share_Log')) {
+            News_Crawler_X_Share_Log::add(
+                sprintf(
+                    '新規ブログが無かったため、未シェア待ち行列から「%s」を X シェアします。',
+                    $post_title ?: ('投稿 ID ' . $post_id)
+                ),
+                'info',
+                array('post_id' => $post_id)
+            );
+        }
+
+        // 日次上限は遵守する（手動再試行の skip は使わない）
+        self::share_post($post_id, false, false);
+
+        if (self::is_already_shared_to_x($post_id)) {
+            $result['shared'] = true;
+            $result['post_id'] = $post_id;
+            $result['reason'] = '未シェア待ち行列から 1 件シェアしました。';
+        } else {
+            $result['post_id'] = $post_id;
+            $result['reason'] = '未シェア待ち行列のシェアを試行しましたが完了しませんでした（上限・API エラー等）。';
+        }
+
+        return $result;
+    }
+
+    /**
      * 未シェア投稿クエリの共通引数
      *
      * @param int $limit 取得件数
@@ -200,6 +305,9 @@ class News_Crawler_X_Poster {
             'post_status' => 'publish',
             'posts_per_page' => max(1, min(50, (int) $limit)),
             'fields' => 'ids',
+            // 待ち行列は古い未シェアから消化する
+            'orderby' => 'date',
+            'order' => 'ASC',
             'meta_query' => array(
                 'relation' => 'AND',
                 array(

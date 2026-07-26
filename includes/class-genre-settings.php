@@ -3658,13 +3658,17 @@ $('#cancel-edit').click(function() {
             $log_message = 'Auto Posting Execution - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Total genres: ' . count($genre_settings) . ', Posts created: ' . $posts_created;
             error_log($log_message);
             file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL, FILE_APPEND | LOCK_EX);
+
+            // 新規ブログが無いときは、未シェア待ち行列を 1 件消化（日次上限内）
+            $pending_share = $this->maybe_drain_x_pending_share_queue((int) $posts_created);
             
             // 実行結果を返す
             $result = array(
                 'executed_count' => $executed_count,
                 'skipped_count' => $skipped_count,
                 'total_genres' => count($genre_settings),
-                'posts_created' => $posts_created
+                'posts_created' => $posts_created,
+                'pending_x_share' => $pending_share,
             );
             
             // 結果をログに出力（cronスクリプトで確認できるように）
@@ -4712,12 +4716,52 @@ $('#cancel-edit').click(function() {
         
         error_log('Force Auto Posting - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Posts Created: ' . $posts_created);
         file_put_contents(WP_CONTENT_DIR . '/debug.log', date('Y-m-d H:i:s') . ' Force Auto Posting - Completed. Executed: ' . $executed_count . ', Skipped: ' . $skipped_count . ', Posts Created: ' . $posts_created . PHP_EOL, FILE_APPEND | LOCK_EX);
+
+        // 新規ブログが無いときは、未シェア待ち行列を 1 件消化（日次上限内）
+        $pending_share = $this->maybe_drain_x_pending_share_queue((int) $posts_created);
         
         return array(
             'executed_count' => $executed_count,
             'skipped_count' => $skipped_count,
-            'posts_created' => $posts_created
+            'posts_created' => $posts_created,
+            'pending_x_share' => $pending_share,
         );
+    }
+
+    /**
+     * 自動投稿で新規ブログが 0 件のとき、未シェア X 待ち行列を 1 件消化する
+     *
+     * @param int $posts_created 今回作成した投稿数
+     * @return array<string, mixed>
+     */
+    private function maybe_drain_x_pending_share_queue($posts_created) {
+        $empty = array(
+            'shared' => false,
+            'post_id' => 0,
+            'reason' => '',
+        );
+
+        if ((int) $posts_created > 0) {
+            $empty['reason'] = '新規ブログがあったため、未シェア待ち行列は消化しません。';
+            return $empty;
+        }
+
+        if (!class_exists('News_Crawler_X_Poster')) {
+            $empty['reason'] = 'X 投稿機能が利用できません。';
+            return $empty;
+        }
+
+        $result = News_Crawler_X_Poster::maybe_drain_pending_share_queue();
+        $log_message = 'Pending X Share Queue - ' . ($result['reason'] ?? '') .
+            ( !empty($result['post_id']) ? ' (post_id: ' . (int) $result['post_id'] . ')' : '' );
+        error_log($log_message);
+        file_put_contents(
+            WP_CONTENT_DIR . '/debug.log',
+            date('Y-m-d H:i:s') . ' ' . $log_message . PHP_EOL,
+            FILE_APPEND | LOCK_EX
+        );
+
+        return is_array($result) ? $result : $empty;
     }
     
     /**

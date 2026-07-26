@@ -192,6 +192,7 @@ class NewsCrawlerCronSettings {
         $today_x_shares = class_exists('News_Crawler_X_Poster') ? News_Crawler_X_Poster::count_today_x_shares() : 0;
         ?>
         <p>News Crawler が作成した投稿を公開すると、X へ自動シェアします。</p>
+        <p class="description">1日上限などでシェアできなかった投稿は未シェア待ち行列に残ります。自動投稿で<strong>新規ブログが 0 件</strong>のとき、上限に余裕があれば待ち行列から古い順に 1 件自動シェアします。</p>
 
         <form method="post" action="options.php">
             <?php settings_fields('news_crawler_basic_settings'); ?>
@@ -226,6 +227,7 @@ class NewsCrawlerCronSettings {
                             <?php if ($max_daily_shares > 0) : ?>
                                 / <?php echo esc_html((string) $max_daily_shares); ?>
                             <?php endif; ?>
+                            （X アプリ制限が 1 日 1 件なら <code>1</code> を推奨）
                         </p>
                     </td>
                 </tr>
@@ -529,7 +531,7 @@ class NewsCrawlerCronSettings {
         ?>
         <h3>シェアログ</h3>
         <?php if ($pending_share_count > 0) : ?>
-            <p class="description">未シェアの News Crawler 投稿が <?php echo esc_html((string) $pending_share_count); ?> 件あります。「未シェア投稿を再試行」ボタンで最大 <?php echo esc_html((string) $retry_batch_size); ?> 件ずつ X シェアできます。</p>
+            <p class="description">未シェアの News Crawler 投稿が <?php echo esc_html((string) $pending_share_count); ?> 件あります。手動では「未シェア投稿を再試行」で最大 <?php echo esc_html((string) $retry_batch_size); ?> 件、自動では新規ブログ 0 件の cron 実行時に 1 件消化されます。</p>
         <?php endif; ?>
         <?php if (empty($entries)) : ?>
             <p>ログはまだありません。</p>
