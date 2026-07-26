@@ -115,55 +115,61 @@ class NewsCrawlerCronSettings {
             echo '</div>';
             return;
         }
-        
-        
-        // 生成されたcronコマンドを表示
-        $cron_command = $this->generate_cron_command();
+
+        $script_path = $this->get_cron_script_path();
+        $cron_line = $this->generate_cron_command();
         
         echo '<div class="ktp-command-box">';
-        echo '<h3 style="margin-top: 0;">📝 Cronスクリプトパス</h3>';
-        echo '<p style="margin-bottom: 16px;">以下のパスをサーバーのcrontabに追加してください：</p>';
-        echo '<div class="ktp-code-block" style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 16px; border-radius: 6px; margin-bottom: 16px; overflow-x: auto;">';
-        echo '<code style="color: #333; font-family: Monaco, Menlo, Ubuntu Mono, monospace; font-size: 14px; line-height: 1.6; word-break: break-all;">' . esc_html($cron_command) . '</code>';
+        echo '<h3 style="margin-top: 0;">📝 推奨 crontab 行</h3>';
+        echo '<p style="margin-bottom: 8px;">この環境で検出したスクリプトパスに <code>&gt;/dev/null 2&gt;&amp;1</code> を付けた次の1行を、実行スケジュールと組み合わせて登録してください。</p>';
+        echo '<div class="ktp-code-block" style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 16px; border-radius: 6px; margin-bottom: 12px; overflow-x: auto;">';
+        echo '<code style="color: #333; font-family: Monaco, Menlo, Ubuntu Mono, monospace; font-size: 14px; line-height: 1.6; word-break: break-all;">' . esc_html($cron_line) . '</code>';
         echo '</div>';
-        echo '<button type="button" class="button button-secondary" onclick="copyToClipboard(\'' . esc_js($cron_command) . '\')">パスをコピー</button>';
+        echo '<button type="button" class="button button-secondary" onclick="copyToClipboard(' . esc_attr(wp_json_encode($cron_line)) . ')">推奨行をコピー</button>';
         echo '</div>';
-        
-        // 設定手順を表示
+
         echo '<div class="ktp-instructions-box" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">';
         echo '<h3 style="margin-top: 0;">📋 設定手順</h3>';
         echo '<ol style="line-height: 1.6;">';
-        echo '<li>上記のパスをコピーします</li>';
-        echo '<li>実行頻度とパスを組み合わせてcrontabに追加します（例：<code style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-family: Monaco, Menlo, Ubuntu Mono, monospace;">0 * * * * /path/to/script</code>）</li>';
+        echo '<li>上記をコピーします</li>';
+        echo '<li>サーバーの cron（crontab やレンタルサーバーの管理画面）に、実行頻度と組み合わせて登録します（例: 毎時0分なら <code>0 * * * *</code>）</li>';
+        echo '<li>管理画面でホームディレクトリなどが固定表示される場合は、固定部分のあとに続くパスと <code>&gt;/dev/null 2&gt;&amp;1</code> を入力し、完成形が上記と同じになるようにします</li>';
+        echo '<li>ホストによっては実行時間制限やシェルの違いがあります。重い処理（複数ジャンル・AI画像生成など）はタイムアウトしやすいので必要に応じて抑えてください</li>';
+        echo '<li>動作確認: 投稿設定の「強制実行」と、プラグイン内の <code>news-crawler-cron.log</code></li>';
         echo '</ol>';
         echo '</div>';
         
-        
-        // JavaScript
         ?>
         <script>
         function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(function() {
-                alert('パスをクリップボードにコピーしました');
-            }, function(err) {
-                console.error('コピーに失敗しました: ', err);
-            });
+                    alert('クリップボードにコピーしました');
+                }, function() {
+                    prompt('次をコピーしてください:', text);
+                });
+            } else {
+                prompt('次をコピーしてください:', text);
+            }
         }
         </script>
         <?php
     }
-    
+
     /**
-     * Cronコマンドを生成
+     * cron スクリプトの絶対パス
      */
-    private function generate_cron_command() {
-        $script_path = dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron.sh';
-        
-        // スクリプトのパスのみを返す
-        return $script_path;
+    private function get_cron_script_path() {
+        return dirname(plugin_dir_path(__FILE__)) . '/news-crawler-cron.sh';
     }
     
-    
+    /**
+     * 推奨 crontab 行を生成（リダイレクト付き）
+     */
+    private function generate_cron_command() {
+        return $this->get_cron_script_path() . ' >/dev/null 2>&1';
+    }
+
     /**
      * X 設定を描画（xLabo 風 UI）
      */
