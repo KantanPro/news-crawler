@@ -241,20 +241,47 @@ else
     # wp-cliが無い場合はPHP直接実行
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHP直接実行でNews Crawlerを実行中..." >> "$LOG_FILE"
 
-    # PHPのフルパスを複数の候補から検索
+    # PHPのフルパスを検索（Web と同じ PHP 8.x を優先。
+    # /usr/local/bin/php はコアサーバー等で古い CLI のことがあり、
+    # WordPress 読み込みで「unexpected '=>'」Fatal になる）
     PHP_CMD=""
-    for php_path in "/usr/bin/php" "/usr/local/bin/php" "/opt/homebrew/bin/php" "$(command -v php || true)"; do
-        if [ -n "$php_path" ] && [ -x "$php_path" ]; then
-            PHP_CMD="$php_path"
-            break
+    PHP_CANDIDATES=(
+        "/usr/bin/php8.3"
+        "/usr/local/bin/php8.3"
+        "/usr/bin/php8.2"
+        "/usr/local/bin/php8.2"
+        "/usr/bin/php8.1"
+        "/usr/local/bin/php8.1"
+        "/usr/local/php/8.3/bin/php"
+        "/usr/local/php/8.2/bin/php"
+        "/usr/local/php/8.1/bin/php"
+        "/opt/homebrew/bin/php"
+        "/usr/bin/php"
+        "/usr/local/bin/php"
+        "$(command -v php || true)"
+    )
+
+    for php_path in "${PHP_CANDIDATES[@]}"; do
+        if [ -z "$php_path" ] || [ ! -x "$php_path" ]; then
+            continue
+        fi
+        # PHP 8.1 以上のみ採用（WP / プラグイン要件）
+        php_major="$("$php_path" -r 'echo PHP_MAJOR_VERSION;' 2>/dev/null || true)"
+        php_minor="$("$php_path" -r 'echo PHP_MINOR_VERSION;' 2>/dev/null || true)"
+        if [ -n "$php_major" ] && [ -n "$php_minor" ]; then
+            if [ "$php_major" -gt 8 ] || { [ "$php_major" -eq 8 ] && [ "$php_minor" -ge 1 ]; }; then
+                PHP_CMD="$php_path"
+                break
+            fi
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] PHPスキップ（バージョン不足 ${php_major}.${php_minor}）: $php_path" >> "$LOG_FILE"
         fi
     done
 
     if [ -z "$PHP_CMD" ]; then
-        cleanup_and_exit 1 "PHPコマンドが見つかりません"
+        cleanup_and_exit 1 "PHP 8.1以上のコマンドが見つかりません（Webと同じPHPバイナリを指定してください）"
     fi
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 使用するPHPコマンド: $PHP_CMD ($("$PHP_CMD" -v 2>&1 | head -n 1))" >> "$LOG_FILE"
 
     # 一時的なPHPファイルを作成して実行（wp-load.phpを使用）
     TEMP_PHP_FILE="/tmp/news-crawler-cron-$(date +%s).php"
