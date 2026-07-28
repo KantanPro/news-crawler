@@ -3723,6 +3723,9 @@ $('#cancel-edit').click(function() {
                     continue; // まだ実行時刻でないものはスキップ
                 }
                 try {
+                    if (empty($setting['id'])) {
+                        $setting['id'] = $genre_id;
+                    }
                     $available = intval($this->test_news_source_availability($setting));
                 } catch (Exception $e) {
                     $available = 0;
@@ -3837,6 +3840,9 @@ $('#cancel-edit').click(function() {
             $posts_created = 0; // 投稿作成数を初期化
             
             error_log('Execute Auto Posting For Genre - Starting crawl for genre: ' . $setting['genre_name'] . ', Content type: ' . $setting['content_type']);
+
+            // 待ち行列・メタ保存用にジャンル ID を確実に付与
+            $setting['id'] = $genre_id;
             
             if ($setting['content_type'] === 'news') {
                 $log_message = 'Execute Auto Posting For Genre - Executing news crawling for genre: ' . $setting['genre_name'];
@@ -3990,6 +3996,17 @@ $('#cancel-edit').click(function() {
             if ($available_candidates === false) {
                 // キャッシュがない場合は0を表示（再評価ボタンで更新）
                 $available_candidates = 0;
+            }
+
+            // 未投稿待ち行列があれば候補ありとみなす
+            if ((int) $available_candidates <= 0
+                && class_exists('News_Crawler_Pending_Article_Queue')
+                && ($setting['content_type'] ?? '') === 'news'
+            ) {
+                $pending = News_Crawler_Pending_Article_Queue::count((string) $genre_id);
+                if ($pending > 0) {
+                    $available_candidates = $pending;
+                }
             }
             
             if ($available_candidates <= 0) {
@@ -4828,6 +4845,15 @@ $('#cancel-edit').click(function() {
             } else {
                 // ニュースソースのテスト
                 $available_articles = $this->test_news_source_availability_news($setting);
+
+                // 未投稿待ち行列があれば、ソース上に新規が無くても候補ありとみなす
+                if (class_exists('News_Crawler_Pending_Article_Queue')) {
+                    $genre_id = isset($setting['id']) ? (string) $setting['id'] : '';
+                    $pending = News_Crawler_Pending_Article_Queue::count($genre_id !== '' ? $genre_id : null);
+                    if ($pending > 0) {
+                        $available_articles = max((int) $available_articles, $pending);
+                    }
+                }
             }
         } catch (Exception $e) {
             error_log('News source availability test error: ' . $e->getMessage());

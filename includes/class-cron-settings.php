@@ -79,6 +79,7 @@ class NewsCrawlerCronSettings {
                         </h2>
                     </div>
                     <div class="ktp-card-content">
+                        <?php $this->render_pending_article_queue_notice(); ?>
                         <?php $this->display_generated_cron_settings(); ?>
                     </div>
                 </div>
@@ -154,6 +155,46 @@ class NewsCrawlerCronSettings {
         }
         </script>
         <?php
+    }
+
+    /**
+     * 未投稿記事待ち行列の案内
+     */
+    private function render_pending_article_queue_notice() {
+        if (!class_exists('News_Crawler_Pending_Article_Queue')) {
+            return;
+        }
+
+        $pending_count = News_Crawler_Pending_Article_Queue::count();
+        $summary = News_Crawler_Pending_Article_Queue::get_summary_list(5);
+
+        echo '<div class="ktp-info-box" style="background:#f0f6fc;border:1px solid #c3d7ef;padding:14px 16px;border-radius:6px;margin-bottom:16px;">';
+        echo '<p style="margin:0 0 8px;"><strong>未投稿のブログ記事待ち行列</strong></p>';
+        if ($pending_count <= 0) {
+            echo '<p class="description" style="margin:0;">待ち行列は空です。ソースで複数ヒットしても投稿上限で作れなかった記事は、ここに溜まり次回以降の自動投稿で消化されます。</p>';
+            echo '</div>';
+            return;
+        }
+
+        echo '<p class="description" style="margin:0 0 8px;">未投稿の記事が <strong>' . esc_html((string) $pending_count) . '</strong> 件あります。自動投稿のたびに古い順で最大 1 件消化します（X 未シェア待ち行列と同趣旨）。</p>';
+        if (!empty($summary)) {
+            echo '<ul style="margin:0;padding-left:1.2em;">';
+            foreach ($summary as $row) {
+                $title = $row['title'] !== '' ? $row['title'] : '(無題)';
+                $queued_at = $row['queued_at'] !== '' ? $row['queued_at'] : '—';
+                echo '<li style="margin-bottom:4px;">' . esc_html($title);
+                echo ' <span style="color:#666;">（登録: ' . esc_html($queued_at) . '）</span>';
+                if (!empty($row['url'])) {
+                    echo ' <a href="' . esc_url($row['url']) . '" target="_blank" rel="noopener noreferrer">元記事</a>';
+                }
+                echo '</li>';
+            }
+            echo '</ul>';
+            if ($pending_count > count($summary)) {
+                echo '<p class="description" style="margin:8px 0 0;">ほか ' . esc_html((string) ($pending_count - count($summary))) . ' 件</p>';
+            }
+        }
+        echo '</div>';
     }
 
     /**

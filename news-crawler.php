@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.3.16
+ * Version: 3.3.17
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義（NEWS_CRAWLER_VERSION は get_plugin_data 不可時のフォールバック）
-define('NEWS_CRAWLER_VERSION', '3.3.16');
+define('NEWS_CRAWLER_VERSION', '3.3.17');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -57,6 +57,7 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-crypto.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-oauth.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-share-log.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-x-poster.php';
+require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-pending-article-queue.php';
 require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 
 
@@ -1279,19 +1280,68 @@ class NewsCrawler {
             $debug_info[] = "    → 有効記事として追加";
             $valid_articles[] = $article;
         }
-        
-        $valid_articles = array_slice($valid_articles, 0, $max_articles);
+
+        $queue_added = 0;
+        $queue_remaining = 0;
+        $from_queue = false;
+        if (class_exists('News_Crawler_Pending_Article_Queue')) {
+            $queue_context = array(
+                'genre_id' => '',
+                'categories' => $categories,
+                'status' => $status,
+            );
+            $queue_added = News_Crawler_Pending_Article_Queue::enqueue_many($valid_articles, $queue_context);
+            $selected = News_Crawler_Pending_Article_Queue::dequeue_articles_for_posting(
+                null,
+                $max_articles,
+                function ($article) {
+                    return $this->is_duplicate_news($article);
+                }
+            );
+            $valid_articles = $selected;
+            $from_queue = !empty($selected);
+            $queue_remaining = News_Crawler_Pending_Article_Queue::count();
+            $debug_info[] = "\n未投稿待ち行列へ追加: {$queue_added}件 / 残: {$queue_remaining}件";
+        } else {
+            $valid_articles = array_slice($valid_articles, 0, $max_articles);
+        }
         
         $posts_created = 0;
         $post_id = null;
         if (!empty($valid_articles)) {
-            $post_id = $this->create_news_summary_post($valid_articles, $categories, $status);
+            $post_categories = $categories;
+            $post_status = $status;
+            if (!empty($valid_articles[0]['_queue_categories']) && is_array($valid_articles[0]['_queue_categories'])) {
+                $post_categories = $valid_articles[0]['_queue_categories'];
+            }
+            if (!empty($valid_articles[0]['_queue_status'])) {
+                $post_status = $valid_articles[0]['_queue_status'];
+            }
+
+            $post_id = $this->create_news_summary_post($valid_articles, $post_categories, $post_status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
-                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id
+                    . ($from_queue ? '（未投稿待ち行列から消化）' : '');
+                if (class_exists('News_Crawler_Pending_Article_Queue')) {
+                    foreach ($valid_articles as $posted_article) {
+                        if (!empty($posted_article['url'])) {
+                            News_Crawler_Pending_Article_Queue::remove_by_url($posted_article['url']);
+                        }
+                    }
+                    $queue_remaining = News_Crawler_Pending_Article_Queue::count();
+                }
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
+
+                if (class_exists('News_Crawler_Pending_Article_Queue') && !empty($valid_articles)) {
+                    News_Crawler_Pending_Article_Queue::enqueue_many($valid_articles, array(
+                        'genre_id' => '',
+                        'categories' => $categories,
+                        'status' => $status,
+                    ));
+                }
                 
                 // OpenAI API認証エラーの場合は処理を停止
                 if (is_wp_error($post_id) && $post_id->get_error_code() === 'openai_auth_error') {
@@ -1301,11 +1351,17 @@ class NewsCrawler {
                 }
             }
         } else {
-            $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+            $debug_info[] = "\n有効な記事・待ち行列がないため投稿を作成しませんでした";
         }
         
         $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
         $result .= "\n投稿ID: " . (is_wp_error($post_id) ? 'エラー' : ($post_id ?: 'なし'));
+        if ($queue_added > 0) {
+            $result .= "\n未投稿待ち行列へ追加: " . $queue_added . '件';
+        }
+        if (class_exists('News_Crawler_Pending_Article_Queue')) {
+            $result .= "\n未投稿待ち行列の残件数: " . (int) $queue_remaining . '件';
+        }
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
         
@@ -1380,23 +1436,80 @@ class NewsCrawler {
             $debug_info[] = "    → 有効記事として追加";
             $valid_articles[] = $article;
         }
-        
-        $valid_articles = array_slice($valid_articles, 0, $max_articles);
+
+        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
+        $genre_id = ($current_genre_setting && isset($current_genre_setting['id']))
+            ? (string) $current_genre_setting['id']
+            : '';
+
+        // ヒットしたが今回投稿しきれない記事を待ち行列へ（X 未シェア待ちと同趣旨）
+        $queue_added = 0;
+        $queue_remaining = 0;
+        $from_queue = false;
+        if (class_exists('News_Crawler_Pending_Article_Queue')) {
+            $queue_context = array(
+                'genre_id' => $genre_id,
+                'categories' => $categories,
+                'status' => $status,
+            );
+            $queue_added = News_Crawler_Pending_Article_Queue::enqueue_many($valid_articles, $queue_context);
+            $queue_remaining = News_Crawler_Pending_Article_Queue::count($genre_id !== '' ? $genre_id : null);
+            $debug_info[] = "\n未投稿待ち行列へ追加: {$queue_added}件（このジャンルの待ち: {$queue_remaining}件）";
+
+            $selected = News_Crawler_Pending_Article_Queue::dequeue_articles_for_posting(
+                $genre_id !== '' ? $genre_id : null,
+                $max_articles,
+                function ($article) {
+                    return $this->is_duplicate_news($article);
+                }
+            );
+            if (!empty($selected)) {
+                $valid_articles = $selected;
+                $from_queue = true;
+                $debug_info[] = '投稿対象を待ち行列から取得: ' . count($valid_articles) . '件';
+            } else {
+                $valid_articles = array();
+                $debug_info[] = '待ち行列から取得できる未投稿記事がありません';
+            }
+            $queue_remaining = News_Crawler_Pending_Article_Queue::count($genre_id !== '' ? $genre_id : null);
+        } else {
+            $valid_articles = array_slice($valid_articles, 0, $max_articles);
+        }
         
         $posts_created = 0;
         $post_id = null;
         
         // 投稿作成処理開始のフラグを設定（評価値キャッシュを保護するため）
-        $current_genre_setting = get_transient('news_crawler_current_genre_setting');
         if ($current_genre_setting && isset($current_genre_setting['id'])) {
             set_transient('news_crawler_creating_post_' . $current_genre_setting['id'], true, 60);
         }
         
         if (!empty($valid_articles)) {
-            $post_id = $this->create_news_summary_post($valid_articles, $categories, $status);
+            // 待ち行列アイテムに保存したカテゴリ・ステータスがあれば優先
+            $post_categories = $categories;
+            $post_status = $status;
+            if (!empty($valid_articles[0]['_queue_categories']) && is_array($valid_articles[0]['_queue_categories'])) {
+                $post_categories = $valid_articles[0]['_queue_categories'];
+            }
+            if (!empty($valid_articles[0]['_queue_status'])) {
+                $post_status = $valid_articles[0]['_queue_status'];
+            }
+
+            $post_id = $this->create_news_summary_post($valid_articles, $post_categories, $post_status);
             if ($post_id && !is_wp_error($post_id)) {
                 $posts_created = 1;
-                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id;
+                $debug_info[] = "\n投稿作成成功: 投稿ID " . $post_id
+                    . ($from_queue ? '（未投稿待ち行列から消化）' : '');
+
+                // 投稿済み URL は待ち行列から除去（念のため）
+                if (class_exists('News_Crawler_Pending_Article_Queue')) {
+                    foreach ($valid_articles as $posted_article) {
+                        if (!empty($posted_article['url'])) {
+                            News_Crawler_Pending_Article_Queue::remove_by_url($posted_article['url']);
+                        }
+                    }
+                    $queue_remaining = News_Crawler_Pending_Article_Queue::count($genre_id !== '' ? $genre_id : null);
+                }
                 
                 // 投稿作成成功後、評価値を適切に更新
                 if ($current_genre_setting && isset($current_genre_setting['id'])) {
@@ -1412,6 +1525,16 @@ class NewsCrawler {
             } else {
                 $error_message = is_wp_error($post_id) ? $post_id->get_error_message() : '不明なエラー';
                 $debug_info[] = "\n投稿作成失敗: " . $error_message;
+
+                // 失敗した記事は待ち行列へ戻す
+                if (class_exists('News_Crawler_Pending_Article_Queue') && !empty($valid_articles)) {
+                    News_Crawler_Pending_Article_Queue::enqueue_many($valid_articles, array(
+                        'genre_id' => $genre_id,
+                        'categories' => $categories,
+                        'status' => $status,
+                    ));
+                    $debug_info[] = '投稿失敗のため記事を待ち行列へ戻しました';
+                }
                 
                 // OpenAI API認証エラーの場合は処理を停止
                 if (is_wp_error($post_id) && $post_id->get_error_code() === 'openai_auth_error') {
@@ -1421,7 +1544,7 @@ class NewsCrawler {
                 }
             }
         } else {
-            $debug_info[] = "\n有効な記事がないため投稿を作成しませんでした";
+            $debug_info[] = "\n有効な記事・待ち行列がないため投稿を作成しませんでした";
         }
         
         // 投稿作成処理完了後、フラグを削除
@@ -1431,6 +1554,12 @@ class NewsCrawler {
         
         $result = $posts_created . '件のニュース投稿を作成しました（' . count($valid_articles) . '件の記事を含む）。';
         $result .= "\n投稿ID: " . (is_wp_error($post_id) ? 'エラー' : ($post_id ?: 'なし'));
+        if ($queue_added > 0) {
+            $result .= "\n未投稿待ち行列へ追加: " . $queue_added . '件';
+        }
+        if (class_exists('News_Crawler_Pending_Article_Queue')) {
+            $result .= "\n未投稿待ち行列の残件数: " . (int) $queue_remaining . '件';
+        }
         if ($duplicates_skipped > 0) $result .= "\n重複スキップ: " . $duplicates_skipped . '件';
         if (!empty($errors)) $result .= "\nエラー: " . implode(', ', $errors);
         
