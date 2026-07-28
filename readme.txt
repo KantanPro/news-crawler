@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 3.3.18
+Stable tag: 3.3.19
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,13 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * ジャンル別設定管理
 
 * YouTube APIのクォータ制限対応
+
+**新機能（v3.3.19）:**
+* 更新通知を KantanBond と同様の WordPress 標準フローに改善
+  * 全管理画面の独自バナーを廃止し、プラグイン一覧・更新画面に一本化
+  * プラグイン一覧に「今すぐ更新」リンクを追加
+  * 設定画面の更新情報表示を整理（取得失敗時の誤表示を修正）
+  * GitHub zipball 展開後のフォルダ名正規化を追加
 
 **新機能（v3.3.18）:**
 * X シェアログに新規ブログ件数を明記

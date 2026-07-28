@@ -48,21 +48,15 @@ class NewsCrawlerUpdater {
         add_filter('site_transient_update_plugins', array($this, 'check_for_updates'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
         add_filter('upgrader_pre_install', array($this, 'before_update'), 10, 3);
+        add_filter('upgrader_source_selection', array($this, 'normalize_github_zipball_source'), 1, 4);
         add_filter('upgrader_post_install', array($this, 'rename_github_source'), 9, 3);
         add_filter('upgrader_post_install', array($this, 'after_update'), 10, 3);
         add_filter('upgrader_pre_download', array($this, 'upgrader_pre_download'), 5, 3);
         add_action('upgrader_process_complete', array($this, 'handle_auto_activation'), 10, 2);
         add_action('admin_init', array($this, 'maybe_reload_admin_after_activation'));
-        add_action('admin_init', array($this, 'maybe_refresh_on_admin_screens'));
-        add_action('admin_notices', array($this, 'show_update_admin_notice'));
-
+        add_filter('plugin_action_links_' . $this->plugin_basename, array($this, 'plugin_action_links'));
         add_filter('plugin_row_meta', array($this, 'plugin_row_meta'), 10, 2);
         add_action('wp_ajax_news_crawler_debug_updates', array($this, 'ajax_debug_updates'));
-
-        if (!wp_next_scheduled('news_crawler_update_check')) {
-            wp_schedule_event(time(), 'twicedaily', 'news_crawler_update_check');
-        }
-        add_action('news_crawler_update_check', array($this, 'scheduled_update_check'));
     }
 
     /**
@@ -272,6 +266,57 @@ class NewsCrawlerUpdater {
         return $response;
     }
 
+    /**
+     * GitHub zipball 展開直後にフォルダ名を news-crawler に正規化する（KantanBond 同様）
+     */
+    public function normalize_github_zipball_source($source, $remote_source, $upgrader, $hook_extra) {
+        unset($remote_source, $upgrader);
+
+        if (is_wp_error($source) || !is_string($source) || trim($source) === '') {
+            return $source;
+        }
+
+        if (empty($hook_extra['type']) || $hook_extra['type'] !== 'plugin') {
+            return $source;
+        }
+
+        if (isset($hook_extra['plugin']) && $hook_extra['plugin'] !== $this->plugin_basename) {
+            return $source;
+        }
+
+        $main_file = basename($this->plugin_file);
+        $candidate = trailingslashit($source);
+        if (!is_dir($candidate) || !file_exists($candidate . $main_file)) {
+            return $source;
+        }
+
+        if (!function_exists('get_plugin_data')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugin_data = get_plugin_data($candidate . $main_file, false, false);
+        $name = isset($plugin_data['Name']) ? (string) $plugin_data['Name'] : '';
+        if (stripos($name, 'News Crawler') === false) {
+            return $source;
+        }
+
+        $src = untrailingslashit($source);
+        if (basename($src) === $this->plugin_slug) {
+            return $source;
+        }
+
+        $dest = trailingslashit(dirname($src)) . $this->plugin_slug;
+        if (is_dir($dest)) {
+            $this->rmdir_recursive($dest);
+        }
+
+        if (@rename($src, $dest)) {
+            return trailingslashit($dest);
+        }
+
+        return $source;
+    }
+
     public function rename_github_source($response, $hook_extra, $result) {
         if (!$this->is_target_plugin_update($hook_extra)) {
             return $response;
@@ -385,62 +430,56 @@ class NewsCrawlerUpdater {
         delete_site_transient($this->key('pre_update_state'));
     }
 
-    public function scheduled_update_check() {
-        $this->clear_version_cache();
-        wp_update_plugins();
-    }
-
     /**
-     * プラグイン一覧・更新画面表示時に古いキャッシュを避ける
+     * プラグイン一覧の操作リンク（更新ありのとき「今すぐ更新」を先頭に表示）
+     *
+     * @param array<int, string> $links 既存リンク
+     * @return array<int, string>
      */
-    public function maybe_refresh_on_admin_screens() {
-        if (!$this->should_force_refresh()) {
-            return;
-        }
-
-        $this->clear_version_cache();
-        delete_site_transient('update_plugins');
-        delete_site_transient('update_plugins_checked');
-
-        if (function_exists('wp_update_plugins')) {
-            wp_update_plugins();
-        }
-
-        $this->ensure_update_in_transient();
-    }
-
-    /**
-     * WordPress標準通知が出ない場合のフォールバック
-     */
-    public function show_update_admin_notice() {
+    public function plugin_action_links($links) {
         if (!current_user_can('update_plugins')) {
-            return;
-        }
-
-        global $pagenow;
-        if ($pagenow === 'update-core.php') {
-            return;
+            return $links;
         }
 
         $status = $this->get_update_status();
         if (empty($status['has_update'])) {
-            return;
+            return $links;
         }
 
-        $this->ensure_update_in_transient();
+        $upgrade_url = $this->get_upgrade_url();
+        if ($upgrade_url === '') {
+            return $links;
+        }
 
-        $update_url = wp_nonce_url(
+        array_unshift(
+            $links,
+            '<a href="' . esc_url($upgrade_url) . '" class="update-link" aria-label="'
+            . esc_attr(
+                sprintf(
+                    'News Crawler をバージョン %s に更新',
+                    isset($status['latest_version']) ? $status['latest_version'] : ''
+                )
+            )
+            . '">今すぐ更新</a>'
+        );
+
+        return $links;
+    }
+
+    /**
+     * WordPress 標準のワンクリック更新 URL
+     *
+     * @return string
+     */
+    public function get_upgrade_url() {
+        if (!current_user_can('update_plugins')) {
+            return '';
+        }
+
+        return wp_nonce_url(
             self_admin_url('update.php?action=upgrade-plugin&plugin=' . rawurlencode($this->plugin_basename)),
             'upgrade-plugin_' . $this->plugin_basename
         );
-        echo '<div class="notice notice-warning is-dismissible"><p>';
-        echo '<strong>News Crawler:</strong> 新しいバージョン ';
-        echo esc_html($status['latest_version']);
-        echo ' が利用可能です（現在: ';
-        echo esc_html($status['current_version']);
-        echo '）。<a href="' . esc_url($update_url) . '">今すぐ更新</a>';
-        echo ' | <a href="' . esc_url(admin_url('update-core.php?force-check=1')) . '">更新画面へ</a>';
-        echo '</p></div>';
     }
 
     public function plugin_row_meta($links, $file) {
@@ -515,7 +554,6 @@ class NewsCrawlerUpdater {
             'backup_cached_version' => get_transient($this->key('latest_version_backup')),
             'wp_transient_exists'   => !empty($transient),
             'wp_transient_response' => isset($transient->response[$this->plugin_basename]) ? $transient->response[$this->plugin_basename] : null,
-            'scheduled_check'       => wp_next_scheduled('news_crawler_update_check'),
         );
 
         if (is_wp_error($response)) {
@@ -605,18 +643,7 @@ class NewsCrawlerUpdater {
         }
 
         global $pagenow;
-        if (in_array($pagenow, array('plugins.php', 'update-core.php', 'update.php'), true)) {
-            return true;
-        }
-
-        if (isset($_GET['page'])) {
-            $page = sanitize_text_field(wp_unslash($_GET['page']));
-            if (strpos($page, 'news-crawler') === 0) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($pagenow, array('plugins.php', 'update-core.php', 'update.php'), true);
     }
 
     /**
@@ -1082,6 +1109,17 @@ class NewsCrawlerUpdater {
     }
 
     private function get_changelog_for_version($version) {
+        $readme_file = dirname($this->plugin_file) . '/readme.txt';
+        if (is_readable($readme_file)) {
+            $content = file_get_contents($readme_file);
+            if (is_string($content) && $content !== '') {
+                $pattern = '/= ' . preg_quote($version, '/') . ' =(.*?)(?== \d|$)/s';
+                if (preg_match($pattern, $content, $matches)) {
+                    return trim($matches[1]);
+                }
+            }
+        }
+
         $changelog_file = dirname($this->plugin_file) . '/CHANGELOG.md';
         if (!file_exists($changelog_file)) {
             return '';

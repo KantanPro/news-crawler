@@ -2,7 +2,7 @@
 /**
  * Plugin Name: News Crawler
  * Description: 指定されたニュースソースから記事を自動取得し、WordPressサイトに投稿として追加します。YouTube動画クロール機能も含まれています。
- * Version: 3.3.18
+ * Version: 3.3.19
  * Author: KantanPro
  * Author URI: https://kantanpro.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグイン定数の定義（NEWS_CRAWLER_VERSION は get_plugin_data 不可時のフォールバック）
-define('NEWS_CRAWLER_VERSION', '3.3.18');
+define('NEWS_CRAWLER_VERSION', '3.3.19');
 define('NEWS_CRAWLER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NEWS_CRAWLER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('NEWS_CRAWLER_TEXT_DOMAIN', 'news-crawler');
@@ -63,12 +63,22 @@ require_once NEWS_CRAWLER_PLUGIN_DIR . 'includes/class-secure-logger.php';
 
 // アップデータクラスを初期化（WordPress標準更新システム / GitHub Releases連携）
 // レート制限回避: wp-config.php 等で define('KP_GITHUB_TOKEN', 'ghp_xxx'); または NEWS_CRAWLER_GITHUB_TOKEN を定義
-add_action('plugins_loaded', function() {
+add_action('plugins_loaded', 'news_crawler_init_github_updater', 1);
+
+/**
+ * GitHub Releases 連携の更新通知（管理画面・WP-Cron）。
+ * KantanBond と同様、WordPress 標準の「プラグイン」画面・「更新」画面で通知する。
+ */
+function news_crawler_init_github_updater() {
+    if (!is_admin() && !(defined('DOING_CRON') && DOING_CRON)) {
+        return;
+    }
+
     if (class_exists('NewsCrawlerUpdater') && !defined('NEWS_CRAWLER_UPDATER_INIT')) {
         NewsCrawlerUpdater::get_instance();
         define('NEWS_CRAWLER_UPDATER_INIT', true);
     }
-}, 1);
+}
 
 
 // 更新後の自動有効化処理（NewsCrawlerUpdaterクラスで処理）

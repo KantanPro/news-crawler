@@ -1186,71 +1186,93 @@ class NewsCrawlerSettingsManager {
     }
     
     /**
-     * 更新情報を表示
+     * 更新情報を表示（WordPress 標準の更新フローに誘導）
      */
     public function display_update_info() {
         $current_version = news_crawler_get_version();
-        // Updaterから更新状況を取得
-        $latest_version = false;
+        $status = array(
+            'status' => 'error',
+            'message' => '更新情報を取得できませんでした。',
+        );
+
         if (class_exists('NewsCrawlerUpdater')) {
-            $updater = NewsCrawlerUpdater::get_instance();
-            $status = $updater->get_update_status();
-            if ($status && isset($status['status']) && $status['status'] === 'success') {
-                $latest_version = array(
-                    'version' => $status['latest_version'],
-                    'published_at' => !empty($status['published_at']) ? $status['published_at'] : date('Y-m-d H:i:s'),
-                    'description' => !empty($status['description']) ? $status['description'] : '',
-                );
-            }
+            $status = NewsCrawlerUpdater::get_instance()->get_update_status();
         }
-        // フォールバック
-        if (!$latest_version) {
-            $cached = get_transient('news_crawler_latest_version');
-            if ($cached) {
-                $latest_version = $cached;
-            } else {
-                $latest_version = array(
-                    'version' => $current_version,
-                    'published_at' => date('Y-m-d H:i:s'),
-                    'description' => ''
-                );
-            }
-        }
-        
-        $needs_update = version_compare($current_version, $latest_version['version'], '<');
-        
-        echo '<div class="card">';
+
+        echo '<div class="card nc-update-info-card">';
         echo '<h3>バージョン情報</h3>';
-        echo '<table class="system-info-table">';
-        echo '<tr><th>現在のバージョン</th><td>' . esc_html($current_version) . '</td></tr>';
-        echo '<tr><th>最新バージョン</th><td>' . esc_html($latest_version['version']) . '</td></tr>';
-        echo '<tr><th>最終更新日</th><td>' . esc_html(date('Y-m-d H:i:s', strtotime($latest_version['published_at']))) . '</td></tr>';
+        echo '<table class="system-info-table widefat striped" style="max-width:640px;">';
+        echo '<tr><th scope="row">現在のバージョン</th><td><strong>' . esc_html($current_version) . '</strong></td></tr>';
+
+        if (!isset($status['status']) || $status['status'] !== 'success') {
+            echo '<tr><th scope="row">最新バージョン</th><td><span style="color:#b32d2e;">取得できませんでした</span></td></tr>';
+            echo '</table>';
+            echo '<p class="description">GitHub から更新情報を取得できませんでした。';
+            echo ' <a href="' . esc_url(admin_url('plugins.php')) . '">プラグイン一覧</a>';
+            echo ' または <a href="' . esc_url(admin_url('update-core.php?force-check=1')) . '">更新の確認</a>';
+            echo ' をお試しください。</p>';
+            $this->render_update_cache_controls();
+            echo '</div>';
+            return;
+        }
+
+        $latest_version = isset($status['latest_version']) ? (string) $status['latest_version'] : '';
+        $has_update = !empty($status['has_update']);
+        $published_at = !empty($status['published_at']) ? $status['published_at'] : '';
+
+        echo '<tr><th scope="row">最新バージョン</th><td><strong>' . esc_html($latest_version) . '</strong></td></tr>';
+        if ($published_at !== '') {
+            echo '<tr><th scope="row">リリース日</th><td>' . esc_html(date('Y-m-d H:i', strtotime($published_at))) . '</td></tr>';
+        }
         echo '</table>';
-        
-        if ($needs_update) {
-            echo '<div class="notice notice-warning" style="margin: 15px 0;">';
-            echo '<p><strong>新しいバージョンが利用可能です！</strong></p>';
-            echo '<p><a href="' . admin_url('update-core.php') . '" class="button button-primary">今すぐ更新</a></p>';
+
+        if ($has_update) {
+            $upgrade_url = '';
+            if (class_exists('NewsCrawlerUpdater')) {
+                $upgrade_url = NewsCrawlerUpdater::get_instance()->get_upgrade_url();
+            }
+            echo '<div class="notice notice-warning inline" style="margin:16px 0;padding:12px 16px;">';
+            echo '<p><strong>新しいバージョン ' . esc_html($latest_version) . ' が利用可能です。</strong></p>';
+            echo '<p class="description" style="margin-bottom:12px;">';
+            echo 'WordPress 標準の更新と同じ手順です。';
+            echo ' <a href="' . esc_url(admin_url('plugins.php')) . '">プラグイン一覧</a>';
+            echo ' の News Crawler 行からも更新できます。</p>';
+            if ($upgrade_url !== '') {
+                echo '<p><a href="' . esc_url($upgrade_url) . '" class="button button-primary">今すぐ更新</a> ';
+                echo '<a href="' . esc_url(admin_url('update-core.php')) . '" class="button">更新画面を開く</a></p>';
+            }
+            echo '</div>';
+        } else {
+            echo '<div class="notice notice-success inline" style="margin:16px 0;padding:12px 16px;">';
+            echo '<p><strong>お使いのバージョンは最新です。</strong></p>';
+            echo '<p class="description" style="margin:0;">更新の確認は ';
+            echo '<a href="' . esc_url(admin_url('update-core.php?force-check=1')) . '">ダッシュボード → 更新</a>';
+            echo ' から行えます。</p>';
             echo '</div>';
         }
-        
-        if (!empty($latest_version['description'])) {
-            echo '<div class="card">';
+
+        if ($has_update && !empty($status['description'])) {
+            echo '<div class="card" style="margin-top:12px;">';
             echo '<h3>リリースノート</h3>';
-            echo '<div style="max-height: 300px; overflow-y: auto; padding: 15px; background: #f9f9f9; border-radius: 4px;">';
-            echo '<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">' . esc_html($latest_version['description']) . '</pre>';
-            echo '</div>';
-            echo '</div>';
+            echo '<div style="max-height:300px;overflow-y:auto;padding:15px;background:#f9f9f9;border-radius:4px;">';
+            echo '<pre style="white-space:pre-wrap;font-family:inherit;margin:0;">' . esc_html($status['description']) . '</pre>';
+            echo '</div></div>';
         }
-        
-        // キャッシュクリアボタンを追加
-        echo '<div class="card">';
-        echo '<h3>キャッシュ管理</h3>';
-        echo '<p>バージョン情報のキャッシュをクリアできます。</p>';
-        echo '<button type="button" id="clear-cache" class="button">キャッシュクリア</button>';
-        echo '<input type="hidden" id="news_crawler_nonce" value="' . wp_create_nonce('news_crawler_nonce') . '">';
+
+        $this->render_update_cache_controls();
         echo '</div>';
-        
+    }
+
+    /**
+     * 更新情報キャッシュの手動クリア UI
+     */
+    private function render_update_cache_controls() {
+        echo '<div class="card" style="margin-top:12px;">';
+        echo '<h3>更新情報の再取得</h3>';
+        echo '<p class="description">更新が表示されない場合に、キャッシュをクリアして GitHub から再取得します。</p>';
+        echo '<button type="button" id="clear-cache" class="button">キャッシュをクリアして再確認</button>';
+        echo '<input type="hidden" id="news_crawler_nonce" value="' . esc_attr(wp_create_nonce('news_crawler_nonce')) . '">';
+        echo '</div>';
     }
     
     
@@ -1258,7 +1280,7 @@ class NewsCrawlerSettingsManager {
      * 更新情報セクションのコールバック
      */
     public function update_info_section_callback() {
-        echo '<p>プラグインの更新状況と最新バージョン情報を表示します。</p>';
+        echo '<p>WordPress 標準の「プラグイン」画面・「更新」画面と同じ情報を表示します。更新がある場合はプラグイン一覧の News Crawler 行に「今すぐ更新」が表示されます。</p>';
         $this->display_update_info();
     }
     
