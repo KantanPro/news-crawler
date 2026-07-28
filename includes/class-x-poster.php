@@ -222,9 +222,12 @@ class News_Crawler_X_Poster {
      *
      * X の 1 日上限などで当日シェアできなかった投稿を、枠が空いた回で消化する。
      *
+     * @param int $posts_created 今回の自動投稿で作成した新規ブログ件数（ログ表示用。通常は 0）
      * @return array{shared:bool,post_id:int,reason:string}
      */
-    public static function maybe_drain_pending_share_queue() {
+    public static function maybe_drain_pending_share_queue($posts_created = 0) {
+        $posts_created = max(0, (int) $posts_created);
+        $new_blog_label = sprintf('新規ブログは %d 件', $posts_created);
         $result = array(
             'shared' => false,
             'post_id' => 0,
@@ -241,7 +244,10 @@ class News_Crawler_X_Poster {
         }
 
         if (empty($settings['twitter_enabled'])) {
-            $result['reason'] = 'X 自動シェアが無効です。';
+            $result['reason'] = $new_blog_label . 'でした。X 自動シェアが無効です。';
+            if (class_exists('News_Crawler_X_Share_Log')) {
+                News_Crawler_X_Share_Log::add($result['reason'], 'info');
+            }
             return $result;
         }
 
@@ -250,7 +256,8 @@ class News_Crawler_X_Poster {
                 ? max(0, (int) $settings['twitter_max_daily_shares'])
                 : 0;
             $result['reason'] = sprintf(
-                '本日の X 自動シェア上限（%d 件）に達しているため、未シェア待ち行列は消化しません。',
+                '%sでした。本日の X 自動シェア上限（%d 件）に達しているため、未シェア待ち行列は消化しません。',
+                $new_blog_label,
                 $daily_limit
             );
             if (class_exists('News_Crawler_X_Share_Log')) {
@@ -261,7 +268,10 @@ class News_Crawler_X_Poster {
 
         $pending_ids = self::get_pending_post_ids(5);
         if (empty($pending_ids)) {
-            $result['reason'] = '未シェアの待ち行列は空です。';
+            $result['reason'] = $new_blog_label . 'でしたが、未シェアの待ち行列は空です。';
+            if (class_exists('News_Crawler_X_Share_Log')) {
+                News_Crawler_X_Share_Log::add($result['reason'], 'info');
+            }
             return $result;
         }
 
@@ -270,7 +280,8 @@ class News_Crawler_X_Poster {
         if (class_exists('News_Crawler_X_Share_Log')) {
             News_Crawler_X_Share_Log::add(
                 sprintf(
-                    '新規ブログが無かったため、未シェア待ち行列から「%s」を X シェアします。',
+                    '%sだったため、未シェア待ち行列から「%s」を X シェアします。',
+                    $new_blog_label,
                     $post_title ?: ('投稿 ID ' . $post_id)
                 ),
                 'info',

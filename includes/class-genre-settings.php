@@ -4752,23 +4752,34 @@ $('#cancel-edit').click(function() {
      * @return array<string, mixed>
      */
     private function maybe_drain_x_pending_share_queue($posts_created) {
+        $posts_created = (int) $posts_created;
         $empty = array(
             'shared' => false,
             'post_id' => 0,
             'reason' => '',
         );
 
-        if ((int) $posts_created > 0) {
-            $empty['reason'] = '新規ブログがあったため、未シェア待ち行列は消化しません。';
+        if ($posts_created > 0) {
+            $empty['reason'] = sprintf(
+                '今回の自動投稿で新規ブログが %d 件作成されたため、未シェア待ち行列は消化しません。',
+                $posts_created
+            );
+            if (class_exists('News_Crawler_X_Share_Log')) {
+                News_Crawler_X_Share_Log::add($empty['reason'], 'info');
+            }
             return $empty;
         }
 
         if (!class_exists('News_Crawler_X_Poster')) {
-            $empty['reason'] = 'X 投稿機能が利用できません。';
+            $empty['reason'] = '新規ブログは 0 件でしたが、X 投稿機能が利用できません。';
+            if (class_exists('News_Crawler_X_Share_Log')) {
+                News_Crawler_X_Share_Log::add($empty['reason'], 'info');
+            }
             return $empty;
         }
 
-        $result = News_Crawler_X_Poster::maybe_drain_pending_share_queue();
+        // posts_created = 0 のときだけ待ち行列消化を試行（ログにも新規 0 件と明記する）
+        $result = News_Crawler_X_Poster::maybe_drain_pending_share_queue(0);
         $log_message = 'Pending X Share Queue - ' . ($result['reason'] ?? '') .
             ( !empty($result['post_id']) ? ' (post_id: ' . (int) $result['post_id'] . ')' : '' );
         error_log($log_message);
