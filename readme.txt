@@ -4,7 +4,7 @@ Tags: news, crawler, youtube, automation, content
 Requires at least: 5.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 3.3.19
+Stable tag: 3.3.20
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,13 @@ News Crawlerは、指定されたニュースソースから自動的に記事�
 * ジャンル別設定管理
 
 * YouTube APIのクォータ制限対応
+
+**新機能（v3.3.20）:**
+* X 未シェア待ち行列の自動消化条件を改善
+  * 新規ブログのシェアが API エラー等で失敗し日次枠に余裕がある場合、待ち行列から 1 件消化する
+  * 新規シェアが成功して日次枠を使い切った場合のみ待ち行列を見送る
+* X シェアの HTTP 403 失敗時にシェアログへ対処ヒントを表示（OAuth 2.0 / 1.0a）
+* 未シェア待ち行列の管理画面説明文を更新
 
 **新機能（v3.3.19）:**
 * 更新通知を KantanBond と同様の WordPress 標準フローに改善

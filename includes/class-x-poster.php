@@ -746,6 +746,16 @@ class News_Crawler_X_Poster {
     private function format_oauth2_post_error($data, $response_code, $refresh_failed = false) {
         $message = $this->extract_api_error_message($data, $response_code);
 
+        if ($response_code === 403) {
+            $hints = array(
+                'X Developer Portal でアプリの User authentication settings に Read and Write が有効か確認してください。',
+                'OAuth 2.0 の場合は「接続を解除」→ Client ID / Secret を保存 →「X アカウントを接続」で再接続してください（tweet.write スコープが必要）。',
+                'OAuth 1.0a の場合は読み取りと書き込み権限のアクセストークンを「再生成」して再入力してください。',
+                'X API のアクセスレベル（Free / Basic 等）で投稿 API が利用可能か、Developer Portal の Usage で確認してください。',
+            );
+            return $message . ' — ' . implode(' ', $hints);
+        }
+
         if ($response_code !== 401) {
             return $message;
         }
@@ -778,6 +788,15 @@ class News_Crawler_X_Poster {
 
         if ($response_code === 401) {
             return $message . ' — Developer Portal の OAuth 1.0a（コンシューマーキー / コンシューマーシークレット / アクセストークン / アクセストークンシークレット）が正しいか確認してください。OAuth 2.0 Client ID/Secret ではありません。読み取りと書き込み権限のトークンを「再生生成」して再入力してください。';
+        }
+
+        if ($response_code === 403) {
+            $hints = array(
+                'Developer Portal の OAuth 1.0a で読み取りと書き込み権限のアクセストークンを「再生成」して再入力してください。',
+                'アプリの User authentication settings に Read and Write が有効か確認してください。',
+                'X API のアクセスレベルで投稿 API が利用可能か、Developer Portal の Usage で確認してください。',
+            );
+            return $message . ' — ' . implode(' ', $hints);
         }
 
         return $message;

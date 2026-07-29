@@ -4746,7 +4746,11 @@ $('#cancel-edit').click(function() {
     }
 
     /**
-     * 自動投稿で新規ブログが 0 件のとき、未シェア X 待ち行列を 1 件消化する
+     * 未シェア X 待ち行列を 1 件消化する（日次上限内）
+     *
+     * 新規ブログ作成時はその投稿のシェアを優先する。新規のシェアが成功して日次枠を
+     * 消費した場合のみ待ち行列は見送る。API エラー等で新規シェアが失敗し枠に余裕が
+     * あれば、従来どおり待ち行列から 1 件消化する。
      *
      * @param int $posts_created 今回作成した投稿数
      * @return array<string, mixed>
@@ -4760,14 +4764,19 @@ $('#cancel-edit').click(function() {
         );
 
         if ($posts_created > 0) {
-            $empty['reason'] = sprintf(
-                '今回の自動投稿で新規ブログが %d 件作成されたため、未シェア待ち行列は消化しません。',
-                $posts_created
-            );
-            if (class_exists('News_Crawler_X_Share_Log')) {
-                News_Crawler_X_Share_Log::add($empty['reason'], 'info');
+            $quota_remaining = class_exists('News_Crawler_X_Poster')
+                && News_Crawler_X_Poster::has_daily_share_quota_remaining();
+
+            if (!$quota_remaining) {
+                $empty['reason'] = sprintf(
+                    '今回の自動投稿で新規ブログが %d 件作成され、本日の X 自動シェア枠を使用済みのため、未シェア待ち行列は消化しません。',
+                    $posts_created
+                );
+                if (class_exists('News_Crawler_X_Share_Log')) {
+                    News_Crawler_X_Share_Log::add($empty['reason'], 'info');
+                }
+                return $empty;
             }
-            return $empty;
         }
 
         if (!class_exists('News_Crawler_X_Poster')) {
