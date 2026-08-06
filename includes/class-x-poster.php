@@ -310,15 +310,23 @@ class News_Crawler_X_Poster {
      * @param int $limit 取得件数
      * @return array<string, mixed>
      */
+    const PENDING_SHARE_MAX_AGE_DAYS = 14;
+
     private static function get_pending_posts_query_args($limit) {
         return array(
             'post_type' => 'post',
             'post_status' => 'publish',
             'posts_per_page' => max(1, min(50, (int) $limit)),
             'fields' => 'ids',
-            // 待ち行列は古い未シェアから消化する
+            // 待ち行列は古い未シェアから消化する（ただし公開後 PENDING_SHARE_MAX_AGE_DAYS 日を超えた記事は対象外）
             'orderby' => 'date',
             'order' => 'ASC',
+            'date_query' => array(
+                array(
+                    'after' => date('Y-m-d H:i:s', strtotime('-' . self::PENDING_SHARE_MAX_AGE_DAYS . ' days')),
+                    'inclusive' => true,
+                ),
+            ),
             'meta_query' => array(
                 'relation' => 'AND',
                 array(
